@@ -1,0 +1,56 @@
+# `wasm_manifest` rules: committed Wasm artifacts are only trusted when a trusted manifest
+# names their hash.
+#
+# The manifest is keyed by hash, not by path, which is what makes a rename a WARN instead of a
+# HIGH: the bytes are known, their location is not. Severity, title and rationale live here so
+# the detector carries no policy of its own.
+
+[[rule]]
+id = "wasm-unlisted"
+title = "Committed Wasm with no manifest entry"
+roles = ["wasm"]
+detector = "builtin:wasm_manifest"
+severity = "high"
+suppressible = false
+rationale = "A binary artifact nobody declared is the payload delivery channel this class of attack ends in. A Wasm file the manifest does not carry, or that the scanner could not hash, has no stated origin, source or build command."
+tests = { positive = "wasm_unlisted", negative = "wasm_unlisted" }
+
+[[rule]]
+id = "wasm-hash-mismatch"
+title = "Listed Wasm path holds a different artifact"
+roles = ["wasm"]
+detector = "builtin:wasm_manifest"
+severity = "high"
+suppressible = false
+rationale = "The path was declared as one build and now holds another. Rebuilding a contract changes the hash, so this is a deliberate swap until proven otherwise."
+tests = { positive = "wasm_hash_mismatch", negative = "wasm_hash_mismatch" }
+
+[[rule]]
+id = "wasm-path-moved"
+title = "Known artifact moved to an unlisted path"
+roles = ["wasm"]
+detector = "builtin:wasm_manifest"
+severity = "warn"
+suppressible = true
+rationale = "The bytes are known, the location is not. A move is usually a refactor; it is also how an artifact gets in front of a release step that no longer checks for it."
+tests = { positive = "wasm_path_moved", negative = "wasm_path_moved" }
+
+[[rule]]
+id = "wasm-manifest-stale"
+title = "Manifest entry matches no tracked file"
+roles = ["wasm"]
+detector = "builtin:wasm_manifest"
+severity = "warn"
+suppressible = true
+rationale = "A manifest that no longer describes the tree is a manifest nobody checks. It also hides the case where the artifact was deleted here and shipped from somewhere else."
+tests = { positive = "wasm_manifest_stale", negative = "wasm_manifest_stale" }
+
+[[rule]]
+id = "wasm-archive-skipped"
+title = "Archive in the tree was not looked inside"
+roles = ["archive"]
+detector = "builtin:wasm_manifest"
+severity = "warn"
+suppressible = true
+rationale = "A zip or tarball can carry a Wasm artifact past every check in this file. The scanner reads bytes, never unpacks them, so the archive is reported as an unexamined hole rather than passed over."
+tests = { positive = "wasm_archive_skipped", negative = "wasm_archive_skipped" }
