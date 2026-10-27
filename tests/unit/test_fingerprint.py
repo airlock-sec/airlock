@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import replace
 
 import pytest
 
@@ -95,9 +96,22 @@ class TestEvidenceKey:
         item = pending(evidence=None, file_sha256=digest)
         assert item.evidence_key() == digest
 
-    def test_no_evidence_and_no_file_hash_is_an_error(self) -> None:
-        with pytest.raises(ValueError, match="no evidence and no file sha256"):
-            pending(evidence=None).evidence_key()
+    def test_a_state_finding_keys_on_its_message(self) -> None:
+        item = pending(evidence=None, file_sha256=None)
+        assert item.evidence_key() == normalize_evidence(item.message)
+
+    def test_a_state_finding_with_a_different_message_keys_differently(self) -> None:
+        # Two `policy-changed` states in one file must not collapse onto one fingerprint, or one
+        # occurrence index would cover both.
+        base = pending(rule_id="policy-changed", evidence=None)
+        other = replace(base, message="wasm-manifest.toml was added by this change")
+        assert base.evidence_key() != other.evidence_key()
+
+    def test_nothing_to_key_on_is_an_error(self) -> None:
+        item = pending(evidence=None, file_sha256=None)
+        empty = replace(item, message="   ")
+        with pytest.raises(ValueError, match="no evidence, no file sha256 and no message"):
+            empty.evidence_key()
 
 
 class TestOccurrences:

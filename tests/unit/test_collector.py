@@ -25,6 +25,7 @@ from airlock.collector import (
     git_text,
     list_tracked_files,
 )
+from airlock.fingerprint import number_occurrences
 from airlock.model import Policy, Severity
 from airlock.roles import ARCHIVE_ROLE, NATIVE_ROLE, SOURCE_ROLE, WASM_ROLE
 
@@ -303,3 +304,30 @@ class TestStartupChecks:
     def test_git_text_carries_the_failure_message(self, repo: Path) -> None:
         with pytest.raises(ValueError):
             git_text(repo, "rev-parse", "--verify", "HEAD")
+
+
+class TestStateFindingsAreFindings:
+    """A skip is reported, which means it has to survive numbering into a `Finding`.
+
+    Numbering needs something to key on, and a skipped file has no bytes, no text and no hash.
+    Before task 2.7 these findings crashed the scan that tried to report them.
+    """
+
+    def test_every_state_finding_from_a_skipping_repo_gets_a_fingerprint(self, repo: Path) -> None:
+        write(repo, "outside.txt", "eval(Buffer.from(a,'base64'))\n")
+        write(repo, "big.js", "b" * 60)
+        (repo / "link.py").symlink_to(repo / "outside.txt")
+        git(repo, "add", "-A")
+        commit(repo)
+        # After the commit, because `commit` stages the working tree and a fresh `git add -A`
+        # would drop a mode the working tree cannot produce.
+        git(repo, "update-index", "--add", "--cacheinfo", f"160000,{GITLINK_SHA},vendored")
+
+        collection = collect(repo, Policy(max_file_bytes=10), ROLE_GLOBS)
+
+        assert {"submodule-present", "skipped-symlink", "skipped-oversize"} <= set(
+            rule_ids(collection.pending)
+        )
+        findings = number_occurrences(collection.pending)
+        assert all(finding.fingerprint.startswith("sha256:") for finding in findings)
+        assert len({finding.fingerprint for finding in findings}) == len(findings)

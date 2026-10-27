@@ -69,14 +69,22 @@ class PendingFinding:
     file_sha256: str | None = None
 
     def evidence_key(self) -> str:
-        """File-level findings (line 0) hash on the file, not on a line of text."""
-        if self.evidence is None:
-            if self.file_sha256 is None:
+        """File-level findings (line 0) hash on the file, not on a line of text.
+
+        A state finding has neither: the file was skipped, is the repository itself, or is a
+        policy file that was read from a ref rather than collected. It keys on its message,
+        which is written by the scanner and never by scanned content, and every state rule is
+        non-suppressible, so a reworded message cannot move an owner's suppression.
+        """
+        if self.evidence is not None:
+            return normalize_evidence(self.evidence)
+        if self.file_sha256 is None:
+            if not self.message.strip():
                 raise ValueError(
-                    f"{self.rule_id} at {self.path} has no evidence and no file sha256"
+                    f"{self.rule_id} at {self.path} has no evidence, no file sha256 and no message"
                 )
-            return self.file_sha256
-        return normalize_evidence(self.evidence)
+            return normalize_evidence(self.message)
+        return self.file_sha256
 
     def with_evidence(self, evidence: str | None) -> PendingFinding:
         """Return a copy carrying a different excerpt, keeping the finding immutable."""
