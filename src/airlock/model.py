@@ -36,6 +36,10 @@ WASM_ORIGINS = frozenset({"built", "vendored", "generated"})
 PATTERN_KINDS = frozenset({"regex", "literal"})
 SUPPRESSION_EXPIRY_DAYS = 30
 
+#: A scan-level finding has no file to name. `require_repo_path` refuses an empty path, so the
+#: repository itself is written as `.`.
+REPO_PATH = "."
+
 # Rule IDs for scanner states and skips rather than for data rules (ARCHITECTURE.md 8).
 # Every one of these is a finding: no file is ever skipped silently.
 STATE_RULE_IDS = frozenset(
@@ -109,7 +113,7 @@ def _require_fingerprint(value: str, field_name: str) -> None:
         raise ValueError(f"{field_name} must be {FINGERPRINT_PREFIX} followed by 64 hex digits")
 
 
-def _require_repo_path(value: str, field_name: str) -> None:
+def require_repo_path(value: str, field_name: str) -> None:
     if not value:
         raise ValueError(f"{field_name} must be a non-empty repo-relative path")
     if value.startswith("/") or ".." in value.split("/") or "\\" in value:
@@ -120,7 +124,7 @@ def _require_exact_path(value: str, field_name: str) -> None:
     """Suppression paths are literal. A finding path is not checked this way: real files
     contain glob metacharacters, such as Next.js routes named `[id].tsx`, and a finding for
     one must still be constructible."""
-    _require_repo_path(value, field_name)
+    require_repo_path(value, field_name)
     if _GLOB_CHARS & set(value):
         raise ValueError(f"{field_name} must be an exact path, globs are not allowed: {value!r}")
 
@@ -144,7 +148,7 @@ class Finding:
     def __post_init__(self) -> None:
         if not _KEBAB_RE.match(self.rule_id):
             raise ValueError(f"rule_id must be kebab-case: {self.rule_id!r}")
-        _require_repo_path(self.path, "path")
+        require_repo_path(self.path, "path")
         _require_fingerprint(self.fingerprint, "fingerprint")
         if self.line < 0:
             raise ValueError("line must be 0 for a file-level finding")
@@ -328,7 +332,7 @@ class WasmEntry:
         if not self.paths:
             raise ValueError("wasm entry must list at least one path")
         for path in self.paths:
-            _require_repo_path(path, "wasm path")
+            require_repo_path(path, "wasm path")
 
 
 @dataclass(frozen=True, slots=True)
@@ -367,7 +371,7 @@ class FileEntry:
     skip_reason: str | None = None
 
     def __post_init__(self) -> None:
-        _require_repo_path(self.path, "path")
+        require_repo_path(self.path, "path")
         if self.size_bytes < 0:
             raise ValueError(f"size_bytes cannot be negative for {self.path}")
         if self.sha256 is not None and not _HEX64_RE.match(self.sha256):

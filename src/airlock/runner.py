@@ -20,12 +20,8 @@ from __future__ import annotations
 
 from .detectors import DETECTORS, Detector
 from .fingerprint import PendingFinding, number_occurrences
-from .model import MAX_MESSAGE_CHARS, Finding, ScanContext, Severity
+from .model import MAX_MESSAGE_CHARS, REPO_PATH, Finding, ScanContext, Severity
 from .rules import apply_patterns, cap_findings
-
-#: A repo-level finding has no file to name. `model._require_repo_path` refuses an empty path,
-#: so the repository itself is written as `.`.
-REPO_PATH = "."
 
 DETECTOR_ERROR_RULE_ID = "detector-error"
 

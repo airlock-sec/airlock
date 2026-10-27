@@ -1,6 +1,6 @@
 # ROADMAP: Airlock
 
-Last updated: 2026-10-27 21:40 UTC
+Last updated: 2026-10-27 21:04 UTC
 Roadmap version: 1
 
 This file is the single source of truth for remaining work. It is read before every task and updated after every change.
@@ -35,7 +35,7 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 |---|---|---|---|---|
 | 0 | Decisions and validation | 4 | 16 | 25% |
 | 1 | Repository bootstrap and self-protection | 2 | 12 | 17% |
-| 2 | Core engine | 7 | 13 | 54% |
+| 2 | Core engine | 8 | 13 | 62% |
 | 3 | P0 detectors | 0 | 10 | 0% |
 | 4 | Action and dogfood | 0 | 7 | 0% |
 | 5 | Release v0.1.0 | 0 | 6 | 0% |
@@ -43,7 +43,7 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 | 7 | Hardening and edge cases | 0 | 12 | 0% |
 | 8 | Release v0.2.0 and community | 0 | 5 | 0% |
 | 9 (backlog) | Backlog | 0 | 10 | 0% |
-| **Phases 0 to 8** | **Readiness total** | **13** | **86** | **15%** |
+| **Phases 0 to 8** | **Readiness total** | **14** | **86** | **16%** |
 | Gates | G1 to G10 | 0 | 10 | 0% |
 <!-- PROGRESS:END -->
 
@@ -54,9 +54,9 @@ roadmap update, which the roadmap rule does not allow, so they are recorded here
 The bootstrap tasks that read "done when merged" (1.3, 1.8, 1.10, 1.11) stay unticked until the
 pull request lands, and 1.5 is not close: there is no CI workflow yet, so every check above was
 run by hand on the owner's machine. Nothing reaches a user yet: `config_role` and
-`wasm_manifest` exist and are registered, but policy (2.7), suppression (2.8), the reporters
-(2.9) and the CLI (2.10) are stubs, so `airlock scan` still exits 2 by design rather than
-reporting a scan that never ran.
+`wasm_manifest` are registered and policy resolution (2.7) reads the trusted base, but
+suppression (2.8), the reporters (2.9) and the CLI (2.10) are stubs, so `airlock scan` still
+exits 2 by design rather than reporting a scan that never ran.
 
 ## 3. Readiness gates
 
@@ -126,7 +126,7 @@ real, so 0.4 remains the highest-value thing a person can do here.
 - [x] **2.4** `roles.py` plus `rules/roles.toml`: custom glob matcher (`**`, `*` never crosses `/`), content magic for Wasm and native binaries. M. Deps: 2.1. Done when: a lone `*` pattern does not match across directories; renamed `.wasm` resolves. (done 2026-10-27: hand-written segment matcher, Wasm, Mach-O, PE and archive magic before any extension, and `known_roles` as the cross-check the rule loader uses)
 - [x] **2.5** `rules.py`: rule loader and in-code validation, pattern engine with `line_cap`, `cfg-long-line` emission. M. Deps: 2.1, 2.4. Done when: invalid rule files exit 2; long lines skip regex. (done 2026-10-27: TOML rules with in-code validation, duplicate id, unknown role and unknown detector cross-checks, and the line cap split out of the pattern engine as `cap_findings` so the runner reports withheld lines whatever the registry holds)
 - [x] **2.6** `fingerprint.py`: occurrence-aware fingerprints. S. Deps: 2.1. Done when: a duplicated line yields a distinct fingerprint. (done 2026-10-27: occurrence numbering over a stable sort; deleting an earlier duplicate shifts the index and un-suppresses the survivor, which fails closed)
-- [ ] **2.7** `policy.py`: trusted-base resolution for `pr`, `push` and `full`; `history-rewritten`, `no-trusted-base`, `policy-changed`, `untrusted-policy-source`; bootstrap defaults. L. Deps: 2.1, 2.3. Done when: the trusted-base tests (policy edit plus payload, force push, new branch, unresolvable base) pass.
+- [x] **2.7** `policy.py`: trusted-base resolution for `pr`, `push` and `full`; `history-rewritten`, `no-trusted-base`, `policy-changed`, `untrusted-policy-source`; bootstrap defaults. L. Deps: 2.1, 2.3. Done when: the trusted-base tests (policy edit plus payload, force push, new branch, unresolvable base) pass. (done 2026-10-27: `resolve_policy` returns the policy and the manifest read from the trusted ref, plus the state findings that say why the ref is weaker; `policy_from_toml` and `manifest_from_toml` parse the two files and report unknown keys instead of dropping them; `pr` mode refuses an unresolvable base rather than reading HEAD. All four named tests pass against real temporary git repositories, including the B1 case: one commit that edits `airlock.toml`, adds a suppression for a HIGH rule and adds the payload is judged by the base copy with no suppressions at all. Two defects surfaced on the way: the dogfood `airlock.toml` was not valid TOML (an inline table written across two lines, which the 7.6 sketch copies), and a state finding with no evidence crashed `number_occurrences` instead of reporting. Verified: `pytest` 284 passed, `ruff check` and `ruff format --check` clean on 35 files, `mypy src` clean on 24 files. Not verified: suppression application, which is 2.8, and an end-to-end scan, which is 2.10)
 - [ ] **2.8** Suppression application: required fields, non-suppressible rules, `suppression-invalid`, `suppression-expiring` (30 days), UTC date comparison. M. Deps: 2.6, 2.7. Done when: tests cover each path.
 - [ ] **2.9** Reporters: console, GitHub annotations (escaping, HIGH first, WARN cap), JSON, step summary (fenced, sanitized evidence). M. Deps: 2.1. Done when: injection and flooding tests pass.
 - [ ] **2.10** `cli.py`: `scan` and `manifest add|check`, exit codes, deterministic ordering. M. Deps: 2.7, 2.9. Done when: CLI integration tests pass.
@@ -249,6 +249,7 @@ Newest first. One row per merged change.
 
 | Date (UTC) | Change | Tasks |
 |---|---|---|
+| 2026-10-27 21:04 | `policy.py` resolves the trusted base and loads the two protected files. `pr` mode takes the PR base SHA and exits 2 when it is missing, malformed or unreachable, because the alternative is judging a change by the policy the change wrote. `push` mode takes `github.event.before`: all-zeros is a new branch, and anything that is not an ancestor of HEAD is a rewrite; both scan against `BOOTSTRAP_POLICY` and an empty manifest, which carry no suppressions. `full` mode reads the working tree and says so with `untrusted-policy-source` (INFO). Both files are compared with their HEAD copies, so a policy edit inside the change yields `policy-changed` (WARN) with a line-count summary and no diff text, and the base copy is what the scan runs. Unknown keys in either file come back as `policy-unknown-key` (WARN) naming the dotted key, because a misspelled setting otherwise vanishes into its default; a missing or unsupported `version`, bad TOML and a malformed suppression stay exit 2. Suppression application is 2.8, so `Policy.suppressions` is parsed and not yet used. Two defects found by writing this: the dogfood `airlock.toml` did not parse at all (an inline table across two lines is not valid TOML, and `ARCHITECTURE.md` 7.6 showed the same shape, so both are corrected), and a scanner-state finding with no evidence raised inside `number_occurrences`, which would have crashed the first scan of any repository containing a submodule, a symlink or an oversized file; state findings now key on their message, which is scanner-written and non-suppressible. 7.3 records that rule. Verified: `pytest` 284 passed (55 new, all four named trusted-base cases against real temporary git repositories), `ruff check` and `ruff format --check` clean on 35 files, `mypy src` clean on 24 files. Not verified: an end-to-end scan, and the `pr` base SHA as GitHub actually supplies it, which needs the Action (4.1) | 2.7, 2.1, 2.6, 7.3 |
 | 2026-10-27 21:40 | `config_role` and `wasm_manifest` implemented over the shipped rule data, and `runner.py` dispatches them. Rules are split by owner: the engine pass runs the `pattern` rules and the `line_cap` account for every file with text, while a `builtin:` rule may carry a pattern only its detector reads. That is how `cfg-process-spawn` keeps both tiers (WARN for a build step stated up front, HIGH when the command names a downloader, a decoder or an inline script) without the same line being reported twice. `cfg-long-line` moved out of `apply_patterns` into `cap_findings` for the same reason as 2.3: a withheld line must be accounted for whatever the registry holds. `wasm_manifest` stops calling an entry stale when its declared path still holds a file, so one swapped artifact yields one finding, and a file named `.wasm` with no Wasm header is reported as the pointer shape it is. A detector that raises keeps the findings it already yielded and adds one HIGH `detector-error`. 2.11 ticked; 3.1 and 3.4 annotated as in progress with what is left. Also corrected here: 2.2 to 2.6 were merged without the roadmap update the rule requires. Verified: `pytest` 229 passed, `ruff check` and `ruff format --check` clean on 34 files, `mypy src` clean on 24 files. Not verified: an end-to-end scan, since the CLI still refuses to report a scan that did not run | 2.11, 3.1, 3.4, 2.2, 2.3, 2.4, 2.5, 2.6 |
 | 2026-10-27 19:07 | Scaffold committed on branch `feat/1.4-scaffold` (not yet merged): package tree per `project_structure.md` with behavior documented in each stub and nothing implemented (`cli.py` exits 2 so an unbuilt tool cannot read as a pass), `model.py` data models with 67 unit tests, `pyproject.toml` (hatchling, ruff, mypy, pytest), `rules/roles.toml`, dogfood `airlock.toml` and `wasm-manifest.toml`, `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `.github/CODEOWNERS` and the PR template, `.gitignore`, and the doc set copied to the repo root. `project_structure.md` renamed from repo-guard to airlock. Added 1.12 (rename sweep in the four remaining docs, 37 stale references), 2.13 (`FileEntry` and `ScanContext` drafts to confirm) and 7.12 (SARIF fingerprint key spelling). 1.3, 1.8, 1.10 and 1.11 stay open until merge | 1.4, 1.8, 1.10, 1.11, 2.1, 1.12, 2.13, 7.12 |
 | 2026-10-27 19:15 | Closed the scaffold gates: installed `ruff` 0.17 and `mypy` 2.4 as `uv` tools (system Python is externally managed and `python3 -m venv` needs an apt package, so neither was forced in), then fixed what they found. `ruff check` flagged three items in the tests: an unsorted import block, a `pytest.raises(match=...)` pattern carrying an unescaped alternation, and a reversed comparison. `ruff format` revealed a larger problem: it also rewrites Python fences inside Markdown, and it reformatted `ARCHITECTURE.md`. That change was reverted and `*.md` is now in `tool.ruff.extend-exclude`, because the design documents must stay reviewable and the roadmap rule depends on their diffs being legible. Verified: `pytest` 67 passed, `ruff check` clean, `ruff format --check` clean on 26 files, `mypy src --strict` clean on 24 files. Not verified: the self-scan, since `airlock scan` deliberately exits 2 until Phase 2 exists | 1.4, 2.1 |
