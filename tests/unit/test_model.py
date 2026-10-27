@@ -13,8 +13,8 @@ from airlock.model import (
     BOOTSTRAP_POLICY,
     EMPTY_MANIFEST,
     EXIT_CONFIG,
-    Finding,
     FileEntry,
+    Finding,
     Manifest,
     Mode,
     Policy,
@@ -104,7 +104,7 @@ class TestFinding:
         [DIGEST, f"sha256:{'z' * 64}", "sha256:", "md5:" + DIGEST, ""],
     )
     def test_fingerprint_must_be_prefixed_sha256_hex(self, fingerprint: str) -> None:
-        with pytest.raises(ValueError, match="64 hex|must start with"):
+        with pytest.raises(ValueError, match="fingerprint must"):
             make_finding(fingerprint=fingerprint)
 
     def test_negative_line_and_occurrence_are_rejected(self) -> None:
@@ -259,9 +259,8 @@ class TestPolicyAndManifest:
             Policy(tail_max_len=-1)
 
     def test_policy_keys_are_the_documented_set(self) -> None:
-        assert model.POLICY_TOP_LEVEL_KEYS == frozenset(
-            {"version", "policy", "soroban", "suppress"}
-        )
+        top_level = frozenset({"version", "policy", "soroban", "suppress"})
+        assert top_level == model.POLICY_TOP_LEVEL_KEYS
         assert "tail_entropy" in model.POLICY_SETTINGS_KEYS
 
     def test_manifest_entry_needs_a_hash_origin_and_paths(self) -> None:
@@ -313,7 +312,11 @@ class TestContextAndReport:
 
     def test_file_entry_may_still_record_a_skip(self) -> None:
         entry = FileEntry(
-            path="big.js", size_bytes=9_999_999, sha256=DIGEST, roles=("source",), text=None,
+            path="big.js",
+            size_bytes=9_999_999,
+            sha256=DIGEST,
+            roles=("source",),
+            text=None,
             skip_reason="skipped-oversize",
         )
         assert entry.text is None and entry.skip_reason in model.STATE_RULE_IDS
