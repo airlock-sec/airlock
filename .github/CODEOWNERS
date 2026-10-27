@@ -1,0 +1,27 @@
+# Owner review is required before anything merges in these paths. They carry the trust
+# model, the detection logic and the gates, so a small edit there can disable a check
+# (project_structure.md 2). Later rules win over earlier ones.
+
+# The roadmap gate itself
+/scripts/ @Gabbydunkk
+
+# Detection logic and the rules that feed it
+/rules/ @Gabbydunkk
+/src/airlock/detectors/ @Gabbydunkk
+
+# Trust model and fail-closed behavior
+/src/airlock/policy.py @Gabbydunkk
+/src/airlock/collector.py @Gabbydunkk
+/src/airlock/runner.py @Gabbydunkk
+
+# Dogfood policy and the Wasm manifest
+/airlock.toml @Gabbydunkk
+/wasm-manifest.toml @Gabbydunkk
+
+# The supply chain of the tool itself
+/action.yml @Gabbydunkk
+/.github/workflows/ @Gabbydunkk
+/pyproject.toml @Gabbydunkk
+
+# Review enforcement
+/.github/CODEOWNERS @Gabbydunkk
