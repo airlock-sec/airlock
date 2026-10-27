@@ -185,7 +185,10 @@ class RulePattern:
             raise ValueError("a regex pattern holds exactly one expression")
         if self.kind == "regex":
             # Compiled once at load time so a broken rule is a config error, not a crash later.
-            re.compile(self.value[0])
+            try:
+                re.compile(self.value[0])
+            except re.error as exc:
+                raise ValueError(f"regex pattern does not compile: {exc}") from exc
 
 
 @dataclass(frozen=True, slots=True)

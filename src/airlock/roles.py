@@ -50,6 +50,14 @@ _ARCHIVE_PREFIXES: tuple[bytes, ...] = (
 
 _TAR_MAGIC_AT_257 = b"ustar"
 
+#: Roles where a file the scanner could not fully read is a HIGH finding, not a WARN
+#: (`ARCHITECTURE.md` 8). Hiding a payload in a build config is the attack this tool exists
+#: for, so an incomplete read of one of these is treated as the payload it might conceal.
+SENSITIVE_ROLES = frozenset({"tooling-config", "editor-autorun"})
+
+#: Every role name the resolver can produce before `roles.toml` globs are added.
+BUILTIN_ROLES = frozenset({WASM_ROLE, NATIVE_ROLE, ARCHIVE_ROLE, SOURCE_ROLE, DOC_ROLE, OTHER_ROLE})
+
 SOURCE_SUFFIXES = frozenset(
     {
         ".py",

@@ -24,10 +24,7 @@ from pathlib import Path
 
 from .fingerprint import PendingFinding, truncate_evidence
 from .model import FileEntry, Policy, Severity
-from .roles import resolve_roles, roles_from_magic
-
-#: Roles where a file the scanner could not fully read is a HIGH finding, not a WARN.
-SENSITIVE_ROLES = frozenset({"tooling-config", "editor-autorun"})
+from .roles import SENSITIVE_ROLES, resolve_roles, roles_from_magic
 
 #: Roles whose content is still worth a lenient decode when strict UTF-8 fails, so one bad
 #: byte cannot hide a payload behind `non-utf8-text`.
