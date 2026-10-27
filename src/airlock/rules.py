@@ -270,50 +270,65 @@ def _cap_severity(authored: Severity, roles: Iterable[str]) -> Severity:
 def apply_patterns(
     rules: Iterable[Rule], entry: FileEntry, line_cap: int
 ) -> tuple[PendingFinding, ...]:
-    """Run every applicable pattern rule over one file, line by line.
+    """Run every pattern rule that applies to one file, line by line.
 
     Only rules with `detector = "pattern"` are handled here; code detectors dispatch in the
-    runner. Over-cap lines never reach a regex. They produce one finding for the file, naming
-    the first one and how many there were, so a minified bundle cannot bury the report under
-    thousands of identical rows.
+    runner. Lines past `line_cap` never reach a regex and are accounted for by
+    `cap_findings`, so the two paths cannot double up on the same line.
     """
     if entry.text is None or line_cap <= 0:
         return ()
-    pattern_rules = [rule for rule in rules if rule.detector == "pattern"]
-    applicable = [rule for rule in pattern_rules if set(rule.roles).intersection(entry.roles)]
+    applicable = [
+        rule
+        for rule in rules
+        if rule.detector == "pattern"
+        and rule.id != LONG_LINE_RULE_ID
+        and set(rule.roles).intersection(entry.roles)
+    ]
+    if not applicable:
+        return ()
     findings: list[PendingFinding] = []
+    for number, raw_line in enumerate(entry.text.split("\n"), start=1):
+        line = raw_line.removesuffix("\r")
+        if len(line) > line_cap:
+            continue
+        for rule in applicable:
+            if line_matches(rule, line):
+                findings.append(finding_for(rule, entry, number, evidence=line))
+    return tuple(findings)
+
+
+def cap_findings(
+    rules: Iterable[Rule], entry: FileEntry, line_cap: int
+) -> tuple[PendingFinding, ...]:
+    """One finding per file for the lines past `line_cap`, naming the first and the count.
+
+    The runner calls this for every file it has text for, whatever detectors exist: a line
+    withheld from the regexes must never go unmentioned. There is no role filter, because an
+    entry with text is text by construction and this is about its shape.
+    """
+    if entry.text is None or line_cap <= 0:
+        return ()
     over_cap: list[tuple[int, str]] = []
     for number, raw_line in enumerate(entry.text.split("\n"), start=1):
         line = raw_line.removesuffix("\r")
         if len(line) > line_cap:
             over_cap.append((number, line))
-            continue
-        for rule in applicable:
-            if rule.id == LONG_LINE_RULE_ID:
-                continue
-            if line_matches(rule, line):
-                findings.append(finding_for(rule, entry, number, evidence=line))
-
-    long_rule = _long_line_rule(pattern_rules)
-    if over_cap and (long_rule is None or set(long_rule.roles).intersection(entry.roles)):
-        rule = long_rule if long_rule is not None else FALLBACK_LONG_LINE
-        first_number, first_line = over_cap[0]
-        suffix = (
-            ""
-            if len(over_cap) == 1
-            else f", and {len(over_cap) - 1} more over-cap line(s) in this file"
-        )
-        findings.append(
-            finding_for(
-                rule,
-                entry,
-                first_number,
-                evidence=first_line,
-                message=(
-                    f"{rule.title}: line {first_number} is {len(first_line)} characters against "
-                    f"a {line_cap} character cap{suffix}, so no pattern ran on it"
-                ),
-                severity=_cap_severity(rule.severity, entry.roles),
-            )
-        )
-    return tuple(findings)
+    if not over_cap:
+        return ()
+    rule = _long_line_rule(rules) or FALLBACK_LONG_LINE
+    first_number, first_line = over_cap[0]
+    extra = "" if len(over_cap) == 1 else f", and {len(over_cap) - 1} more over-cap line(s) here"
+    return (
+        finding_for(
+            rule,
+            entry,
+            first_number,
+            evidence=first_line,
+            message=(
+                f"{rule.title}: line {first_number} is {len(first_line)} characters against a "
+                f"{line_cap} character cap{extra}, so no pattern ran on it"
+            ),
+            severity=_cap_severity(rule.severity, entry.roles),
+        ),
+    )

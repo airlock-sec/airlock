@@ -14,6 +14,7 @@ from airlock.model import FileEntry, Severity
 from airlock.rules import (
     LONG_LINE_RULE_ID,
     apply_patterns,
+    cap_findings,
     line_matches,
     load_role_globs,
     load_rule_file,
@@ -45,12 +46,15 @@ def rule_body(
     kind: str = "regex",
     value: str = DYNAMIC_CODE,
     title: str = "Dynamic code execution in tooling config",
+    with_pattern: bool = False,
 ) -> str:
     role_list = roles if roles is not None else ["tooling-config"]
     roles_toml = ", ".join(f"'{role}'" for role in role_list)
     fixture = rule_id.replace("-", "_")
     pattern = (
-        "" if detector != "pattern" else f"pattern = {{ kind = '{kind}', value = '{value}' }}\n"
+        f"pattern = {{ kind = '{kind}', value = '{value}' }}\n"
+        if detector == "pattern" or with_pattern
+        else ""
     )
     return (
         "[[rule]]\n"
@@ -125,17 +129,13 @@ class TestLoading:
         with pytest.raises(ValueError, match="has no pattern"):
             load_rules(rules_dir(tmp_path, body))
 
-    def test_a_builtin_rule_must_not_carry_a_pattern(self, tmp_path: Path) -> None:
-        body = rule_body(detector="builtin:config_role")
-        assert "pattern = {" not in body
-        assert load_rules(rules_dir(tmp_path, body))[0].detector == "builtin:config_role"
-
-    def test_a_pattern_next_to_a_builtin_detector_is_rejected(self, tmp_path: Path) -> None:
-        body = rule_body(detector="builtin:config_role") + (
-            "pattern = { kind = 'literal', value = ['x'] }\n"
-        )
-        with pytest.raises(ValueError, match="builtin detector"):
-            load_rule_file(rules_dir(tmp_path, body) / "builtin_1.toml")
+    def test_a_code_rule_may_carry_a_pattern_its_detector_owns(self, tmp_path: Path) -> None:
+        body = rule_body(detector="builtin:config_role", with_pattern=True)
+        rule = load_rule_file(rules_dir(tmp_path, body) / "builtin_1.toml")[0]
+        assert rule.pattern is not None
+        # The engine runs only `detector = "pattern"` rules, so the code detector stays the only
+        # reporter of lines this pattern matches.
+        assert apply_patterns([rule], make_entry(text="eval(x)\n"), line_cap=200) == ()
 
     def test_duplicate_rule_ids_are_rejected(self, tmp_path: Path) -> None:
         with pytest.raises(ValueError, match="duplicate rule id"):
@@ -248,44 +248,6 @@ class TestApplyPatterns:
         )[0]
         assert finding.evidence == "eval(x)"
 
-    def test_a_line_over_the_cap_is_reported_and_never_matched(self, tmp_path: Path) -> None:
-        rules = load_rules(rules_dir(tmp_path, rule_body(), LONG_LINE_BODY))
-        payload = "eval(" + "a" * 500 + ")"
-        findings = apply_patterns(rules, make_entry(text=payload), line_cap=200)
-        assert [finding.rule_id for finding in findings] == [LONG_LINE_RULE_ID]
-        # The rule data carries the sensitive-role severity.
-        assert findings[0].severity is Severity.HIGH
-        assert "no pattern ran on it" in findings[0].message
-
-    def test_over_cap_lines_are_counted_once_per_file(self, tmp_path: Path) -> None:
-        rules = load_rules(rules_dir(tmp_path, LONG_LINE_BODY))
-        text = f"{'x' * 300}\nshort\n{'y' * 400}\n"
-        findings = apply_patterns(
-            rules, make_entry(path="a.py", roles=("source",), text=text), line_cap=200
-        )
-        assert len(findings) == 1
-        assert findings[0].line == 1
-        assert "line 1 is 300 characters" in findings[0].message
-        assert "1 more over-cap line" in findings[0].message
-
-    def test_a_long_line_in_a_plain_source_file_is_demoted_to_warn(self, tmp_path: Path) -> None:
-        rules = load_rules(rules_dir(tmp_path, rule_body(), LONG_LINE_BODY))
-        findings = apply_patterns(
-            rules, make_entry(path="a.py", roles=("source",), text="x" * 400), line_cap=200
-        )
-        assert [finding.severity for finding in findings] == [Severity.WARN]
-
-    def test_an_over_cap_line_is_still_reported_without_a_loaded_cap_rule(
-        self, dynamic_rules: Path
-    ) -> None:
-        # The engine must never withhold a long line from the patterns without saying so,
-        # even if a rule set forgets cfg-long-line.
-        findings = apply_patterns(
-            load_rules(dynamic_rules), make_entry(text="x" * 400), line_cap=200
-        )
-        assert [finding.rule_id for finding in findings] == [LONG_LINE_RULE_ID]
-        assert findings[0].severity is Severity.HIGH
-
     def test_a_file_without_text_is_not_matched(self, dynamic_rules: Path) -> None:
         binary = FileEntry(path="a.wasm", size_bytes=8, sha256=None, roles=("wasm",), text=None)
         assert apply_patterns(load_rules(dynamic_rules), binary, line_cap=200) == ()
@@ -299,3 +261,45 @@ class TestApplyPatterns:
             load_rules(dynamic_rules), make_entry(sha256=digest), line_cap=200
         )[0]
         assert finding.file_sha256 == digest
+
+
+class TestCapFindings:
+    def test_a_line_over_the_cap_is_reported_and_never_matched(self, tmp_path: Path) -> None:
+        rules = load_rules(rules_dir(tmp_path, rule_body(), LONG_LINE_BODY))
+        payload = "eval(" + "a" * 500 + ")"
+        findings = cap_findings(rules, make_entry(text=payload), line_cap=200)
+        assert [finding.rule_id for finding in findings] == [LONG_LINE_RULE_ID]
+        # The rule data carries the sensitive-role severity.
+        assert findings[0].severity is Severity.HIGH
+        assert "no pattern ran on it" in findings[0].message
+        # The same line never reaches a regex, so the capability rule stays silent.
+        assert apply_patterns(rules, make_entry(text=payload), line_cap=200) == ()
+
+    def test_over_cap_lines_are_counted_once_per_file(self, tmp_path: Path) -> None:
+        rules = load_rules(rules_dir(tmp_path, LONG_LINE_BODY))
+        text = f"{'x' * 300}\nshort\n{'y' * 400}\n"
+        findings = cap_findings(
+            rules, make_entry(path="a.py", roles=("source",), text=text), line_cap=200
+        )
+        assert len(findings) == 1
+        assert findings[0].line == 1
+        assert "line 1 is 300 characters" in findings[0].message
+        assert "1 more over-cap line" in findings[0].message
+
+    def test_a_long_line_in_a_plain_source_file_is_demoted_to_warn(self, tmp_path: Path) -> None:
+        rules = load_rules(rules_dir(tmp_path, rule_body(), LONG_LINE_BODY))
+        findings = cap_findings(
+            rules, make_entry(path="a.py", roles=("source",), text="x" * 400), line_cap=200
+        )
+        assert [finding.severity for finding in findings] == [Severity.WARN]
+
+    def test_an_over_cap_line_is_still_reported_without_a_loaded_cap_rule(
+        self, dynamic_rules: Path
+    ) -> None:
+        # The engine must never withhold a long line from the patterns without saying so,
+        # even if a rule set forgets cfg-long-line.
+        findings = cap_findings(
+            load_rules(dynamic_rules), make_entry(roles=("source",), text="x" * 400), line_cap=200
+        )
+        assert [finding.rule_id for finding in findings] == [LONG_LINE_RULE_ID]
+        assert findings[0].severity is Severity.WARN

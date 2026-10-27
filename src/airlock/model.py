@@ -229,8 +229,8 @@ class Rule:
                 raise ValueError(f"rule {self.id} uses detector 'pattern' but has no pattern")
         elif not self.detector.startswith("builtin:"):
             raise ValueError(f"rule {self.id} detector must be 'pattern' or 'builtin:<name>'")
-        elif self.pattern is not None:
-            raise ValueError(f"rule {self.id} points at a builtin detector and cannot have one")
+        # A `builtin:` rule may carry a pattern: it is the text the code detector looks for, and
+        # the engine never runs it, so the detector stays the only reporter of that line.
 
 
 @dataclass(frozen=True, slots=True)
