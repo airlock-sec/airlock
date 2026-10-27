@@ -14,6 +14,7 @@ from datetime import date
 from enum import Enum, IntEnum
 
 MAX_MESSAGE_CHARS = 200
+MAX_EVIDENCE_CHARS = 200
 FINGERPRINT_PREFIX = "sha256:"
 
 # Exit codes (ARCHITECTURE.md 8).
@@ -184,7 +185,10 @@ class RulePattern:
             raise ValueError("a regex pattern holds exactly one expression")
         if self.kind == "regex":
             # Compiled once at load time so a broken rule is a config error, not a crash later.
-            re.compile(self.value[0])
+            try:
+                re.compile(self.value[0])
+            except re.error as exc:
+                raise ValueError(f"regex pattern does not compile: {exc}") from exc
 
 
 @dataclass(frozen=True, slots=True)
@@ -225,8 +229,8 @@ class Rule:
                 raise ValueError(f"rule {self.id} uses detector 'pattern' but has no pattern")
         elif not self.detector.startswith("builtin:"):
             raise ValueError(f"rule {self.id} detector must be 'pattern' or 'builtin:<name>'")
-        elif self.pattern is not None:
-            raise ValueError(f"rule {self.id} points at a builtin detector and cannot have one")
+        # A `builtin:` rule may carry a pattern: it is the text the code detector looks for, and
+        # the engine never runs it, so the detector stays the only reporter of that line.
 
 
 @dataclass(frozen=True, slots=True)
@@ -349,17 +353,25 @@ EMPTY_MANIFEST = Manifest()
 
 @dataclass(frozen=True, slots=True)
 class FileEntry:
-    """One tracked file as the collector produced it. Finalized by task 2.2."""
+    """One tracked file as the collector produced it. Finalized by task 2.2.
+
+    `sha256` and `text` are absent whenever the collector could not read the whole file; the
+    matching skip finding is why the scan is still fail-closed.
+    """
 
     path: str
     size_bytes: int
-    sha256: str
+    sha256: str | None
     roles: tuple[str, ...]
     text: str | None = None
     skip_reason: str | None = None
 
     def __post_init__(self) -> None:
         _require_repo_path(self.path, "path")
+        if self.size_bytes < 0:
+            raise ValueError(f"size_bytes cannot be negative for {self.path}")
+        if self.sha256 is not None and not _HEX64_RE.match(self.sha256):
+            raise ValueError("file sha256 must be 64 hex digits")
 
 
 @dataclass(frozen=True, slots=True)

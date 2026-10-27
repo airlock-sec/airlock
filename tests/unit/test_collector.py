@@ -1,0 +1,305 @@
+"""Collector tests (tasks 2.2 and 2.3).
+
+These run against real temporary git repositories: the collector's job is to read a git
+index honestly, and a mock index would not prove anything about `-z --stage` parsing or
+about what a symlink does to a scanner.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import os
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+
+from airlock.collector import (
+    SKIP_ENCODING,
+    SKIP_OVERSIZE,
+    SKIP_SUBMODULE,
+    SKIP_SYMLINK,
+    check_runtime,
+    collect,
+    git_text,
+    list_tracked_files,
+)
+from airlock.model import Policy, Severity
+from airlock.roles import ARCHIVE_ROLE, NATIVE_ROLE, SOURCE_ROLE, WASM_ROLE
+
+ROLE_GLOBS = {
+    "tooling-config": ("**/postcss.config.*", "**/next.config.*"),
+    "editor-autorun": ("**/.vscode/tasks.json",),
+}
+
+WASM_HEAD = b"\x00asm\x01\x00\x00\x00"
+GITLINK_SHA = "e3" + "0" * 38
+
+
+def git(root: Path, *args: str) -> str:
+    result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(root),
+            "-c",
+            "user.name=airlock-test",
+            "-c",
+            "user.email=airlock-test@example.invalid",
+            "-c",
+            "core.hooksPath=/dev/null",
+            *args,
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout
+
+
+@pytest.fixture
+def repo(tmp_path: Path) -> Path:
+    root = tmp_path / "repo"
+    root.mkdir()
+    git(root, "init", "-q", "--initial-branch=main")
+    return root
+
+
+def write(root: Path, rel: str, data: bytes | str) -> Path:
+    path = root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data.encode() if isinstance(data, str) else data)
+    return path
+
+
+def commit(root: Path) -> str:
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "fixture")
+    return git(root, "rev-parse", "HEAD").strip()
+
+
+def scan(root: Path, policy: Policy | None = None):
+    return collect(root, policy or Policy(), ROLE_GLOBS)
+
+
+def rule_ids(findings) -> list[str]:
+    return [finding.rule_id for finding in findings]
+
+
+def entry_of(result, rel: str):
+    for entry in result.entries:
+        if entry.path == rel:
+            return entry
+    raise AssertionError(f"{rel} is not in the collected entries")
+
+
+class TestListing:
+    def test_tracked_files_are_returned_in_path_order(self, repo: Path) -> None:
+        write(repo, "z.py", "x = 1\n")
+        write(repo, "a.py", "y = 2\n")
+        head = commit(repo)
+        listing = list_tracked_files(repo)
+        assert [entry.path for entry in listing] == ["a.py", "z.py"]
+        assert check_runtime(repo) == head
+
+    def test_untracked_files_are_out_of_scope(self, repo: Path) -> None:
+        write(repo, "tracked.py", "x = 1\n")
+        commit(repo)
+        write(repo, "added_later.py", "eval(payload)\n")
+        assert [entry.path for entry in scan(repo).entries] == ["tracked.py"]
+
+    def test_a_path_with_spaces_survives_the_null_delimited_listing(self, repo: Path) -> None:
+        write(repo, "docs/my file.py", "x = 1\n")
+        commit(repo)
+        assert [entry.path for entry in scan(repo).entries] == ["docs/my file.py"]
+
+
+class TestRolesAndReads:
+    def test_content_magic_beats_the_extension(self, repo: Path) -> None:
+        write(repo, "not_python.py", WASM_HEAD + b"\x00\x00")
+        commit(repo)
+        result = scan(repo)
+        entry = entry_of(result, "not_python.py")
+        assert entry.roles == (WASM_ROLE,)
+        assert entry.text is None
+        assert entry.sha256 == hashlib.sha256(WASM_HEAD + b"\x00\x00").hexdigest()
+        # A real Wasm binary is full of NUL bytes; it must not be reported as broken text.
+        assert "nul-in-text" not in rule_ids(result.pending)
+
+    def test_native_and_archive_magic_are_recognised(self, repo: Path) -> None:
+        write(repo, "blob.rs", b"\x7fELF\x02\x01\x01\x01" + b"\0" * 20)
+        write(repo, "bundle.gz", b"\x1f\x8b\x08\x00fake")
+        commit(repo)
+        result = scan(repo)
+        assert entry_of(result, "blob.rs").roles == (NATIVE_ROLE,)
+        assert entry_of(result, "bundle.gz").roles == (ARCHIVE_ROLE,)
+
+    def test_sha256_covers_the_whole_file(self, repo: Path) -> None:
+        data = "x" * 9000
+        write(repo, "long.py", data)
+        commit(repo)
+        entry = entry_of(scan(repo), "long.py")
+        assert entry.sha256 == hashlib.sha256(data.encode()).hexdigest()
+        assert entry.size_bytes == 9000
+
+    def test_no_default_directory_skip(self, repo: Path) -> None:
+        write(repo, "node_modules/left-pad/index.js", "module.exports = 1\n")
+        write(repo, "vendor/thing.py", "x = 1\n")
+        write(repo, "dist/bundle.js", "eval(payload)\n")
+        commit(repo)
+        paths = [entry.path for entry in scan(repo).entries]
+        assert len(paths) == 3
+
+    def test_a_config_file_keeps_the_tooling_role_alongside_its_fallback(self, repo: Path) -> None:
+        write(repo, "postcss.config.mjs", "export default {}\n")
+        commit(repo)
+        assert entry_of(scan(repo), "postcss.config.mjs").roles == (
+            "tooling-config",
+            "source",
+        )
+
+
+class TestSymlinks:
+    def test_a_tracked_symlink_is_recorded_not_followed(self, repo: Path, tmp_path: Path) -> None:
+        secret = tmp_path / "outside.txt"
+        secret.write_text("eval(Buffer.from(a,'base64'))\n")
+        link = repo / "postcss.config.mjs"
+        link.symlink_to(secret)
+        git(repo, "add", "-A")
+        commit(repo)
+        result = scan(repo)
+        entry = entry_of(result, "postcss.config.mjs")
+        assert entry.skip_reason == SKIP_SYMLINK
+        assert entry.text is None
+        assert "skipped-symlink" in rule_ids(result.pending)
+        assert "eval" not in repr(result)
+
+
+class TestSubmodules:
+    def test_a_gitlink_yields_submodule_present(self, repo: Path) -> None:
+        write(repo, "keep.py", "x = 1\n")
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "seed")
+        # A gitlink added straight to the index: a real submodule clone would need the
+        # network, and the collector only ever looks at the index mode.
+        git(
+            repo,
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            f"160000,{GITLINK_SHA},vendor/lib",
+        )
+        result = scan(repo)
+        assert "submodule-present" in rule_ids(result.pending)
+        assert entry_of(result, "vendor/lib").skip_reason == SKIP_SUBMODULE
+
+
+class TestLimits:
+    def test_oversize_is_warn_for_ordinary_roles(self, repo: Path) -> None:
+        write(repo, "big.py", "x" * 500)
+        commit(repo)
+        result = scan(repo, Policy(max_file_bytes=200))
+        assert "skipped-oversize" in rule_ids(result.pending)
+        finding = next(f for f in result.pending if f.rule_id == "skipped-oversize")
+        assert finding.severity is Severity.WARN
+        assert entry_of(result, "big.py").skip_reason == SKIP_OVERSIZE
+
+    def test_oversize_is_high_in_a_tooling_config(self, repo: Path) -> None:
+        write(repo, "postcss.config.mjs", "x" * 500)
+        commit(repo)
+        result = scan(repo, Policy(max_file_bytes=200))
+        finding = next(f for f in result.pending if f.rule_id == "skipped-oversize")
+        assert finding.severity is Severity.HIGH
+
+    @pytest.mark.skipif(os.geteuid() == 0, reason="root ignores file permissions")
+    def test_unreadable_is_high(self, repo: Path) -> None:
+        path = write(repo, "locked.py", "x = 1\n")
+        commit(repo)
+        path.chmod(0o000)
+        try:
+            result = scan(repo)
+        finally:
+            path.chmod(0o644)
+        assert "skipped-unreadable" in rule_ids(result.pending)
+        assert entry_of(result, "locked.py").skip_reason == "unreadable"
+
+
+class TestDecoding:
+    def test_a_nul_byte_is_a_finding_and_the_text_is_still_scanned(self, repo: Path) -> None:
+        write(repo, "next.config.mjs", "// \x00\neval(x)\n")
+        commit(repo)
+        result = scan(repo)
+        assert "nul-in-text" in rule_ids(result.pending)
+        entry = entry_of(result, "next.config.mjs")
+        assert entry.text is not None
+        assert "eval(x)" in entry.text
+        assert entry.skip_reason is None
+
+    def test_utf16_with_a_bom_does_not_trip_the_nul_rule(self, repo: Path) -> None:
+        write(repo, "postcss.config.mjs", "export default {}\n".encode("utf-16"))
+        commit(repo)
+        result = scan(repo)
+        assert "nul-in-text" not in rule_ids(result.pending)
+        assert "export default" in entry_of(result, "postcss.config.mjs").text
+
+    def test_utf16_without_a_bom_is_still_reported(self, repo: Path) -> None:
+        write(repo, "postcss.config.mjs", "export default {}\n".encode("utf-16-le"))
+        commit(repo)
+        assert "nul-in-text" in rule_ids(scan(repo).pending)
+
+    def test_utf8_bom_is_stripped(self, repo: Path) -> None:
+        write(repo, "a.py", "﻿x = 1\n")
+        commit(repo)
+        assert entry_of(scan(repo), "a.py").text == "x = 1\n"
+
+    def test_undecodable_bytes_in_a_source_file_are_still_scanned(self, repo: Path) -> None:
+        write(repo, "broken.py", b"x = 1\nname = caf\xe9\n")
+        commit(repo)
+        result = scan(repo)
+        assert "non-utf8-text" in rule_ids(result.pending)
+        entry = entry_of(result, "broken.py")
+        assert entry.skip_reason is None
+        assert entry.text is not None and "name = caf" in entry.text
+        assert entry.roles == (SOURCE_ROLE,)
+
+    def test_undecodable_bytes_elsewhere_are_a_warn_and_a_skip(self, repo: Path) -> None:
+        write(repo, "notes.txt", b"\xff\xff\xfe\x01")
+        commit(repo)
+        result = scan(repo)
+        finding = next(f for f in result.pending if f.rule_id == "non-utf8-text")
+        assert finding.severity is Severity.WARN
+        assert entry_of(result, "notes.txt").skip_reason == SKIP_ENCODING
+
+    def test_files_skipped_counts_by_reason(self, repo: Path) -> None:
+        write(repo, "notes.txt", b"\xff\xff\xfe\x01")
+        write(repo, "ok.py", "x = 1\n")
+        commit(repo)
+        assert scan(repo).files_skipped == {SKIP_ENCODING: 1}
+
+
+class TestStartupChecks:
+    def test_a_directory_that_is_not_a_repository_is_a_plain_error(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="cannot read the repository"):
+            check_runtime(tmp_path / "nothing")
+
+    def test_no_git_on_path_is_reported(self, repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(shutil, "which", lambda _name: None)
+        with pytest.raises(ValueError, match="needs git on PATH"):
+            check_runtime(repo)
+
+    def test_an_ancient_interpreter_is_reported(
+        self, repo: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("airlock.collector.sys.version_info", (3, 10, 0))
+        with pytest.raises(ValueError, match=r"needs Python 3\.11"):
+            check_runtime(repo)
+
+    def test_git_text_returns_stdout_without_a_shell(self, repo: Path) -> None:
+        write(repo, "a.py", "x = 1\n")
+        commit(repo)
+        assert git_text(repo, "rev-parse", "--abbrev-ref", "HEAD") == "main"
+
+    def test_git_text_carries_the_failure_message(self, repo: Path) -> None:
+        with pytest.raises(ValueError):
+            git_text(repo, "rev-parse", "--verify", "HEAD")

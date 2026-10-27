@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import dataclasses
-import re
 from datetime import date
 
 import pytest
@@ -172,16 +171,19 @@ class TestRules:
             RulePattern(kind="regex", value=("a", "b"))
 
     def test_invalid_regex_fails_at_construction(self) -> None:
-        with pytest.raises(re.error):
+        # A pattern that cannot compile is a config error (exit 2), not a crash mid-scan.
+        with pytest.raises(ValueError, match="does not compile"):
             RulePattern(kind="regex", value=("([unclosed",))
 
     def test_pattern_detector_without_a_pattern_is_rejected(self) -> None:
         with pytest.raises(ValueError, match="has no pattern"):
             self.make_rule(pattern=None)
 
-    def test_builtin_detector_carrying_a_pattern_is_rejected(self) -> None:
-        with pytest.raises(ValueError, match="cannot have one"):
-            self.make_rule(detector="builtin:wasm_manifest")
+    def test_a_code_rule_may_carry_the_pattern_its_detector_matches(self) -> None:
+        # cfg-process-spawn is decided in code but its trigger text stays in the rule file. The
+        # engine only runs `detector = "pattern"` rules, so this cannot double-report a line.
+        rule = self.make_rule(detector="builtin:config_role")
+        assert rule.pattern is not None
 
     def test_builtin_detector_without_pattern_is_valid(self) -> None:
         assert self.make_rule(detector="builtin:wasm_manifest", pattern=None).detector

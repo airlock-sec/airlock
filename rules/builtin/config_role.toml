@@ -1,0 +1,101 @@
+# `config_role` rules: the PolinRider class of compromise inside build tooling.
+#
+# Capability, not signature (ADR-012): obfuscator fingerprints rotate every week, while the
+# mechanism stays. A build config has no reason to evaluate strings, open sockets, spawn
+# processes or point at a chain RPC, so those verbs are the signal.
+#
+# Patterns use TOML multi-line literal strings ('''), because a regex needs both quote
+# characters and backslashes, and a literal string is the only form that keeps them as written.
+#
+# Two kinds of rule live here. `detector = "pattern"` rules are run line by line by the engine
+# (`rules.apply_patterns`). Rules pointing at `builtin:config_role` are decided in code, because
+# the logic needs more than one line. A code rule may carry a pattern as well: it is the text the
+# detector looks for, and the engine ignores it, so the detector stays the only reporter of that
+# line. `cfg-process-spawn` needs this, since the same pattern is a WARN or a HIGH depending on
+# what the command runs.
+#
+# `cfg-nul` is not here. A NUL byte after BOM handling is reported by the collector as
+# `nul-in-text` for every role, so the finding cannot be lost by a file that resolves to an
+# unexpected role. See ARCHITECTURE.md 9.1.
+
+[[rule]]
+id = "cfg-dynamic-code"
+title = "Dynamic code execution in a build config"
+roles = ["tooling-config"]
+detector = "pattern"
+severity = "high"
+suppressible = false
+rationale = "Build configs are evaluated at install and build time. Evaluating a string there is how this class of attack turns a dependency install into remote code execution."
+pattern = { kind = "regex", value = '''(?<![\w.$])(?:eval|Function)\s*\(|\bvm\.runIn|\bimport\s*\(''' }
+tests = { positive = "cfg_dynamic_code", negative = "cfg_dynamic_code" }
+
+[[rule]]
+id = "cfg-network"
+title = "Network access from a build config"
+roles = ["tooling-config"]
+detector = "pattern"
+severity = "warn"
+suppressible = true
+rationale = "A build step that reaches the network can be handed its payload after install, which no lockfile review would have seen. Alone this is a WARN: some legitimate Next.js configs fetch at build time."
+pattern = { kind = "regex", value = '''\brequire\s*\(\s*["'](?:node:)?(?:https?|net|dns|tls|child_process)["']\s*\)|\bfrom\s+["'](?:node:)?(?:https?|net)["']|\bfetch\s*\(|\baxios\b|node-fetch|XMLHttpRequest|WebSocket|\.request\s*\(|https?://''' }
+tests = { positive = "cfg_network", negative = "cfg_network" }
+
+[[rule]]
+id = "cfg-chain-endpoint"
+title = "Blockchain endpoint inside build tooling"
+roles = ["tooling-config"]
+detector = "pattern"
+severity = "high"
+suppressible = true
+rationale = "The reported campaigns configured a chain RPC or JSON-RPC client inside tooling so the payload could sign and broadcast from the victim machine. A build config naming any chain endpoint is out of place, whichever chain it is. Bare SDK names stay out of this pattern: web tooling legitimately lists them in a webpack config, and the endpoint or its configuration variable is the signal. Specific C2 hosts belong in builtin_patterns once task 0.4 confirms the published list."
+pattern = { kind = "regex", value = '''(?i)\b(?:tronweb|tronscan|bsc-dataseed|json-rpc|json_rpc)\b|nile[.-][a-z]|\brpc[._-]?(?:url|endpoint|host|node|provider)\b|/json_rpc\b''' }
+tests = { positive = "cfg_chain_endpoint", negative = "cfg_chain_endpoint" }
+
+[[rule]]
+id = "cfg-long-line"
+title = "Line longer than the configured cap"
+roles = ["tooling-config", "editor-autorun", "source", "doc", "other"]
+detector = "pattern"
+severity = "high"
+suppressible = true
+rationale = "Regexes are not run on lines past line_cap, because a minified bundle is a backtracking target. The line still has to be accounted for, so its length is the finding."
+# A never-matching literal: the engine excludes this id from line matching and reports it from the
+# line length instead (`rules.cap_findings`), which the runner does for every file it has text
+# for. The pattern exists so the rule stays a valid pattern rule and cannot be mistaken for a code
+# rule no detector dispatches.
+pattern = { kind = "literal", value = ["no literal ever matches this text"] }
+tests = { positive = "cfg_long_line", negative = "cfg_long_line" }
+
+# The rules below are decided in code. Their severity, title and rationale stay here, so the
+# detector reads them from data instead of hardcoding them.
+
+[[rule]]
+id = "cfg-network-exec"
+title = "Network access combined with execution in one build config"
+roles = ["tooling-config"]
+detector = "builtin:config_role"
+severity = "high"
+suppressible = false
+rationale = "Remote content plus a way to run it is the whole attack. Each half alone can be legitimate; together they are the fetch-decrypt-evaluate shape, which is why the combination is HIGH even when neither capability would be on its own."
+tests = { positive = "cfg_network_exec", negative = "cfg_network_exec" }
+
+[[rule]]
+id = "cfg-process-spawn"
+title = "Process execution from a build config"
+roles = ["tooling-config"]
+detector = "builtin:config_role"
+severity = "warn"
+suppressible = true
+rationale = "Spawning a shell from a build config is the install-hook dropper path. The detector escalates to HIGH when the command is not a build step stated up front but a downloader, a decoder or an inline script."
+pattern = { kind = "regex", value = '''(?<![\w.$])(?:execSync|execFileSync|spawnSync|spawn|execFile|exec|child_process)\b|\brequire\s*\(\s*["'](?:node:)?child_process["']\s*\)''' }
+tests = { positive = "cfg_process_spawn", negative = "cfg_process_spawn" }
+
+[[rule]]
+id = "cfg-appended-tail"
+title = "Payload appended to the end of a build config"
+roles = ["tooling-config"]
+detector = "builtin:config_role"
+severity = "high"
+suppressible = true
+rationale = "Campaigns append a long high-entropy line after a valid config rather than editing one, so the diff looks like one more line. Thresholds are placeholders until tuned on the corpus (ARCHITECTURE.md 15)."
+tests = { positive = "cfg_appended_tail", negative = "cfg_appended_tail" }

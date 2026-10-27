@@ -1,6 +1,6 @@
 # ROADMAP: Airlock
 
-Last updated: 2026-10-27 19:15 UTC
+Last updated: 2026-10-27 21:40 UTC
 Roadmap version: 1
 
 This file is the single source of truth for remaining work. It is read before every task and updated after every change.
@@ -35,7 +35,7 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 |---|---|---|---|---|
 | 0 | Decisions and validation | 4 | 16 | 25% |
 | 1 | Repository bootstrap and self-protection | 2 | 12 | 17% |
-| 2 | Core engine | 1 | 13 | 8% |
+| 2 | Core engine | 7 | 13 | 54% |
 | 3 | P0 detectors | 0 | 10 | 0% |
 | 4 | Action and dogfood | 0 | 7 | 0% |
 | 5 | Release v0.1.0 | 0 | 6 | 0% |
@@ -43,14 +43,20 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 | 7 | Hardening and edge cases | 0 | 12 | 0% |
 | 8 | Release v0.2.0 and community | 0 | 5 | 0% |
 | 9 (backlog) | Backlog | 0 | 10 | 0% |
-| **Phases 0 to 8** | **Readiness total** | **7** | **86** | **8%** |
+| **Phases 0 to 8** | **Readiness total** | **13** | **86** | **15%** |
 | Gates | G1 to G10 | 0 | 10 | 0% |
 <!-- PROGRESS:END -->
 
-Two of those seven are this scaffold (1.4 and 2.1). The bootstrap tasks that read "done when
-merged" (1.3, 1.8, 1.10, 1.11) stay unticked until the pull request lands, and 1.5 is not
-close: there is no CI workflow yet, so every check above was run by hand on the owner's
-machine. Nothing in Phase 3 exists: the scanner still detects nothing.
+Six of the thirteen Phase 2 rows were ticked late: the commits for 2.2 to 2.6 landed without a
+roadmap update, which the roadmap rule does not allow, so they are recorded here as of
+2026-10-27 with the tests that were run at the time.
+
+The bootstrap tasks that read "done when merged" (1.3, 1.8, 1.10, 1.11) stay unticked until the
+pull request lands, and 1.5 is not close: there is no CI workflow yet, so every check above was
+run by hand on the owner's machine. Nothing reaches a user yet: `config_role` and
+`wasm_manifest` exist and are registered, but policy (2.7), suppression (2.8), the reporters
+(2.9) and the CLI (2.10) are stubs, so `airlock scan` still exits 2 by design rather than
+reporting a scan that never ran.
 
 ## 3. Readiness gates
 
@@ -115,25 +121,25 @@ real, so 0.4 remains the highest-value thing a person can do here.
 ### Phase 2: Core engine
 
 - [x] **2.1** `model.py`: Severity, Mode, Finding, Rule, Policy, Manifest, ScanReport; policy `version` handling and `policy-unknown-key`. M. Deps: 1.4. Done when: unit tests cover construction, ordering and version errors. (done 2026-10-27 for the model half: all seven types plus `Suppression`, `ReleaseProfile` and the `BOOTSTRAP_POLICY` defaults, version rejection tested, HIGH-first ordering tested. Carve-out: the known-key sets are constants here, and the `policy-unknown-key` finding itself is emitted by the TOML loader in 2.7. `FileEntry` and `ScanContext` are drafted ahead of need and are settled by 2.13)
-- [ ] **2.2** `collector.py`: `git ls-files -z --stage`, submodule entries, symlinks, size limit, BOM-aware decoding, `non-utf8-text`, `nul-in-text`, line cap, no default directory skips, paths with unusual characters. L. Deps: 2.1. Done when: tests for each case pass.
-- [ ] **2.3** Startup checks: Python version, `git` present, repo readable (including `safe.directory`). Exit 2 with a plain message. S. Deps: 2.2. Done when: each failure path has a test.
-- [ ] **2.4** `roles.py` plus `rules/roles.toml`: custom glob matcher (`**`, `*` never crosses `/`), content magic for Wasm and native binaries. M. Deps: 2.1. Done when: a lone `*` pattern does not match across directories; renamed `.wasm` resolves.
-- [ ] **2.5** `rules.py`: rule loader and in-code validation, pattern engine with `line_cap`, `cfg-long-line` emission. M. Deps: 2.1, 2.4. Done when: invalid rule files exit 2; long lines skip regex.
-- [ ] **2.6** `fingerprint.py`: occurrence-aware fingerprints. S. Deps: 2.1. Done when: a duplicated line yields a distinct fingerprint.
+- [x] **2.2** `collector.py`: `git ls-files -z --stage`, submodule entries, symlinks, size limit, BOM-aware decoding, `non-utf8-text`, `nul-in-text`, line cap, no default directory skips, paths with unusual characters. L. Deps: 2.1. Done when: tests for each case pass. (done 2026-10-27: null-delimited staging, gitlinks, tracked symlinks read but never followed, oversize, unreadable, BOM and UTF-16 handling, `non-utf8-text`, `nul-in-text`, no default directory skips, paths with spaces. 24 collector tests)
+- [x] **2.3** Startup checks: Python version, `git` present, repo readable (including `safe.directory`). Exit 2 with a plain message. S. Deps: 2.2. Done when: each failure path has a test. (done 2026-10-27: `check_runtime` refuses an interpreter below 3.11, a missing `git`, and a directory git will not open, returning the message the CLI turns into exit 2; tested for each path. The `safe.directory` hint is in the message, and the CLI wiring lands with 2.10)
+- [x] **2.4** `roles.py` plus `rules/roles.toml`: custom glob matcher (`**`, `*` never crosses `/`), content magic for Wasm and native binaries. M. Deps: 2.1. Done when: a lone `*` pattern does not match across directories; renamed `.wasm` resolves. (done 2026-10-27: hand-written segment matcher, Wasm, Mach-O, PE and archive magic before any extension, and `known_roles` as the cross-check the rule loader uses)
+- [x] **2.5** `rules.py`: rule loader and in-code validation, pattern engine with `line_cap`, `cfg-long-line` emission. M. Deps: 2.1, 2.4. Done when: invalid rule files exit 2; long lines skip regex. (done 2026-10-27: TOML rules with in-code validation, duplicate id, unknown role and unknown detector cross-checks, and the line cap split out of the pattern engine as `cap_findings` so the runner reports withheld lines whatever the registry holds)
+- [x] **2.6** `fingerprint.py`: occurrence-aware fingerprints. S. Deps: 2.1. Done when: a duplicated line yields a distinct fingerprint. (done 2026-10-27: occurrence numbering over a stable sort; deleting an earlier duplicate shifts the index and un-suppresses the survivor, which fails closed)
 - [ ] **2.7** `policy.py`: trusted-base resolution for `pr`, `push` and `full`; `history-rewritten`, `no-trusted-base`, `policy-changed`, `untrusted-policy-source`; bootstrap defaults. L. Deps: 2.1, 2.3. Done when: the trusted-base tests (policy edit plus payload, force push, new branch, unresolvable base) pass.
 - [ ] **2.8** Suppression application: required fields, non-suppressible rules, `suppression-invalid`, `suppression-expiring` (30 days), UTC date comparison. M. Deps: 2.6, 2.7. Done when: tests cover each path.
 - [ ] **2.9** Reporters: console, GitHub annotations (escaping, HIGH first, WARN cap), JSON, step summary (fenced, sanitized evidence). M. Deps: 2.1. Done when: injection and flooding tests pass.
 - [ ] **2.10** `cli.py`: `scan` and `manifest add|check`, exit codes, deterministic ordering. M. Deps: 2.7, 2.9. Done when: CLI integration tests pass.
-- [ ] **2.11** `runner.py`: run detectors, wrap exceptions as `detector-error`. S. Deps: 2.1. Done when: a raising detector yields HIGH and exit 1.
+- [x] **2.11** `runner.py`: run detectors, wrap exceptions as `detector-error`. S. Deps: 2.1. Done when: a raising detector yields HIGH and exit 1. (done 2026-10-27 for the engine: `engine_findings` runs the pattern rules and the cap account over every entry with text, `collect` dispatches the registry in order, a raising detector keeps what it already yielded and adds one HIGH `detector-error`, and the next detector still runs. Exit 1 is 2.10's, since there is no CLI path to it yet)
 - [ ] **2.12** ReDoS timing harness and fixture-coverage test (every rule has a positive and a negative fixture). M. Deps: 2.5. Done when: the suite fails on a rule with no fixtures or a slow pattern.
 - [ ] **2.13** Settle the `FileEntry` and `ScanContext` drafts added to `model.py`: they currently carry only the fields `ARCHITECTURE.md` 6.1 and 6.3 describe, and `ARCHITECTURE.md` 7 lists neither. S. Deps: 2.2, 2.11. Done when: no field is unused, no detector needs a field the model lacks, and 7.x documents both.
 
 ### Phase 3: P0 detectors
 
-- [ ] **3.1** `config_role` with tiered rules (`cfg-dynamic-code`, `cfg-network-exec`, `cfg-network`, `cfg-process-spawn`, `cfg-chain-endpoint`, `cfg-appended-tail`, `cfg-long-line`, `cfg-nul`). L. Deps: 2.5, 2.11. Done when: all positive fixtures fire and no negative fixture does.
+- [ ] **3.1** *(in progress 2026-10-27: detector and rule data written, 18 detector tests over the shipped rules; the fixture builders in `tests/fixtures/` and the coverage gate in 2.12 are what is left)* `config_role` with tiered rules (`cfg-dynamic-code`, `cfg-network-exec`, `cfg-network`, `cfg-process-spawn`, `cfg-chain-endpoint`, `cfg-appended-tail`, `cfg-long-line`, `cfg-nul`). L. Deps: 2.5, 2.11. Done when: all positive fixtures fire and no negative fixture does.
 - [ ] **3.2** Synthetic fixture builders for `config_role` (strings assembled at test time). M. Deps: 2.12. Done when: no committed file contains a live-looking payload.
 - [ ] **3.3** Tune `tail_max_len` and `tail_entropy` on the corpus. S. Deps: 0.10, 3.1. Done when: thresholds recorded with the evidence.
-- [ ] **3.4** `wasm_manifest`: hash-keyed matching, `wasm-unlisted`, `wasm-hash-mismatch`, `wasm-path-moved`, `wasm-manifest-stale`, `wasm-archive-skipped`. M. Deps: 2.4, 2.11. Done when: fixtures pass.
+- [ ] **3.4** *(in progress 2026-10-27: detector written and tested against the shipped rules, including the LFS-pointer shape and the stale/mismatch overlap; fixtures and 2.12 pending)* `wasm_manifest`: hash-keyed matching, `wasm-unlisted`, `wasm-hash-mismatch`, `wasm-path-moved`, `wasm-manifest-stale`, `wasm-archive-skipped`. M. Deps: 2.4, 2.11. Done when: fixtures pass.
 - [ ] **3.5** `manifest add` and `manifest check`, including a hand-written TOML writer. M. Deps: 3.4, 2.10. Done when: adding a fixture takes one command and round-trips.
 - [ ] **3.6** Port HIGH rules from `malware_scan.py` as data rules (invisible Unicode, exfiltration endpoints, decode-and-eval, obfuscator identifiers, credential harvesting, blockchain C2, workflow secret dump, install-hook dropper, VS Code auto-run, `pull_request_target` checkout, `build.rs` network, native binary). L. Deps: 2.5. Done when: each has fixtures.
 - [ ] **3.7** Port WARN rules. M. Deps: 3.6. Done when: each has fixtures.
@@ -243,6 +249,7 @@ Newest first. One row per merged change.
 
 | Date (UTC) | Change | Tasks |
 |---|---|---|
+| 2026-10-27 21:40 | `config_role` and `wasm_manifest` implemented over the shipped rule data, and `runner.py` dispatches them. Rules are split by owner: the engine pass runs the `pattern` rules and the `line_cap` account for every file with text, while a `builtin:` rule may carry a pattern only its detector reads. That is how `cfg-process-spawn` keeps both tiers (WARN for a build step stated up front, HIGH when the command names a downloader, a decoder or an inline script) without the same line being reported twice. `cfg-long-line` moved out of `apply_patterns` into `cap_findings` for the same reason as 2.3: a withheld line must be accounted for whatever the registry holds. `wasm_manifest` stops calling an entry stale when its declared path still holds a file, so one swapped artifact yields one finding, and a file named `.wasm` with no Wasm header is reported as the pointer shape it is. A detector that raises keeps the findings it already yielded and adds one HIGH `detector-error`. 2.11 ticked; 3.1 and 3.4 annotated as in progress with what is left. Also corrected here: 2.2 to 2.6 were merged without the roadmap update the rule requires. Verified: `pytest` 229 passed, `ruff check` and `ruff format --check` clean on 34 files, `mypy src` clean on 24 files. Not verified: an end-to-end scan, since the CLI still refuses to report a scan that did not run | 2.11, 3.1, 3.4, 2.2, 2.3, 2.4, 2.5, 2.6 |
 | 2026-10-27 19:07 | Scaffold committed on branch `feat/1.4-scaffold` (not yet merged): package tree per `project_structure.md` with behavior documented in each stub and nothing implemented (`cli.py` exits 2 so an unbuilt tool cannot read as a pass), `model.py` data models with 67 unit tests, `pyproject.toml` (hatchling, ruff, mypy, pytest), `rules/roles.toml`, dogfood `airlock.toml` and `wasm-manifest.toml`, `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `.github/CODEOWNERS` and the PR template, `.gitignore`, and the doc set copied to the repo root. `project_structure.md` renamed from repo-guard to airlock. Added 1.12 (rename sweep in the four remaining docs, 37 stale references), 2.13 (`FileEntry` and `ScanContext` drafts to confirm) and 7.12 (SARIF fingerprint key spelling). 1.3, 1.8, 1.10 and 1.11 stay open until merge | 1.4, 1.8, 1.10, 1.11, 2.1, 1.12, 2.13, 7.12 |
 | 2026-10-27 19:15 | Closed the scaffold gates: installed `ruff` 0.17 and `mypy` 2.4 as `uv` tools (system Python is externally managed and `python3 -m venv` needs an apt package, so neither was forced in), then fixed what they found. `ruff check` flagged three items in the tests: an unsorted import block, a `pytest.raises(match=...)` pattern carrying an unescaped alternation, and a reversed comparison. `ruff format` revealed a larger problem: it also rewrites Python fences inside Markdown, and it reformatted `ARCHITECTURE.md`. That change was reverted and `*.md` is now in `tool.ruff.extend-exclude`, because the design documents must stay reviewable and the roadmap rule depends on their diffs being legible. Verified: `pytest` 67 passed, `ruff check` clean, `ruff format --check` clean on 26 files, `mypy src --strict` clean on 24 files. Not verified: the self-scan, since `airlock scan` deliberately exits 2 until Phase 2 exists | 1.4, 2.1 |
 | 2026-10-27 | Correction: `airlock-sec` is a GitHub organization, not a user account. Removed the user-account assumption from D-03, risk R-9, PRD risks and open questions; reframed 0.16 as an org plan and controls check; added the org 2FA requirement to 1.2 | 0.13, 0.16, 1.2 |

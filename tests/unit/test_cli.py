@@ -18,10 +18,13 @@ def test_cli_exit_code_is_never_the_pass_code() -> None:
     assert main([]) != EXIT_PASS
 
 
-def test_detector_registry_is_empty_and_immutable() -> None:
-    # Populated by tasks 3.1, 3.4 and 3.6. A scan over an empty registry is a config error.
-    assert detectors.DETECTORS == ()
+def test_every_registered_detector_is_callable_and_named() -> None:
+    # A rule file may only point at a name in DETECTOR_NAMES, so the two lists drifting is a
+    # config error the loader catches, not a detector that silently never runs.
     assert isinstance(detectors.DETECTORS, tuple)
+    assert detectors.DETECTORS
+    assert all(callable(detector) for detector in detectors.DETECTORS)
+    assert len(detectors.DETECTOR_NAMES) == len(detectors.DETECTORS)
 
 
 @pytest.mark.parametrize(
