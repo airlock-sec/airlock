@@ -198,11 +198,17 @@ Network alone is WARN because some legitimate Next.js configs fetch at build tim
 ### 6.3 CLI
 
 ```
-airlock scan     [--mode pr|push|full] [--base <sha>] [--config <path>]
-                    [--fail-on high|warn] [--format console|json|github] [--output <path>]
-airlock manifest add <path> [--origin built|vendored|generated] [--source <path>]
+airlock scan     [path] [--mode pr|push|full] [--event <name>] [--base <sha>] [--before <sha>]
+                    [--config <path>] [--wasm-manifest <path>]
+                    [--fail-on info|warn|high] [--format console|json|github] [--output <path>]
+                    [--rules-dir <path>] [--roles <path>]
+airlock manifest add <path> --origin built|vendored|generated [--source <path>]
 airlock manifest check
 ```
+
+`--event` is how the Action passes `github.event_name`, and it implies a mode: `pull_request` to `pr`, `push` to `push`, `workflow_dispatch` and `schedule` to `full`. An event that is not one of those four is a usage error rather than a default, because picking a trust model silently is the bypass B1 is about. Giving both `--event` and a contradicting `--mode` is also a usage error.
+
+`--rules-dir` and `--roles` point at the rule data that shipped with the tool, which is what the Action does with `$GITHUB_ACTION_PATH`. They exist so a source checkout and a test can name a copy explicitly; a scanned repository's own `rules/` is never a valid argument, and `fail_on`, `--format` and the step summary are all this command writes. `manifest add` and `manifest check` are parsed and refused with exit 2 until task 3.5 writes them, so a documented two-step Wasm flow cannot look like it succeeded while doing nothing.
 
 No `init` command: the README carries a copy-paste workflow snippet. No `rules test` command: the pytest suite does that job.
 
