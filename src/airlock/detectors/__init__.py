@@ -1,17 +1,25 @@
 """Detector registry: a plain list of in-tree detector functions.
 
 Third-party detector plugins are not supported; loading external code would defeat the
-trust model (ARCHITECTURE.md 6.3). `DETECTORS` is empty until the P0 detectors land in
-tasks 3.1, 3.4 and 3.6, and a scan with no registered detectors is a config error, not a
-pass.
+trust model (ARCHITECTURE.md 6.3). `DETECTORS` stays a literal tuple so a scan with no
+registered detectors is a config error rather than a pass, and `DETECTOR_NAMES` is what the
+rule loader cross-checks a `builtin:<name>` pointer against.
+
+Detectors yield `PendingFinding`; the runner assigns occurrence indices and builds Findings,
+because a detector cannot know an occurrence number.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 
-from ..model import Finding, ScanContext
+from ..fingerprint import PendingFinding
+from ..model import ScanContext
+from . import config_role, wasm_manifest
 
-Detector = Callable[[ScanContext], Iterable[Finding]]
+Detector = Callable[[ScanContext], Iterable[PendingFinding]]
 
-DETECTORS: tuple[Detector, ...] = ()
+DETECTORS: tuple[Detector, ...] = (config_role.run, wasm_manifest.run)
+
+#: Bare names, as they appear after the `builtin:` prefix in a rule file.
+DETECTOR_NAMES: frozenset[str] = frozenset({"config_role", "wasm_manifest"})
