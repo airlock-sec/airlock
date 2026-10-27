@@ -12,7 +12,7 @@ be turned off with one `*` line (PRD 2.3 item 3). Here `*` never crosses `/` and
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from pathlib import PurePosixPath
 
 WASM_MAGIC = b"\x00asm"
@@ -22,6 +22,12 @@ ARCHIVE_ROLE = "archive"
 SOURCE_ROLE = "source"
 DOC_ROLE = "doc"
 OTHER_ROLE = "other"
+
+#: Roles defined by `rules/roles.toml` rather than by content or extension. The detectors that
+#: own a role name it here, so a rename in the data file fails a test instead of silencing a
+#: detector.
+TOOLING_CONFIG_ROLE = "tooling-config"
+EDITOR_AUTORUN_ROLE = "editor-autorun"
 
 # Mach-O appears in both endiannesses and as a fat archive; PE files start with MZ.
 _NATIVE_PREFIXES: tuple[bytes, ...] = (
@@ -151,6 +157,15 @@ def _match_segments(pattern: list[str], path: list[str]) -> bool:
     if not _segment_pattern(head).match(path[0]):
         return False
     return _match_segments(rest, path[1:])
+
+
+def known_roles(role_globs: Iterable[str]) -> frozenset[str]:
+    """Every role name a rule may legally reference.
+
+    A rule naming a role no resolver can produce is a typo that would silence it forever, so
+    the rule loader cross-checks against this set (`ARCHITECTURE.md` 6.4).
+    """
+    return BUILTIN_ROLES | frozenset(role_globs)
 
 
 def fallback_role(path: str) -> str:
