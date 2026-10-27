@@ -1,4 +1,5 @@
-"""Trusted-base resolution and the policy and manifest loaders. Task 2.7 (`ARCHITECTURE.md` 6.5).
+"""Trusted-base resolution, the policy and manifest loaders and suppression application.
+Tasks 2.7 and 2.8 (`ARCHITECTURE.md` 6.5 and 7.6).
 
 Policy (`airlock.toml`, including its suppressions) and `wasm-manifest.toml` are read from a ref
 the change under scan cannot edit: the pull request base in `pr` mode, `github.event.before` in
@@ -23,12 +24,12 @@ from __future__ import annotations
 import tomllib
 from collections import Counter
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
-from datetime import date, datetime
+from dataclasses import dataclass, replace
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from .collector import git_text
-from .fingerprint import PendingFinding, truncate_evidence
+from .fingerprint import PendingFinding, number_occurrences, truncate_evidence
 from .model import (
     BOOTSTRAP_POLICY,
     EMPTY_MANIFEST,
@@ -38,19 +39,23 @@ from .model import (
     POLICY_TOP_LEVEL_KEYS,
     REPO_PATH,
     SOROBAN_KEYS,
+    STATE_RULE_IDS,
     SUPPORTED_POLICY_VERSION,
     SUPPRESSION_KEYS,
     WASM_ENTRY_KEYS,
+    Finding,
     Manifest,
     Mode,
     Policy,
     ReleaseProfile,
+    Rule,
     Severity,
     SorobanPolicy,
     Suppression,
     WasmEntry,
     require_repo_path,
     severity_from_name,
+    sort_findings,
 )
 
 #: The two protected files, named here once so a message and a test never disagree on the spelling.
@@ -69,6 +74,8 @@ NO_TRUSTED_BASE_RULE_ID = "no-trusted-base"
 POLICY_CHANGED_RULE_ID = "policy-changed"
 UNTRUSTED_SOURCE_RULE_ID = "untrusted-policy-source"
 UNKNOWN_KEY_RULE_ID = "policy-unknown-key"
+SUPPRESSION_INVALID_RULE_ID = "suppression-invalid"
+SUPPRESSION_EXPIRING_RULE_ID = "suppression-expiring"
 
 SUPPRESSION_REQUIRED = SUPPRESSION_KEYS - {"expires"}
 WASM_REQUIRED = WASM_ENTRY_KEYS - {"note"}
@@ -618,3 +625,111 @@ def _state(
         evidence=truncate_evidence(evidence),
         suppressible=False,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class Suppressed:
+    """Findings after suppression: what gets reported, and what a policy entry covers.
+
+    Both tuples are in report order. The suppressed ones stay in the result because a reader has
+    to be able to see what the policy hid, and `Finding.suppressed_by` carries the entry's reason.
+    """
+
+    findings: tuple[Finding, ...]
+    suppressed: tuple[Finding, ...]
+
+
+def suppress(
+    findings: Iterable[Finding],
+    policy: Policy,
+    rules: Iterable[Rule],
+    *,
+    policy_path: str = POLICY_FILENAME,
+    today: date | None = None,
+) -> Suppressed:
+    """Apply the trusted policy's suppressions to numbered findings (`ARCHITECTURE.md` 7.6).
+
+    Matching needs rule, path and fingerprint together, so a copy of a suppressed line keeps its
+    own occurrence index and is not covered by its twin's entry (B5). An expired entry simply
+    stops applying and nothing extra is said about the date passing (B10): a build should not go
+    red on a calendar, and the returning finding is the signal.
+
+    An entry that cannot apply, because its rule is missing or non-suppressible, is a HIGH
+    `suppression-invalid` and covers nothing. Reporting the mistake and honouring it as well would
+    hide the finding the report is about, so validity is decided before matching.
+
+    This runs after numbering and before the reporters, because a fingerprint is what is matched.
+    """
+    day = today or datetime.now(UTC).date()
+    by_rule = {rule.id: rule for rule in rules}
+    entries = tuple(policy.suppressions)
+    problems = [_entry_problem(entry, by_rule) for entry in entries]
+    first_for: dict[tuple[str, str, str], int] = {}
+    for position, entry in enumerate(entries):
+        if problems[position] is not None:
+            continue
+        first_for.setdefault((entry.rule, entry.path, entry.fingerprint), position)
+
+    active: list[Finding] = []
+    covered: list[Finding] = []
+    for finding in findings:
+        entry_at = first_for.get((finding.rule_id, finding.path, finding.fingerprint))
+        if entry_at is None:
+            active.append(finding)
+            continue
+        entry = entries[entry_at]
+        if entry.expired(day) or not finding.suppressible:
+            active.append(finding)
+            continue
+        covered.append(replace(finding, suppressed_by=entry.reason))
+
+    pending: list[PendingFinding] = []
+    for position, entry in enumerate(entries):
+        problem = problems[position]
+        if problem is not None:
+            pending.append(
+                _state(
+                    SUPPRESSION_INVALID_RULE_ID,
+                    Severity.HIGH,
+                    policy_path,
+                    f"{policy_path} suppresses {entry.rule} at {entry.path}, and it does not "
+                    f"apply: {problem}",
+                    entry.fingerprint,
+                )
+            )
+            continue
+        if entry.expires is not None and entry.expiring_soon(day):
+            expires = entry.expires
+            days = (expires - day).days
+            when = "expires today" if days == 0 else f"expires in {days} day(s) on {expires}"
+            pending.append(
+                _state(
+                    SUPPRESSION_EXPIRING_RULE_ID,
+                    Severity.WARN,
+                    policy_path,
+                    f"{policy_path}: the suppression of {entry.rule} at {entry.path} {when}. "
+                    "Renew it or the finding returns.",
+                    entry.fingerprint,
+                )
+            )
+
+    return Suppressed(
+        findings=tuple(sort_findings([*active, *number_occurrences(pending)])),
+        suppressed=tuple(sort_findings(covered)),
+    )
+
+
+def _entry_problem(entry: Suppression, by_rule: Mapping[str, Rule]) -> str | None:
+    """Why this entry can never apply, or None when it can.
+
+    Checked against the rule data rather than against a finding, so a suppression of a rule that
+    was made non-suppressible, or renamed, is reported even on a scan where it matched nothing.
+    """
+    rule = by_rule.get(entry.rule)
+    if rule is None:
+        if entry.rule in STATE_RULE_IDS:
+            return "scanner-state findings cannot be suppressed"
+        return "no rule with that id is loaded in this build"
+    if not rule.suppressible:
+        return f"rule {entry.rule} is not suppressible"
+    return None
