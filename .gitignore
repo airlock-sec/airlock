@@ -1,0 +1,13 @@
+# Git ignores, not scan ignores. The scanner has no default directory skips
+# (ARCHITECTURE_ESSENTIALS.md 2); this file does not affect what a scan reads.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+build/
+dist/
+*.egg-info/
+.venv/
+venv/

@@ -1,0 +1,21 @@
+# File roles, resolved by content magic first, then these globs, then an extension
+# fallback (ARCHITECTURE.md 6.2). Loaded and validated by task 2.4.
+#
+# `**` spans directories, `*` never crosses `/`. Wasm and native binaries are identified
+# by magic bytes, not by these patterns, so renaming artifact.wasm to artifact.bin does
+# not hide it.
+
+[roles.tooling-config]
+globs = [
+  "**/postcss.config.*",
+  "**/tailwind.config.*",
+  "**/next.config.*",
+  "**/eslint.config.*",
+  "**/babel.config.*",
+]
+
+[roles.editor-autorun]
+globs = ["**/.vscode/tasks.json"]
+
+# Extra configs (vite, webpack, jest and others) are P1 and need false-positive review
+# against tests/corpus before they are added here.

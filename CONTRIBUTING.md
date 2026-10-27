@@ -1,0 +1,35 @@
+# Contributing
+
+The rules for automated contributors are in [`AGENTS.md`](AGENTS.md); humans are held to the
+same bar. The design lives in [`PRD.md`](PRD.md), [`ARCHITECTURE.md`](ARCHITECTURE.md),
+[`ARCHITECTURE_ESSENTIALS.md`](ARCHITECTURE_ESSENTIALS.md) and
+[`project_structure.md`](project_structure.md).
+
+## Per change
+
+1. Find your task in `ROADMAP.md`. If there is none, add one with the next free ID in its
+   phase and say why.
+2. Check its dependencies are done. If they are not, stop and say so.
+3. Write the failing test or fixture first, then the smallest change that passes.
+4. Run `python -m pytest`, `ruff check .`, `ruff format --check .` and `mypy src`.
+5. **Update `ROADMAP.md` in the same pull request**: tick or add tasks, add a changelog row
+   with a UTC date, refresh the progress table and the `Last updated` line. A change is not
+   finished until the roadmap is current.
+6. Update any document the change touches. If the code contradicts a doc, fix the doc.
+
+## Branches and commits
+
+Branch per task as `feat/<task-id>-<slug>`. Conventional Commits, subject under 72
+characters. Never commit to the default branch, never force-push, never rewrite shared
+history, and do not bump a pinned Action SHA without reading the diff.
+
+## Boundaries
+
+No runtime dependencies. No network access or telemetry during a scan. No third-party
+detector plugins: rules are data, detectors are in-tree code. No inline suppression markers.
+Never commit a live-looking payload, a real secret or a real Stellar seed; trigger strings are
+assembled at test time from fragments (see `tests/fixtures/`).
+
+Protected paths (`project_structure.md` 2) need owner review: `src/airlock/policy.py`,
+`collector.py`, `runner.py`, `rules/`, `action.yml`, `.github/`, `scripts/`, `airlock.toml`
+and `wasm-manifest.toml`. Changes there must not weaken a check.

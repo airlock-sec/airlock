@@ -1,0 +1,149 @@
+# ARCHITECTURE_ESSENTIALS: repo-guard (working name)
+
+Status: v0.2 (red-team revision). Outline of decisions an agent must not violate. Full detail: `ARCHITECTURE.md` (section numbers in brackets). Scope: `PRD.md`. Work queue: `ROADMAP.md`. File locations: `project_structure.md`.
+
+## 0. Roadmap rule (read first)
+
+- `ROADMAP.md` must be updated in the same PR as every change: code, rules, tests, docs, CI, config, dependency bumps, reverts.
+- Update means: tick, untick or add tasks; add a changelog entry; refresh the progress table; refresh `Last updated`.
+- CI check: `scripts/check_roadmap_touched.sh` (task 1.9; until it exists, reviewers enforce by hand).
+- If behavior changes, also update `PRD.md`, `ARCHITECTURE.md`, this file and `project_structure.md` in the same PR. [17]
+
+## 1. What this is
+
+- CLI plus composite GitHub Action that scans Stellar/Soroban repos for supply-chain compromise and release-integrity gaps.
+- Two layers: generic injection scanner (PolinRider class) and Soroban-aware rules.
+- The scanned repo is untrusted input.
+
+## 2. Hard rules (never break)
+
+- Never execute, import or `eval` scanned content. [1]
+- Never run scanner code from the scanned checkout; it comes from the pinned Action path. [4, 10]
+- Policy, suppressions and manifest come from a trusted base: PR base in `pr` mode, `github.event.before` in `push` mode. [6.5]
+- Never read policy from HEAD in `pr` or `push` mode.
+- Never skip a file silently. Every skip is a finding. [8]
+- No default directory skips (no `vendor/`, `dist/`, `node_modules/` exemptions). [6.1]
+- Never exit 0 after a detector exception, invalid config, missing git, old Python or unresolvable base. [8]
+- No inline suppression markers. Suppressions are fingerprint-keyed, occurrence-aware, with a reason. [7.3, 7.6]
+- No network and no telemetry during `scan`. [1]
+- No runtime dependencies in v0.1; standard library only. [2]
+- No third-party detector plugins. Rules are data, detectors are in-tree code. [6.3]
+- No comment or string masking in `config_role`; match raw text. [ADR-013]
+- Regex only runs on lines at or under `line_cap`. Longer lines are findings, not regex input. [ADR-018]
+- Soroban rules apply to contract crates only (`crate-type` has `cdylib`). [ADR-016]
+- Never hardcode contract size limit, build target triple or SDK version; read from policy. [9.3]
+- No rule without one positive and one negative fixture. [12]
+- No `SELF` skip: the tool scans its own repo. [11]
+- Never commit live-looking payloads; build trigger strings at test time. [12]
+- Evidence text is attacker-controlled: never render it as raw markdown. [6.6]
+
+## 3. Stack
+
+- Python 3.11+, `tomllib`, `hashlib`, `subprocess` (fixed argv, never a shell), `re`, `json`.
+- Build: `pyproject.toml`, `src/` layout, hatchling. Dev only: pytest, ruff, mypy.
+- Output v0.1: console, GitHub commands, JSON, step summary. SARIF is P1. [ADR-008]
+- Distribution: composite Action, consumers pin the full commit SHA. PyPI is Later.
+- No YAML parser. [ADR-007]
+
+## 4. Pipeline
+
+`Collector -> Role resolver -> Detectors -> Suppression filter -> Reporters -> exit code` [3]
+
+- Collector: `git ls-files -z`, size, line and read limits, BOM-aware decoding, startup checks. [6.1]
+- Roles: content magic first (`wasm`, `native-binary`), then globs, then extension fallback. [6.2]
+- Detectors: plain functions `run(ctx) -> Iterable[Finding]`; exceptions become `detector-error` (HIGH). [6.3]
+- Output order: severity descending, then path, line, rule_id. HIGH always first.
+
+## 5. Data models (field lists) [7]
+
+- `Severity`: INFO < WARN < HIGH. `Mode`: pr, push, full.
+- `Finding`: rule_id, severity, path, line, roles, message, evidence, occurrence, fingerprint, suppressible, suppressed_by.
+- Fingerprint: `sha256(rule_id \0 path \0 normalized_evidence \0 occurrence)`; no line number.
+- `Rule` (TOML): id, title, roles, detector, severity, suppressible, rationale, pattern, tests.
+- Suppression (in `repo-guard.toml`): rule, path, fingerprint, reason, optional expires. No owner, no globs.
+- Policy keys: `version`, `[policy]` (fail_on, max_file_bytes, line_cap, tail_max_len, tail_entropy), `[soroban]`, `[[suppress]]`.
+- Wasm manifest entry: sha256, paths[], origin (built|vendored|generated), source, build, note. Keyed by hash.
+- `ScanReport`: tool_version, mode, repo_head, base, files_scanned, files_skipped, findings, suppressed, exit_code.
+- User-owned files: `repo-guard.toml`, `wasm-manifest.toml`.
+
+## 6. Exit codes and fail-closed findings [8]
+
+- Exit: 0 pass, 1 findings at or above `fail_on`, 2 config or usage error, 3 internal error.
+- Finding IDs for skips and states: `skipped-oversize`, `skipped-unreadable`, `skipped-symlink`, `submodule-present`, `nul-in-text`, `non-utf8-text`, `cfg-long-line`, `detector-error`, `history-rewritten`, `no-trusted-base`, `policy-changed`, `suppression-expiring`, `suppression-invalid`, `untrusted-policy-source`.
+
+## 7. Detectors
+
+| Detector | Rules | Priority |
+|---|---|---|
+| `config_role` | `cfg-dynamic-code`, `cfg-network-exec`, `cfg-network`, `cfg-process-spawn`, `cfg-chain-endpoint`, `cfg-appended-tail`, `cfg-long-line`, `cfg-nul` | P0 |
+| `wasm_manifest` | `wasm-unlisted`, `wasm-hash-mismatch`, `wasm-path-moved`, `wasm-manifest-stale`, `wasm-archive-skipped` | P0 |
+| `builtin_patterns` | ported rules from `malware_scan.py` (HIGH first, parity required) | P0 |
+| `soroban_profile` | release-profile keys, `testutils` placement (contract crates only) | P1 |
+| `stellar_seed` | strkey `S...` seed with valid checksum; suppressible | P1 |
+| `cargo_vectors` | `.cargo/config.toml` runner/linker/wrapper, custom `build`, git deps, `[patch]` | P1 |
+
+Key behaviors:
+
+- `config_role` targets role `tooling-config` (postcss, tailwind, next, eslint, babel configs). Capabilities, not signatures. [9.1]
+- `cfg-dynamic-code` is HIGH and not suppressible. Network or spawn alone is WARN; combined is HIGH.
+- `wasm_manifest` identifies Wasm by magic `00 61 73 6D`, never by extension. [9.2]
+- `stellar_seed` reports only checksum-valid candidates. [9.4]
+
+## 8. Trust model [4]
+
+- Trust anchors: pinned Action commit SHA; the trusted base (PR base or pre-push SHA).
+- Residual risk: whoever can push workflow files can remove the scan. A required status check covers PRs. Only an external watcher covers a stolen credential (decision D-04, backlog). Hardware-key 2FA and a protected recovery email are the real controls.
+
+## 9. Action design [10]
+
+- `python3 -I -c` with an explicit `sys.path` from `GITHUB_ACTION_PATH` (`-I` ignores `PYTHONPATH`).
+- Inputs pass through `env:`, never interpolated into the shell.
+- Caller supplies `fetch-depth: 0`; the tool never fetches.
+- Caller uses `permissions: contents: read`, a full-SHA reference and a required status check.
+
+## 10. Layout [5, project_structure.md]
+
+```
+src/repo_guard/{cli,model,collector,roles,rules,policy,fingerprint,runner}.py   (+ strkey.py in P1)
+src/repo_guard/detectors/{config_role,wasm_manifest,builtin_patterns}.py       (+ P1 detectors)
+src/repo_guard/report/{console,github,jsonout,summary}.py                      (+ sarif.py in P1)
+rules/{roles.toml,builtin/*.toml}   scripts/   tests/{unit,fixtures,bypass,corpus,golden}/
+action.yml   pyproject.toml   repo-guard.toml   wasm-manifest.toml
+```
+
+## 11. Testing must-haves [12]
+
+- Positive and negative fixture per rule, enforced inside pytest.
+- Seven bypass regression tests (PRD Appendix B), each failing closed.
+- ReDoS timing test per pattern. Trusted-base tests (policy edit plus payload, force push, new branch).
+- Parity test against `malware_scan.py`. Corpus gate: zero HIGH on clean state of the six repos.
+- Self-scan passes in CI. Roadmap-gate script test.
+
+## 12. Decisions (ADR one-liners) [13]
+
+- 001 stdlib-only Python. 002 one repo. 003 trusted-base policy. 004 fail closed. 005 no inline suppressions.
+- 006 rules are data, no plugins. 007 no YAML parser. 008 SARIF deferred. 009 composite Action, no Docker.
+- 010 Wasm by magic. 011 Soroban expectations from policy. 012 capabilities over signatures.
+- 013 no masking. 014 no directory skips. 015 occurrence-aware fingerprints. 016 contract crates only.
+- 017 roadmap gate in CI. 018 line cap instead of regex timeouts.
+
+## 13. Cut or deferred (do not build without a roadmap decision) [16.4]
+
+- Cut: JS lexer (`jsmask`), `init` command, `rules test` command, suppression `owner`, `roles.overrides`, `read_policy_from`, JSON schema files, force-push workflow template, `hypothesis` fuzzing.
+- Deferred: SARIF (P1), `deploy_gate`, SEP-58 metadata check and `wasmparse`, watch mode, org scan, history scan, parser-based JS, PyPI.
+
+## 14. Known unknowns (do not assume) [15]
+
+- SEP-58 metadata key names and Soroban metadata section names.
+- Whether `-I -c` plus explicit `sys.path` behaves as designed on `ubuntu-latest`.
+- `tail_max_len` and `tail_entropy` values (placeholders until tuned on corpus).
+- Overlap of `stellar_seed` with gitleaks and TruffleHog.
+- Resolver-2 feature behavior for `testutils` inheritance.
+- GitHub limits: annotations per step, step summary size, SARIF size; required-check behavior when a job is deleted.
+
+## 15. Definition of done for v0.1.0
+
+- P0 requirements FR-01 to FR-15 met.
+- All seven bypass tests fail closed; parity test green.
+- Dogfooded on the six repos with zero HIGH false positives; five copy-pasted workflows replaced.
+- Attested release; repo-guard repo passes its own scan; `ROADMAP.md` current.
