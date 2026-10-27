@@ -14,6 +14,7 @@ from datetime import date
 from enum import Enum, IntEnum
 
 MAX_MESSAGE_CHARS = 200
+MAX_EVIDENCE_CHARS = 200
 FINGERPRINT_PREFIX = "sha256:"
 
 # Exit codes (ARCHITECTURE.md 8).
