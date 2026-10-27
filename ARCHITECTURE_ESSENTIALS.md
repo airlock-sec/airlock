@@ -51,7 +51,8 @@ Status: v0.2 (red-team revision). Outline of decisions an agent must not violate
 
 - Collector: `git ls-files -z`, size, line and read limits, BOM-aware decoding, startup checks. [6.1]
 - Roles: content magic first (`wasm`, `native-binary`), then globs, then extension fallback. [6.2]
-- Detectors: plain functions `run(ctx) -> Iterable[Finding]`; exceptions become `detector-error` (HIGH). [6.3]
+- Detectors: plain functions `run(ctx) -> Iterable[Finding]`; a raise becomes `detector-error` (HIGH) and the findings it yielded beforehand are kept. [6.3]
+- The engine pass in `runner.py` runs the `pattern` rules and the `line_cap` account for every file, so neither depends on a detector being registered. A `builtin:` rule may carry a pattern only its detector reads. [6.3, 6.4]
 - Output order: severity descending, then path, line, rule_id. HIGH always first.
 
 ## 5. Data models (field lists) [7]

@@ -133,7 +133,11 @@ A file may have several roles. Globs use a small internal matcher where `**` spa
 
 A detector is a function `run(ctx) -> Iterable[Finding]` registered in a plain list. (An earlier draft used a Protocol class and a registry object; a list of functions is enough.) `ScanContext` exposes file entries with roles, the resolved policy and manifest, loaded rules and the scan mode.
 
-Every call is wrapped: an exception becomes a HIGH `detector-error` and the remaining detectors still run. Third-party detector plugins are not supported, because loading external code would defeat the trust model.
+Every call is wrapped: an exception becomes a HIGH `detector-error` and the remaining detectors still run. Findings a detector yielded before it raised are kept, so one failure on the tenth file costs the scan that file's coverage and nothing more. Third-party detector plugins are not supported, because loading external code would defeat the trust model.
+
+The registry also names the valid `builtin:<name>` targets (`DETECTOR_NAMES`), so the rule loader rejects a rule pointing at a detector that does not exist. Two detectors are registered now: `config_role` and `wasm_manifest`.
+
+`runner.engine_findings` is the pass that is not a detector: it runs the `pattern` rules over every entry with text and reports the lines `line_cap` withheld from any regex. It lives in the runner so those lines are accounted for whatever the registry holds; a registry narrowed to one family must reduce what is matched, never what is reported.
 
 ### 6.4 Rule engine
 
@@ -141,6 +145,8 @@ Rules are TOML data with one of:
 
 - `pattern`: a regex or literal set applied per line, within the rule's `roles`, on raw text.
 - `detector`: a pointer to a builtin function for logic a pattern cannot express.
+
+A `detector` rule may carry a `pattern` as well, which is the text its code detector looks for and the engine never runs. `cfg-process-spawn` needs this: the same line is a WARN or a HIGH depending on what the command runs, so the detector must stay the only reporter of it.
 
 Rule files are validated in code at load time (no JSON schema files in v0.1). An invalid rule file is a config error (exit 2). Every pattern must pass the adversarial timing test in the suite (FR-14).
 
@@ -344,11 +350,12 @@ Exit codes: 0 pass; 1 findings at or above `fail_on`; 2 configuration or usage e
 
 Applies to role `tooling-config`. Runs on raw text, no masking.
 
-1. Skip regex for lines over `line_cap`; emit `cfg-long-line`.
-2. Capability rules: `cfg-dynamic-code`, `cfg-chain-endpoint`, `cfg-network`, `cfg-process-spawn`.
-3. Combination rule `cfg-network-exec`: network capability and (process spawn, dynamic code or `require()` of a non-literal) in one file is HIGH even when each alone would be WARN.
-4. `cfg-appended-tail`: take the last non-empty line; flag if its length exceeds `tail_max_len` or if the entropy of its trailing window exceeds `tail_entropy`. Thresholds are placeholders until tuned on the corpus. [Unverified]
-5. `cfg-nul`.
+1. `cfg-long-line`: lines past `line_cap` reach no regex and are reported by the engine pass (`runner.engine_findings`), not by this detector, so the account holds even when the registry is partial.
+2. Capability rules the engine runs: `cfg-dynamic-code`, `cfg-network`, `cfg-chain-endpoint`.
+3. `cfg-process-spawn`, in this detector, two tiers off one pattern: WARN for a build step stated up front, HIGH when the command names a downloader, a decoder or an inline script.
+4. Combination rule `cfg-network-exec`: network capability and (process spawn, dynamic code or `require()` of a non-literal) in one file is HIGH even when each alone would be WARN.
+5. `cfg-appended-tail`: take the last non-empty line; flag if its length exceeds `tail_max_len` or if the entropy of its trailing window exceeds `tail_entropy`. Thresholds are placeholders until tuned on the corpus. [Unverified]
+6. `cfg-nul`, reported by the collector for every role, so an unexpected role cannot hide it.
 
 Capability rules were chosen because obfuscator fingerprints rotate while the mechanism (fetch remote content, decrypt, evaluate) stays. [Verified: OpenSourceMalware reporting] Known limit: string concatenation such as `globalThis['ev'+'al']` evades regex. The long-line and tail rules give partial coverage; parser analysis is Later.
 
@@ -357,8 +364,8 @@ Capability rules were chosen because obfuscator fingerprints rotate while the me
 1. For every tracked file with role `wasm`, compute SHA-256.
 2. Build `path -> expected hash` and `hash -> entry` maps from the trusted manifest.
 3. Emit `wasm-unlisted` (hash unknown), `wasm-hash-mismatch` (listed path, different hash) or `wasm-path-moved` (known hash, unlisted path).
-4. Emit `wasm-manifest-stale` for entries with no matching file.
-5. Detect archives and report `wasm-archive-skipped`. Git LFS pointer files are handled in P1 (FR-20).
+4. Emit `wasm-manifest-stale` for entries with no matching file. An entry whose declared path still holds a Wasm file is not called stale as well as mismatched or moved: one changed artifact, one finding.
+5. Detect archives and report `wasm-archive-skipped`. Git LFS pointer files are handled in P1 (FR-20): a file named `*.wasm` that carries no Wasm header is reported as `wasm-unlisted` with that reason.
 
 Wasm binary basics: magic `00 61 73 6D`, then version `01 00 00 00`. [Verified: Wasm binary format] No section parsing in v0.1; the SEP-58 metadata check is Later.
 
