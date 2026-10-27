@@ -15,5 +15,10 @@ tail_max_len   = 2000   # placeholder until tuned on the corpus (task 3.3)
 tail_entropy   = 4.5    # placeholder until tuned on the corpus (task 3.3)
 
 [soroban]
-require_release_profile = { overflow-checks = true, panic = "abort", lto = true,
-                            codegen-units = 1, debug-assertions = false }
+
+[soroban.require_release_profile]
+overflow-checks = true
+panic = "abort"
+lto = true
+codegen-units = 1
+debug-assertions = false
