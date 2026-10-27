@@ -1,6 +1,6 @@
 # ROADMAP: Airlock
 
-Last updated: 2026-10-27 19:07 UTC
+Last updated: 2026-10-27 19:15 UTC
 Roadmap version: 1
 
 This file is the single source of truth for remaining work. It is read before every task and updated after every change.
@@ -34,8 +34,8 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 | Phase | Name | Done | Total | Progress |
 |---|---|---|---|---|
 | 0 | Decisions and validation | 4 | 16 | 25% |
-| 1 | Repository bootstrap and self-protection | 1 | 12 | 8% |
-| 2 | Core engine | 0 | 13 | 0% |
+| 1 | Repository bootstrap and self-protection | 2 | 12 | 17% |
+| 2 | Core engine | 1 | 13 | 8% |
 | 3 | P0 detectors | 0 | 10 | 0% |
 | 4 | Action and dogfood | 0 | 7 | 0% |
 | 5 | Release v0.1.0 | 0 | 6 | 0% |
@@ -43,14 +43,14 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 | 7 | Hardening and edge cases | 0 | 12 | 0% |
 | 8 | Release v0.2.0 and community | 0 | 5 | 0% |
 | 9 (backlog) | Backlog | 0 | 10 | 0% |
-| **Phases 0 to 8** | **Readiness total** | **5** | **86** | **6%** |
+| **Phases 0 to 8** | **Readiness total** | **7** | **86** | **8%** |
 | Gates | G1 to G10 | 0 | 10 | 0% |
 <!-- PROGRESS:END -->
 
-The scaffold branch lays down the package tree, the data models and the contributor files. No
-box is ticked for it: 1.4 waits on `ruff` and `mypy` running green (neither is installed on
-the owner's machine yet), and 1.3, 1.8, 1.10 and 1.11 are "done when merged". That is the
-honest count, not a finished one.
+Two of those seven are this scaffold (1.4 and 2.1). The bootstrap tasks that read "done when
+merged" (1.3, 1.8, 1.10, 1.11) stay unticked until the pull request lands, and 1.5 is not
+close: there is no CI workflow yet, so every check above was run by hand on the owner's
+machine. Nothing in Phase 3 exists: the scanner still detects nothing.
 
 ## 3. Readiness gates
 
@@ -71,10 +71,10 @@ All must be true for 100%.
 
 Phase 0, task 0.4: run the seven bypass tests against the existing `malware_scan.py`. Everything downstream depends on which of them are real.
 
-In parallel, the repository scaffold now exists (package tree, `model.py`, contributor and
-governance files, stub modules per `project_structure.md`). Next on that path: install `ruff`
-and `mypy` so 1.4 can be verified and closed, then start 2.2 `collector.py`. The 0.4 result
-still decides which Phase 3 rules matter.
+The scaffold is landed and its gates are green, which closes 1.4 and 2.1. Next on that path
+is 2.2 `collector.py`, the first module that touches untrusted input, and 1.5 CI so the same
+checks stop depending on one machine. The 0.4 result still decides which Phase 3 rules are
+real, so 0.4 remains the highest-value thing a person can do here.
 
 ## 5. Phases and tasks
 
@@ -102,7 +102,7 @@ still decides which Phase 3 rules matter.
 - [x] **1.1** Create the repository under the chosen org. S. Deps: 0.5. Done when: repo exists with license and default branch. (done 2026-10-27: https://github.com/airlock-sec/airlock is public with an Apache-2.0 `LICENSE` and default branch `main`; one commit)
 - [ ] **1.2** Harden maintainer accounts and the org: hardware-key or passkey 2FA, protected recovery email, review of active sessions and tokens, the org setting that requires 2FA for all members, and a minimal owner list. S. Done when: checked off by the owner (not verifiable by CI).
 - [ ] **1.3** Configure rulesets: no force push, no deletion, require PR, required status checks; add `.github/CODEOWNERS` for `src/`, `rules/`, `action.yml`, `scripts/`, `.github/`, `airlock.toml`, `wasm-manifest.toml`. S. Deps: 1.1. Done when: a direct push to the default branch is rejected.
-- [ ] **1.4** Scaffold the package: `pyproject.toml` (hatchling, Python 3.11), `src/airlock/` skeleton, ruff, mypy and pytest config. S. Deps: 1.1. Done when: `pytest`, `ruff check` and `mypy src` run green on an empty skeleton.
+- [x] **1.4** Scaffold the package: `pyproject.toml` (hatchling, Python 3.11), `src/airlock/` skeleton, ruff, mypy and pytest config. S. Deps: 1.1. Done when: `pytest`, `ruff check` and `mypy src` run green on an empty skeleton. (done 2026-10-27: 67 tests pass, `ruff check` and `ruff format --check` clean, `mypy src --strict` clean over 24 files. `ruff` and `mypy` were installed as `uv` tools; system Python is externally managed under PEP 668, and `python3 -m venv` needs an apt package, so nothing was forced into it)
 - [ ] **1.5** CI workflows for tests, lint and type check: every action pinned by hash, top-level `permissions: contents: read`. S. Deps: 1.4. Done when: CI is green on the skeleton.
 - [ ] **1.6** Dependabot for GitHub Actions and pip, grouped weekly to limit noise. S. Deps: 1.1. Done when: config merged. Reminder: Dependabot PRs also need a roadmap changelog line.
 - [ ] **1.7** Scorecard workflow with a fine-grained token so Branch-Protection can be read. S. Deps: 1.3. Done when: Branch-Protection returns a score, not an error.
@@ -114,7 +114,7 @@ still decides which Phase 3 rules matter.
 
 ### Phase 2: Core engine
 
-- [ ] **2.1** `model.py`: Severity, Mode, Finding, Rule, Policy, Manifest, ScanReport; policy `version` handling and `policy-unknown-key`. M. Deps: 1.4. Done when: unit tests cover construction, ordering and version errors.
+- [x] **2.1** `model.py`: Severity, Mode, Finding, Rule, Policy, Manifest, ScanReport; policy `version` handling and `policy-unknown-key`. M. Deps: 1.4. Done when: unit tests cover construction, ordering and version errors. (done 2026-10-27 for the model half: all seven types plus `Suppression`, `ReleaseProfile` and the `BOOTSTRAP_POLICY` defaults, version rejection tested, HIGH-first ordering tested. Carve-out: the known-key sets are constants here, and the `policy-unknown-key` finding itself is emitted by the TOML loader in 2.7. `FileEntry` and `ScanContext` are drafted ahead of need and are settled by 2.13)
 - [ ] **2.2** `collector.py`: `git ls-files -z --stage`, submodule entries, symlinks, size limit, BOM-aware decoding, `non-utf8-text`, `nul-in-text`, line cap, no default directory skips, paths with unusual characters. L. Deps: 2.1. Done when: tests for each case pass.
 - [ ] **2.3** Startup checks: Python version, `git` present, repo readable (including `safe.directory`). Exit 2 with a plain message. S. Deps: 2.2. Done when: each failure path has a test.
 - [ ] **2.4** `roles.py` plus `rules/roles.toml`: custom glob matcher (`**`, `*` never crosses `/`), content magic for Wasm and native binaries. M. Deps: 2.1. Done when: a lone `*` pattern does not match across directories; renamed `.wasm` resolves.
@@ -243,7 +243,8 @@ Newest first. One row per merged change.
 
 | Date (UTC) | Change | Tasks |
 |---|---|---|
-| 2026-10-27 19:07 | Scaffold committed on branch `feat/1.4-scaffold` (not yet merged): package tree per `project_structure.md` with behavior documented in each stub and nothing implemented (`cli.py` exits 2 so an unbuilt tool cannot read as a pass), `model.py` data models with 67 unit tests, `pyproject.toml` (hatchling, ruff, mypy, pytest), `rules/roles.toml`, dogfood `airlock.toml` and `wasm-manifest.toml`, `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `.github/CODEOWNERS` and the PR template, `.gitignore`, and the doc set copied to the repo root. `project_structure.md` renamed from repo-guard to airlock. Added 1.12 (rename sweep in the four remaining docs, 37 stale references), 2.13 (`FileEntry` and `ScanContext` drafts to confirm) and 7.12 (SARIF fingerprint key spelling). No task ticked: 1.4 needs `ruff` and `mypy` green and neither is installed, 2.1 depends on 1.4, and 1.3, 1.8, 1.10, 1.11 are gated on merge | 1.4, 1.8, 1.10, 1.11, 2.1, 1.12, 2.13, 7.12 |
+| 2026-10-27 19:07 | Scaffold committed on branch `feat/1.4-scaffold` (not yet merged): package tree per `project_structure.md` with behavior documented in each stub and nothing implemented (`cli.py` exits 2 so an unbuilt tool cannot read as a pass), `model.py` data models with 67 unit tests, `pyproject.toml` (hatchling, ruff, mypy, pytest), `rules/roles.toml`, dogfood `airlock.toml` and `wasm-manifest.toml`, `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `.github/CODEOWNERS` and the PR template, `.gitignore`, and the doc set copied to the repo root. `project_structure.md` renamed from repo-guard to airlock. Added 1.12 (rename sweep in the four remaining docs, 37 stale references), 2.13 (`FileEntry` and `ScanContext` drafts to confirm) and 7.12 (SARIF fingerprint key spelling). 1.3, 1.8, 1.10 and 1.11 stay open until merge | 1.4, 1.8, 1.10, 1.11, 2.1, 1.12, 2.13, 7.12 |
+| 2026-10-27 19:15 | Closed the scaffold gates: installed `ruff` 0.17 and `mypy` 2.4 as `uv` tools (system Python is externally managed and `python3 -m venv` needs an apt package, so neither was forced in), then fixed what they found. `ruff check` flagged three items in the tests: an unsorted import block, a `pytest.raises(match=...)` pattern carrying an unescaped alternation, and a reversed comparison. `ruff format` revealed a larger problem: it also rewrites Python fences inside Markdown, and it reformatted `ARCHITECTURE.md`. That change was reverted and `*.md` is now in `tool.ruff.extend-exclude`, because the design documents must stay reviewable and the roadmap rule depends on their diffs being legible. Verified: `pytest` 67 passed, `ruff check` clean, `ruff format --check` clean on 26 files, `mypy src --strict` clean on 24 files. Not verified: the self-scan, since `airlock scan` deliberately exits 2 until Phase 2 exists | 1.4, 2.1 |
 | 2026-10-27 | Correction: `airlock-sec` is a GitHub organization, not a user account. Removed the user-account assumption from D-03, risk R-9, PRD risks and open questions; reframed 0.16 as an org plan and controls check; added the org 2FA requirement to 1.2 | 0.13, 0.16, 1.2 |
 | 2026-10-27 | Project named Airlock; repository `airlock-sec/airlock` (public, Apache-2.0, default branch `main`) adopted. Renamed `repo-guard` to `airlock` across all docs (CLI, package, policy file `airlock.toml`, env prefix `AIRLOCK_`). Added name-collision and account-type checks | 0.5, 0.15, 0.16, 1.1 |
 | 2026-10-27 | Drafted `project_structure.md`, `AGENTS.md`, `CLAUDE.md` and this roadmap; red-team revision of `PRD.md`, `ARCHITECTURE.md`, `ARCHITECTURE_ESSENTIALS.md` (v0.2) | 0.2, 0.3 |
