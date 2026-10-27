@@ -171,10 +171,6 @@ def run_scan(
     )
     collection = collect(repo, trusted.policy, role_globs)
     context = ScanContext(
-        mode=mode,
-        tool_version=__version__,
-        repo_head=head,
-        base=trusted.base,
         entries=collection.entries,
         policy=trusted.policy,
         manifest=trusted.manifest,

@@ -357,14 +357,16 @@ EMPTY_MANIFEST = Manifest()
 
 @dataclass(frozen=True, slots=True)
 class FileEntry:
-    """One tracked file as the collector produced it. Finalized by task 2.2.
+    """One tracked file as the collector produced it (task 2.13, `ARCHITECTURE.md` 7.9).
 
     `sha256` and `text` are absent whenever the collector could not read the whole file; the
-    matching skip finding is why the scan is still fail-closed.
+    matching skip finding is why the scan is still fail-closed. The byte size is deliberately not
+    carried: the collector needs it to decide whether a file is oversize or only partly read, and
+    it says so in those findings, but no rule is a function of it. `len(text)` is the size of any
+    file whose text is here.
     """
 
     path: str
-    size_bytes: int
     sha256: str | None
     roles: tuple[str, ...]
     text: str | None = None
@@ -372,20 +374,21 @@ class FileEntry:
 
     def __post_init__(self) -> None:
         require_repo_path(self.path, "path")
-        if self.size_bytes < 0:
-            raise ValueError(f"size_bytes cannot be negative for {self.path}")
         if self.sha256 is not None and not _HEX64_RE.match(self.sha256):
             raise ValueError("file sha256 must be 64 hex digits")
 
 
 @dataclass(frozen=True, slots=True)
 class ScanContext:
-    """Everything a detector may read. Finalized by task 2.11; detectors never fetch more."""
+    """Everything a detector may read (task 2.13, `ARCHITECTURE.md` 7.9).
 
-    mode: Mode
-    tool_version: str
-    repo_head: str
-    base: str | None
+    Four fields, because that is what a rule needs: the collected files, the trusted policy, the
+    trusted manifest and the loaded rule data. Detectors never fetch more and never get the trust
+    model itself: `mode` decides which base the policy came from, which is settled before this
+    exists, and is then recorded on the report. A rule that genuinely needs the mode will add it
+    back with a task that says why.
+    """
+
     entries: tuple[FileEntry, ...]
     policy: Policy
     manifest: Manifest

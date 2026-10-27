@@ -142,7 +142,7 @@ class TestRolesAndReads:
         commit(repo)
         entry = entry_of(scan(repo), "long.py")
         assert entry.sha256 == hashlib.sha256(data.encode()).hexdigest()
-        assert entry.size_bytes == 9000
+        assert entry.skip_reason is None
 
     def test_no_default_directory_skip(self, repo: Path) -> None:
         write(repo, "node_modules/left-pad/index.js", "module.exports = 1\n")

@@ -15,7 +15,7 @@ import pytest
 from airlock import roles, runner
 from airlock.detectors import DETECTOR_NAMES
 from airlock.fingerprint import PendingFinding
-from airlock.model import FileEntry, Manifest, Mode, Policy, ScanContext, Severity
+from airlock.model import FileEntry, Manifest, Policy, ScanContext, Severity
 from airlock.rules import load_role_globs, load_rules
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -45,16 +45,11 @@ def make_entry(
         if text is not None
         else (roles.WASM_ROLE,)
     )
-    size = len(text) if text is not None else 0
-    return FileEntry(path=path, size_bytes=size, sha256=sha256, roles=roles_, text=text)
+    return FileEntry(path=path, sha256=sha256, roles=roles_, text=text)
 
 
 def make_context(entries: list[FileEntry], **overrides: Any) -> ScanContext:
     values: dict[str, Any] = {
-        "mode": Mode.FULL,
-        "tool_version": "0.0.0-test",
-        "repo_head": "0" * 40,
-        "base": None,
         "entries": tuple(entries),
         "policy": Policy(),
         "manifest": Manifest(),

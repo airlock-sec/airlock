@@ -2,9 +2,9 @@
 
 Each rule names its fixture builder in its own data file (`tests = { positive = ..., negative =
 ... }`), so the suite can ask every shipped rule for both halves and fail when one is missing
-(`PRD.md` FR-13). Trigger text is assembled from fragments at test time and handed to the runner
-as an in-memory tree, so this repository never commits a live-looking payload
-(`project_structure.md` 6).
+(`PRD.md` FR-13). Trigger text is assembled from fragments at test time and handed to the scanner
+as collected files (path, bytes, roles, hash), so this repository never commits a live-looking
+payload (`project_structure.md` 6).
 
 The caps here are smaller than the shipped policy defaults on purpose: a fixture should be long
 because the rule says so, not because it is the size of a real minified bundle.
@@ -22,7 +22,6 @@ from airlock.model import (
     EMPTY_MANIFEST,
     FileEntry,
     Manifest,
-    Mode,
     Policy,
     Rule,
     ScanContext,
@@ -133,7 +132,6 @@ def entry_for(file: File, role_globs: Mapping[str, tuple[str, ...]]) -> FileEntr
     data = file.content()
     return FileEntry(
         path=file.path,
-        size_bytes=len(data),
         sha256=digest(data),
         roles=resolve_roles(file.path, data[:HEAD_BYTES], role_globs),
         text=file.text,
@@ -141,13 +139,9 @@ def entry_for(file: File, role_globs: Mapping[str, tuple[str, ...]]) -> FileEntr
 
 
 def context(case: Case) -> ScanContext:
-    """The scan context a fixture is run under: full mode, the caps above, the shipped rules."""
+    """The scan context a fixture is run under: the caps above, the shipped rules and policy."""
     role_globs = load_role_globs(REPO_ROOT / "rules" / "roles.toml")
     return ScanContext(
-        mode=Mode.FULL,
-        tool_version="0.0.0-test",
-        repo_head="0" * 40,
-        base=None,
         entries=tuple(entry_for(file, role_globs) for file in case.files),
         policy=Policy(line_cap=LINE_CAP, tail_max_len=TAIL_MAX_LEN, tail_entropy=TAIL_ENTROPY),
         manifest=case.manifest,
