@@ -350,17 +350,25 @@ EMPTY_MANIFEST = Manifest()
 
 @dataclass(frozen=True, slots=True)
 class FileEntry:
-    """One tracked file as the collector produced it. Finalized by task 2.2."""
+    """One tracked file as the collector produced it. Finalized by task 2.2.
+
+    `sha256` and `text` are absent whenever the collector could not read the whole file; the
+    matching skip finding is why the scan is still fail-closed.
+    """
 
     path: str
     size_bytes: int
-    sha256: str
+    sha256: str | None
     roles: tuple[str, ...]
     text: str | None = None
     skip_reason: str | None = None
 
     def __post_init__(self) -> None:
         _require_repo_path(self.path, "path")
+        if self.size_bytes < 0:
+            raise ValueError(f"size_bytes cannot be negative for {self.path}")
+        if self.sha256 is not None and not _HEX64_RE.match(self.sha256):
+            raise ValueError("file sha256 must be 64 hex digits")
 
 
 @dataclass(frozen=True, slots=True)
