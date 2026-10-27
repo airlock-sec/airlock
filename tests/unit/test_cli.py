@@ -105,13 +105,11 @@ class TestUsage:
             main([])
         assert stop.value.code == EXIT_CONFIG
 
-    @pytest.mark.parametrize(
-        "verb", [["manifest", "add", "a.wasm", "--origin", "built"], ["manifest", "check"]]
-    )
-    def test_manifest_verbs_are_refused_rather_than_ignored(self, verb: list[str]) -> None:
-        """3.5 has not written these yet, and a silent success would look like a recorded
-        artifact."""
-        assert main(verb) == EXIT_CONFIG
+    def test_a_verb_that_is_not_add_or_check_is_a_usage_error(self) -> None:
+        """argparse refuses an unknown verb; nothing here may fall through to a silent success."""
+        with pytest.raises(SystemExit) as stop:
+            main(["manifest", "remove", "a.wasm"])
+        assert stop.value.code == EXIT_CONFIG
 
     def test_an_unmapped_event_never_picks_a_trust_model_by_guessing(self) -> None:
         assert main(["scan", "--event", "release"]) == EXIT_CONFIG
@@ -461,6 +459,162 @@ class TestFailClosed:
         monkeypatch.setattr("airlock.cli.collect", explode)
 
         assert main(["scan", str(repo), "--mode", "full"]) == EXIT_INTERNAL
+
+
+def artifact(root: Path, rel: str, word: str) -> Path:
+    """A generated Wasm artifact: magic, version preamble, one custom section naming its seed."""
+    body = word.encode()
+    path = root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"\x00asm\x01\x00\x00\x00\x00" + str(len(body)).encode() + b"\x01a" + body)
+    git(root, "add", "-A")
+    return path
+
+
+def manifest_add(root: Path, *targets: str) -> int:
+    """Run `airlock manifest add` against `root` and return its exit code."""
+    return main(
+        [
+            "manifest",
+            "add",
+            *targets,
+            "--repo",
+            str(root),
+            "--origin",
+            "built",
+            "--source",
+            "contracts/counter",
+            "--build",
+            "cargo build --release --target wasm32-unknown-unknown",
+        ]
+    )
+
+
+def manifest_check(root: Path, capsys: pytest.CaptureFixture[str], *args: str) -> int:
+    """Run `airlock manifest check` against `root` and return its exit code."""
+    return main(["manifest", "check", str(root), *args])
+
+
+class TestManifestCommands:
+    """Task 3.5: one command records an artifact, and `check` answers the manifest question."""
+
+    def test_add_then_check_round_trips_to_a_clean_exit(self, repo: Path, capsys) -> None:
+        seed(repo)
+        artifact(repo, "target/counter.wasm", "counter")
+
+        assert manifest_add(repo, "target/counter.wasm") == EXIT_PASS
+        commit(repo)
+        assert manifest_check(repo, capsys) == EXIT_PASS
+
+    def test_a_second_add_reports_that_nothing_changed(self, repo: Path, capsys) -> None:
+        seed(repo)
+        artifact(repo, "target/counter.wasm", "counter")
+
+        assert manifest_add(repo, "target/counter.wasm") == EXIT_PASS
+        committed = (repo / "wasm-manifest.toml").read_text(encoding="utf-8")
+
+        assert manifest_add(repo, "target/counter.wasm") == EXIT_PASS
+        assert "already lists every target" in capsys.readouterr().out
+        assert (repo / "wasm-manifest.toml").read_text(encoding="utf-8") == committed
+
+    def test_add_records_the_artifact_and_commits_nothing(self, repo: Path, capsys) -> None:
+        """`add` writes the manifest file and stops there; staging it is the operator's job."""
+        head = seed(repo)
+        artifact(repo, "target/counter.wasm", "counter")
+        staged = git(repo, "diff", "--cached", "--name-only")
+
+        manifest_add(repo, "target/counter.wasm")
+
+        written = (repo / "wasm-manifest.toml").read_text(encoding="utf-8")
+        assert "cargo build --release" in written
+        assert git(repo, "diff", "--cached", "--name-only") == staged
+        assert "wasm-manifest.toml" not in staged.split()
+        assert git(repo, "rev-parse", "HEAD").strip() == head
+        assert git(repo, "status", "--porcelain").splitlines() == [
+            "A  target/counter.wasm",
+            " M wasm-manifest.toml",
+        ]
+        assert "on its own" in capsys.readouterr().out
+
+    def test_check_fails_closed_on_an_unlisted_artifact(self, repo: Path, capsys) -> None:
+        seed(repo)
+        artifact(repo, "target/evil.wasm", "evil")
+        commit(repo)
+
+        assert manifest_check(repo, capsys) == EXIT_FINDINGS
+        assert "wasm-unlisted" in capsys.readouterr().out
+
+    def test_check_names_a_stale_entry_without_failing_the_gate(self, repo: Path, capsys) -> None:
+        """A gone artifact is manifest rot, not a shippable-bytes problem: WARN, so exit 0.
+
+        `check` shares the scan's `fail_on` threshold rather than inventing one, which is why
+        the stale entry is named in the output but does not stop the line. The artifact it
+        described is no longer in the tree, so nothing unsafe would ship.
+        """
+        seed(repo)
+        artifact(repo, "target/counter.wasm", "counter")
+        manifest_add(repo, "target/counter.wasm")
+        commit(repo)
+        (repo / "target" / "counter.wasm").unlink()
+        git(repo, "add", "-A")
+        commit(repo)
+
+        assert manifest_check(repo, capsys) == EXIT_PASS
+        out = capsys.readouterr().out
+        assert "wasm-manifest-stale" in out
+        assert "1 WARN" in out
+
+    def test_check_answers_only_the_manifest_question(self, repo: Path, capsys) -> None:
+        """A payload is the scan's finding, not the manifest's, so `check` stays exit 0."""
+        seed(repo)
+        artifact(repo, "target/counter.wasm", "counter")
+        manifest_add(repo, "target/counter.wasm")
+        write(repo, "postcss.config.mjs", PAYLOAD)
+        commit(repo)
+
+        assert scan(repo, capsys=capsys)[0] == EXIT_FINDINGS
+        assert manifest_check(repo, capsys) == EXIT_PASS
+        out = capsys.readouterr().out
+        assert "cfg-dynamic-code" not in out
+
+    def test_check_writes_the_same_report_formats_as_a_scan(self, repo: Path, capsys) -> None:
+        seed(repo)
+        artifact(repo, "target/evil.wasm", "evil")
+        commit(repo)
+
+        assert manifest_check(repo, capsys, "--format", "json") == EXIT_FINDINGS
+        report = json.loads(capsys.readouterr().out)
+        assert {item["rule_id"] for item in report["findings"]} == {"wasm-unlisted"}
+        assert report["files_scanned"] >= 1
+
+    def test_add_refuses_a_file_that_is_not_wasm(self, repo: Path, capsys) -> None:
+        seed(repo)
+        write(repo, "pointer.wasm", "version https://git-lfs.github.com/spec/v1\n")
+
+        assert (
+            main(
+                [
+                    "manifest",
+                    "add",
+                    "pointer.wasm",
+                    "--repo",
+                    str(repo),
+                    "--origin",
+                    "vendored",
+                    "--source",
+                    "upstream",
+                ]
+            )
+            == EXIT_CONFIG
+        )
+        assert "Wasm magic" in capsys.readouterr().err
+
+    def test_check_on_an_unborn_repository_is_a_usage_error(self, tmp_path: Path, capsys) -> None:
+        root = tmp_path / "empty"
+        root.mkdir()
+        git(root, "init", "-q", "--initial-branch=main")
+
+        assert manifest_check(root, capsys) == EXIT_CONFIG
 
 
 class TestRegistryIntegrity:
