@@ -1,0 +1,10 @@
+# Airlock's own Wasm manifest, keyed by SHA-256 (ARCHITECTURE.md 7.7). Protected path.
+#
+# No entries yet: this repository commits no Wasm artifacts. Tests generate fixture bytes
+# at run time (`\\0asm` plus a trivial section) and never store a compiled contract.
+#
+# Adding one is a two-step flow: land the manifest change in its own pull request first,
+# then the pull request that adds the file. Policy is read from the trusted base, so a PR
+# carrying both fails until the manifest merge is the base.
+
+version = 1

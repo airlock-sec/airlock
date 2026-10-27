@@ -1,0 +1,19 @@
+# Airlock's own policy, read by the dogfood scan of this repository (task 4.3).
+# Protected path: changes need owner review, and a scan in `pr` or `push` mode reads this
+# file from the trusted base, never from HEAD.
+#
+# There are no suppressions here on purpose. Add one only with a real reason, a exact path
+# and the fingerprint from a finding.
+
+version = 1
+
+[policy]
+fail_on        = "high"
+max_file_bytes = 5000000
+line_cap       = 20000
+tail_max_len   = 2000   # placeholder until tuned on the corpus (task 3.3)
+tail_entropy   = 4.5    # placeholder until tuned on the corpus (task 3.3)
+
+[soroban]
+require_release_profile = { overflow-checks = true, panic = "abort", lto = true,
+                            codegen-units = 1, debug-assertions = false }
