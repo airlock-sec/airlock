@@ -227,7 +227,7 @@ Ordering: severity descending, then `(path, line, rule_id)`, so output is determ
 fingerprint = sha256(rule_id \0 normalized_path \0 normalized_evidence \0 occurrence)
 ```
 
-`normalized_evidence` is the matched line with outer whitespace stripped and internal whitespace runs collapsed. Line numbers are excluded so edits above a line do not invalidate a suppression. `occurrence` is the zero-based index of that identical evidence within the file, so a second copy of a suppressed line is a new, unsuppressed finding (B5). If an earlier duplicate is removed, indices shift and the suppression must be reissued; that fails closed. For file-level findings the file's SHA-256 replaces the evidence. [Unverified: churn on real edits]
+`normalized_evidence` is the matched line with outer whitespace stripped and internal whitespace runs collapsed. Line numbers are excluded so edits above a line do not invalidate a suppression. `occurrence` is the zero-based index of that identical evidence within the file, so a second copy of a suppressed line is a new, unsuppressed finding (B5). If an earlier duplicate is removed, indices shift and the suppression must be reissued; that fails closed. For file-level findings the file's SHA-256 replaces the evidence. A scanner-state finding (`skipped-oversize`, `history-rewritten`, `policy-unknown-key`) has neither a matched line nor file bytes, so it keys on its message: the message is written by the scanner, never by scanned content, and every state rule is non-suppressible, so rewording one cannot move an owner's suppression. [Unverified: churn on real edits]
 
 ### 7.4 Rule file
 
@@ -271,16 +271,22 @@ tail_max_len   = 2000        # placeholder; tune on corpus (task 3.3)
 tail_entropy   = 4.5         # placeholder; tune on corpus (task 3.3)
 
 [soroban]                    # used by soroban_profile (P1)
-require_release_profile = { overflow-checks = true, panic = "abort", lto = true,
-                            codegen-units = 1, debug-assertions = false }
+[soroban.require_release_profile]
+overflow-checks = true
+panic = "abort"
+lto = true
+codegen-units = 1
+debug-assertions = false
 
 [[suppress]]
 rule        = "cfg-process-spawn"
 path        = "next.config.mjs"
 fingerprint = "sha256:..."
 reason      = "git rev-parse HEAD for build id"
-expires     = "2027-04-27"   # optional
+expires     = 2027-04-27     # optional, a TOML date
 ```
+
+An inline table has to stay on one line in TOML, so the release profile is written as its own table. `expires` is a date, not a string; the loader accepts the `YYYY-MM-DD` spelling too, because that is how the earlier sketch in this section wrote it.
 
 Rules for suppressions:
 

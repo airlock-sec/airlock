@@ -1,7 +1,620 @@
-"""Trusted-base resolution, policy loading and suppression application. Task 2.7 and 2.8.
+"""Trusted-base resolution and the policy and manifest loaders. Task 2.7 (`ARCHITECTURE.md` 6.5).
 
-Policy, suppressions and the Wasm manifest come from the trusted base (PR base in `pr`
-mode, `github.event.before` in `push` mode), never from HEAD. An unresolvable base, an
-invalid config or missing git must exit non-zero (ARCHITECTURE.md 6.5 and 8). This module
-and `collector.py` are the only ones allowed to call `subprocess`.
+Policy (`airlock.toml`, including its suppressions) and `wasm-manifest.toml` are read from a ref
+the change under scan cannot edit: the pull request base in `pr` mode, `github.event.before` in
+`push` mode. Only `full` mode reads the working tree, and it says so in a finding, because that
+is the one mode where the change can approve itself.
+
+The fallbacks are strict rather than convenient. A new branch, a rewritten history and a base
+that carries no policy file all scan against `BOOTSTRAP_POLICY` and an empty manifest: shipped
+defaults, no suppressions to inherit. Nothing here falls back to HEAD.
+
+Invalid TOML, an unsupported or missing `version` and an unresolvable `pr` base raise
+`ValueError`, which the CLI turns into exit 2. Unknown keys are the exception: they come back as
+`policy-unknown-key` findings, because a misspelled key leaves its setting at the default and the
+finding is the only place that says so.
+
+Like `collector.py`, this is one of the two modules allowed to run `subprocess`, always through
+`git_text` with a fixed argument list and never through a shell.
 """
+
+from __future__ import annotations
+
+import tomllib
+from collections import Counter
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
+from datetime import date, datetime
+from pathlib import Path
+
+from .collector import git_text
+from .fingerprint import PendingFinding, truncate_evidence
+from .model import (
+    BOOTSTRAP_POLICY,
+    EMPTY_MANIFEST,
+    MANIFEST_TOP_LEVEL_KEYS,
+    MAX_MESSAGE_CHARS,
+    POLICY_SETTINGS_KEYS,
+    POLICY_TOP_LEVEL_KEYS,
+    REPO_PATH,
+    SOROBAN_KEYS,
+    SUPPORTED_POLICY_VERSION,
+    SUPPRESSION_KEYS,
+    WASM_ENTRY_KEYS,
+    Manifest,
+    Mode,
+    Policy,
+    ReleaseProfile,
+    Severity,
+    SorobanPolicy,
+    Suppression,
+    WasmEntry,
+    require_repo_path,
+    severity_from_name,
+)
+
+#: The two protected files, named here once so a message and a test never disagree on the spelling.
+POLICY_FILENAME = "airlock.toml"
+MANIFEST_FILENAME = "wasm-manifest.toml"
+
+#: GitHub sends this as `github.event.before` for the first push to a branch.
+ZERO_SHA = "0" * 40
+
+#: A config file past this size is not a configuration file. Checked before parsing, and
+#: deliberately not `max_file_bytes`, which lives in the file being read.
+MAX_CONFIG_BYTES = 1_000_000
+
+HISTORY_REWRITTEN_RULE_ID = "history-rewritten"
+NO_TRUSTED_BASE_RULE_ID = "no-trusted-base"
+POLICY_CHANGED_RULE_ID = "policy-changed"
+UNTRUSTED_SOURCE_RULE_ID = "untrusted-policy-source"
+UNKNOWN_KEY_RULE_ID = "policy-unknown-key"
+
+SUPPRESSION_REQUIRED = SUPPRESSION_KEYS - {"expires"}
+WASM_REQUIRED = WASM_ENTRY_KEYS - {"note"}
+
+#: `[soroban] require_release_profile` keys, spelled the way Cargo spells them.
+_RELEASE_PROFILE_KEYS = frozenset(
+    {"overflow-checks", "panic", "lto", "codegen-units", "debug-assertions"}
+)
+
+HEX_DIGITS = frozenset("0123456789abcdef")
+
+
+@dataclass(frozen=True, slots=True)
+class TrustedConfig:
+    """What the scan runs on, plus the findings that say where it came from.
+
+    `base` is the commit the two files were read from, or None when the shipped defaults were
+    used. It is the value that belongs in `ScanContext.base`.
+    """
+
+    policy: Policy
+    manifest: Manifest
+    base: str | None
+    pending: tuple[PendingFinding, ...]
+
+
+def resolve_policy(
+    repo_root: Path,
+    mode: Mode,
+    head: str,
+    *,
+    base: str | None = None,
+    before: str | None = None,
+    policy_path: str = POLICY_FILENAME,
+    manifest_path: str = MANIFEST_FILENAME,
+) -> TrustedConfig:
+    """Read the protected files from the trusted base and report every way it is weaker.
+
+    Raises `ValueError` for a `pr` base that cannot be resolved, so a scan can never end up
+    judged by the policy the change under review wrote.
+    """
+    require_repo_path(policy_path, "policy path")
+    require_repo_path(manifest_path, "manifest path")
+
+    if mode is Mode.FULL:
+        return _from_working_tree(repo_root, policy_path, manifest_path)
+
+    if not _is_sha(head):
+        raise ValueError(f"HEAD is not a commit SHA: {_short(head)!r}")
+    ref, pending = _trusted_ref(repo_root, mode, head, base, before)
+    if ref is None:
+        return TrustedConfig(BOOTSTRAP_POLICY, EMPTY_MANIFEST, None, pending)
+
+    policy, policy_pending = _policy_at_base(repo_root, ref, head, policy_path)
+    manifest, manifest_pending = _manifest_at_base(repo_root, ref, head, manifest_path)
+    return TrustedConfig(
+        policy=policy,
+        manifest=manifest,
+        base=ref,
+        pending=pending + policy_pending + manifest_pending,
+    )
+
+
+def _trusted_ref(
+    repo_root: Path,
+    mode: Mode,
+    head: str,
+    base: str | None,
+    before: str | None,
+) -> tuple[str | None, tuple[PendingFinding, ...]]:
+    """The commit to read policy from, or None with the finding that explains why there is none."""
+    if mode is Mode.PR:
+        if not base:
+            raise ValueError(
+                "pr mode needs the pull request base SHA. The policy is never read from the "
+                "change under review, so there is nothing to fall back to."
+            )
+        if not _is_sha(base):
+            raise ValueError(f"base is not a commit SHA: {_short(base)!r}")
+        if not _is_commit(repo_root, base):
+            raise ValueError(
+                f"base {_short(base)} is not reachable in this checkout. The workflow needs "
+                "actions/checkout with fetch-depth: 0, or a depth that reaches the base commit."
+            )
+        return base, ()
+
+    if not before or before == ZERO_SHA:
+        return None, (
+            _state(
+                NO_TRUSTED_BASE_RULE_ID,
+                Severity.WARN,
+                REPO_PATH,
+                "this push created the branch, so no earlier commit holds "
+                f"{POLICY_FILENAME} or {MANIFEST_FILENAME}: the shipped defaults and no "
+                "suppressions apply",
+                evidence="new-branch",
+            ),
+        )
+
+    reason = _unreachable_reason(repo_root, before, head)
+    if reason is not None:
+        return None, (
+            _state(
+                HISTORY_REWRITTEN_RULE_ID,
+                Severity.HIGH,
+                REPO_PATH,
+                f"the pushed `before` {_short(before)} is not an ancestor of HEAD, so this push "
+                "rewrote history: the shipped defaults and no suppressions apply instead of the "
+                "base policy",
+                evidence=reason,
+            ),
+        )
+    return before, ()
+
+
+def _unreachable_reason(repo_root: Path, before: str, head: str) -> str | None:
+    """Why `before` cannot serve as the base, or None when it can."""
+    if not _is_sha(before):
+        return f"`before` is not a commit SHA: {before[:80]!r}"
+    try:
+        git_text(repo_root, "merge-base", "--is-ancestor", before, head)
+    except ValueError as exc:
+        return str(exc)
+    return None
+
+
+def _is_commit(repo_root: Path, sha: str) -> bool:
+    try:
+        git_text(repo_root, "cat-file", "-e", f"{sha}^{{commit}}")
+    except ValueError:
+        return False
+    return True
+
+
+def _is_sha(value: str) -> bool:
+    return len(value) == 40 and HEX_DIGITS.issuperset(value)
+
+
+def _short(value: str | None) -> str:
+    if value is None:
+        return "(none)"
+    return value[:12]
+
+
+def _blob_at(repo_root: Path, ref: str, path: str) -> str | None:
+    """One file's text at a commit, or None when that commit does not carry it."""
+    if not git_text(repo_root, "ls-tree", "--name-only", ref, "--", path):
+        return None
+    return git_text(repo_root, "show", f"{ref}:{path}")
+
+
+def _policy_at_base(
+    repo_root: Path, ref: str, head: str, path: str
+) -> tuple[Policy, tuple[PendingFinding, ...]]:
+    base_text = _blob_at(repo_root, ref, path)
+    head_text = _blob_at(repo_root, head, path)
+    changed = _change_finding(path, "the policy", base_text, head_text, ref)
+    pending = () if changed is None else (changed,)
+    if base_text is None:
+        # The base has no policy file, so the change under review is the first to carry one. It
+        # is reported and ignored: reading it would let the change set its own rules.
+        return BOOTSTRAP_POLICY, pending
+    policy, key_pending = policy_from_toml(base_text, path=path, source=f"base {_short(ref)}")
+    return policy, pending + key_pending
+
+
+def _manifest_at_base(
+    repo_root: Path, ref: str, head: str, path: str
+) -> tuple[Manifest, tuple[PendingFinding, ...]]:
+    base_text = _blob_at(repo_root, ref, path)
+    head_text = _blob_at(repo_root, head, path)
+    changed = _change_finding(path, "the Wasm manifest", base_text, head_text, ref)
+    pending = () if changed is None else (changed,)
+    if base_text is None:
+        return EMPTY_MANIFEST, pending
+    manifest, key_pending = manifest_from_toml(base_text, path=path, source=f"base {_short(ref)}")
+    return manifest, pending + key_pending
+
+
+def _change_finding(
+    path: str, what: str, base_text: str | None, head_text: str | None, ref: str
+) -> PendingFinding | None:
+    summary = _change_summary(base_text, head_text)
+    if summary is None:
+        return None
+    return _state(
+        POLICY_CHANGED_RULE_ID,
+        Severity.WARN,
+        path,
+        f"{what} changed in this change, and this scan used the version at base "
+        f"{_short(ref)}: {summary}",
+        evidence=f"{path} {summary}",
+    )
+
+
+def _change_summary(base_text: str | None, head_text: str | None) -> str | None:
+    """How the head copy differs, as line counts. None when it does not.
+
+    Content stays out of the summary: it is a message, and the diff of a policy edit is the
+    attacker's own text. The two copies are already read from git, so no `git diff` run is
+    needed to count them.
+    """
+    if base_text is None and head_text is None:
+        return None
+    if base_text is None:
+        return "added by this change"
+    if head_text is None:
+        return "deleted by this change"
+    if base_text == head_text:
+        return None
+    before = Counter(base_text.splitlines())
+    after = Counter(head_text.splitlines())
+    return (
+        f"{sum((after - before).values())} line(s) added, {sum((before - after).values())} removed"
+    )
+
+
+def _from_working_tree(repo_root: Path, policy_path: str, manifest_path: str) -> TrustedConfig:
+    """`full` mode: read what is on disk, then state the weaker guarantee (6.5)."""
+    policy_text = _working_text(repo_root, policy_path)
+    manifest_text = _working_text(repo_root, manifest_path)
+
+    policy_pending: tuple[PendingFinding, ...] = ()
+    manifest_pending: tuple[PendingFinding, ...] = ()
+    if policy_text is None:
+        policy = BOOTSTRAP_POLICY
+    else:
+        policy, policy_pending = policy_from_toml(
+            policy_text, path=policy_path, source="working tree"
+        )
+    if manifest_text is None:
+        manifest, manifest_pending = EMPTY_MANIFEST, ()
+    else:
+        manifest, manifest_pending = manifest_from_toml(
+            manifest_text, path=manifest_path, source="working tree"
+        )
+
+    pending = (
+        _untrusted_source(policy_path, policy_text is not None),
+        _untrusted_source(manifest_path, manifest_text is not None),
+    )
+    return TrustedConfig(
+        policy=policy,
+        manifest=manifest,
+        base=None,
+        pending=pending + policy_pending + manifest_pending,
+    )
+
+
+def _untrusted_source(path: str, present: bool) -> PendingFinding:
+    return _state(
+        UNTRUSTED_SOURCE_RULE_ID,
+        Severity.INFO,
+        path,
+        f"{path} was read from the working tree, which the change under scan can edit"
+        if present
+        else f"no {path} in the working tree, so the shipped defaults apply",
+        evidence="working-tree" if present else "absent",
+    )
+
+
+def _working_text(repo_root: Path, path: str) -> str | None:
+    target = repo_root / path
+    try:
+        data = target.read_bytes()
+    except OSError:
+        return None
+    if len(data) > MAX_CONFIG_BYTES:
+        raise ValueError(
+            f"{path} is {len(data)} bytes, over the {MAX_CONFIG_BYTES} byte limit for a config file"
+        )
+    return data.decode("utf-8", errors="replace")
+
+
+def policy_from_toml(
+    text: str, *, path: str, source: str
+) -> tuple[Policy, tuple[PendingFinding, ...]]:
+    """Parse `airlock.toml`. Every default comes from `BOOTSTRAP_POLICY`, not a second literal."""
+    document = _document(text, path)
+    unknown: list[str] = []
+    _unknown_keys(document, POLICY_TOP_LEVEL_KEYS, "", unknown)
+    version = _require_version(document, path)
+
+    settings = _table(document, "policy", path)
+    _unknown_keys(settings, POLICY_SETTINGS_KEYS, "policy.", unknown)
+    soroban_table = _table(document, "soroban", path)
+    _unknown_keys(soroban_table, SOROBAN_KEYS, "soroban.", unknown)
+
+    policy = Policy(
+        version=version,
+        fail_on=_opt_severity(
+            settings.get("fail_on"), BOOTSTRAP_POLICY.fail_on, "policy.fail_on", path
+        ),
+        max_file_bytes=_opt_int(
+            settings.get("max_file_bytes"),
+            BOOTSTRAP_POLICY.max_file_bytes,
+            "policy.max_file_bytes",
+            path,
+        ),
+        line_cap=_opt_int(
+            settings.get("line_cap"), BOOTSTRAP_POLICY.line_cap, "policy.line_cap", path
+        ),
+        tail_max_len=_opt_int(
+            settings.get("tail_max_len"), BOOTSTRAP_POLICY.tail_max_len, "policy.tail_max_len", path
+        ),
+        tail_entropy=_opt_float(
+            settings.get("tail_entropy"), BOOTSTRAP_POLICY.tail_entropy, "policy.tail_entropy", path
+        ),
+        soroban=_soroban_policy(soroban_table, path, unknown),
+        suppressions=_suppressions(document, path, unknown),
+    )
+    return policy, _unknown_findings(path, source, unknown)
+
+
+def manifest_from_toml(
+    text: str, *, path: str, source: str
+) -> tuple[Manifest, tuple[PendingFinding, ...]]:
+    """Parse `wasm-manifest.toml` (`ARCHITECTURE.md` 7.7)."""
+    document = _document(text, path)
+    unknown: list[str] = []
+    _unknown_keys(document, MANIFEST_TOP_LEVEL_KEYS, "", unknown)
+    version = _require_version(document, path)
+
+    entries: list[WasmEntry] = []
+    for index, table in enumerate(_tables(document, "wasm", path), start=1):
+        context = f"{path}: [[wasm]] #{index}"
+        _unknown_keys(table, WASM_ENTRY_KEYS, f"wasm[{index}].", unknown)
+        _require_keys(table, WASM_REQUIRED, context)
+        entries.append(
+            WasmEntry(
+                sha256=_string(table["sha256"], "sha256", context),
+                paths=_string_list(table["paths"], "paths", context),
+                origin=_string(table["origin"], "origin", context),
+                source=_string(table["source"], "source", context),
+                build=_string(table["build"], "build", context),
+                note=_opt_string(table.get("note"), "", "note", context),
+            )
+        )
+    return Manifest(version=version, entries=tuple(entries)), _unknown_findings(
+        path, source, unknown
+    )
+
+
+def _soroban_policy(table: Mapping[str, object], path: str, unknown: list[str]) -> SorobanPolicy:
+    raw = table.get("require_release_profile")
+    if raw is None:
+        return SorobanPolicy()
+    if not isinstance(raw, Mapping):
+        raise ValueError(f"{path}: [soroban] require_release_profile must be a table")
+    prefix = "soroban.require_release_profile."
+    _unknown_keys(raw, frozenset(_RELEASE_PROFILE_KEYS), prefix, unknown)
+    defaults = BOOTSTRAP_POLICY.soroban.require_release_profile
+    return SorobanPolicy(
+        require_release_profile=ReleaseProfile(
+            overflow_checks=_opt_bool(
+                raw.get("overflow-checks"),
+                defaults.overflow_checks,
+                f"{prefix}overflow-checks",
+                path,
+            ),
+            panic=_opt_string(raw.get("panic"), defaults.panic, f"{prefix}panic", path),
+            lto=_opt_bool(raw.get("lto"), defaults.lto, f"{prefix}lto", path),
+            codegen_units=_opt_int(
+                raw.get("codegen-units"), defaults.codegen_units, f"{prefix}codegen-units", path
+            ),
+            debug_assertions=_opt_bool(
+                raw.get("debug-assertions"),
+                defaults.debug_assertions,
+                f"{prefix}debug-assertions",
+                path,
+            ),
+        )
+    )
+
+
+def _suppressions(
+    document: Mapping[str, object], path: str, unknown: list[str]
+) -> tuple[Suppression, ...]:
+    suppressions: list[Suppression] = []
+    for index, table in enumerate(_tables(document, "suppress", path), start=1):
+        context = f"{path}: [[suppress]] #{index}"
+        _unknown_keys(table, SUPPRESSION_KEYS, f"suppress[{index}].", unknown)
+        _require_keys(table, SUPPRESSION_REQUIRED, context)
+        suppressions.append(
+            Suppression(
+                rule=_string(table["rule"], "rule", context),
+                path=_string(table["path"], "path", context),
+                fingerprint=_string(table["fingerprint"], "fingerprint", context),
+                reason=_string(table["reason"], "reason", context),
+                expires=_expires(table.get("expires"), context),
+            )
+        )
+    return tuple(suppressions)
+
+
+def _expires(value: object, context: str) -> date | None:
+    """A UTC calendar date. A string is accepted too, because the documented example writes one."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        raise ValueError(f"{context}: expires must be a date, not a date and a time")
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value.strip())
+        except ValueError as exc:
+            raise ValueError(f"{context}: expires is not a YYYY-MM-DD date: {value!r}") from exc
+    raise ValueError(f"{context}: expires must be a date")
+
+
+def _document(text: str, path: str) -> Mapping[str, object]:
+    try:
+        return tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:
+        raise ValueError(f"cannot parse {path}: {exc}") from exc
+
+
+def _require_version(document: Mapping[str, object], path: str) -> int:
+    """Required, because a file that omits `version` must not be read as the supported one."""
+    if "version" not in document:
+        raise ValueError(f"{path}: version is required")
+    value = document["version"]
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{path}: version must be a whole number")
+    if value != SUPPORTED_POLICY_VERSION:
+        raise ValueError(
+            f"{path}: version {value} is unsupported, this build reads version "
+            f"{SUPPORTED_POLICY_VERSION}"
+        )
+    return value
+
+
+def _table(document: Mapping[str, object], key: str, path: str) -> Mapping[str, object]:
+    value = document.get(key)
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{path}: [{key}] must be a table")
+    return value
+
+
+def _tables(
+    document: Mapping[str, object], key: str, path: str
+) -> tuple[Mapping[str, object], ...]:
+    value = document.get(key)
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise ValueError(f"{path}: '[[{key}]]' must be a list of tables")
+    tables: list[Mapping[str, object]] = []
+    for item in value:
+        if not isinstance(item, Mapping):
+            raise ValueError(f"{path}: '[[{key}]]' entries must be tables")
+        tables.append(item)
+    return tuple(tables)
+
+
+def _require_keys(table: Mapping[str, object], required: Iterable[str], context: str) -> None:
+    missing = sorted(set(required) - set(table))
+    if missing:
+        raise ValueError(f"{context}: missing required key(s) {', '.join(missing)}")
+
+
+def _unknown_keys(
+    table: Mapping[str, object], allowed: frozenset[str], prefix: str, found: list[str]
+) -> None:
+    """Record the keys no loader reads. Silently dropping one is how a setting stops existing."""
+    found.extend(f"{prefix}{name}" for name in sorted(set(table) - allowed))
+
+
+def _unknown_findings(path: str, source: str, keys: Iterable[str]) -> tuple[PendingFinding, ...]:
+    return tuple(
+        _state(
+            UNKNOWN_KEY_RULE_ID,
+            Severity.WARN,
+            path,
+            f"{path} read from {source} sets {key}, which this version of airlock does not read: "
+            "that setting keeps its default",
+            evidence=key,
+        )
+        for key in keys
+    )
+
+
+def _string(value: object, field: str, context: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"{context}: {field} must be a string")
+    return value
+
+
+def _string_list(value: object, field: str, context: str) -> tuple[str, ...]:
+    if not isinstance(value, list) or not value or not all(isinstance(item, str) for item in value):
+        raise ValueError(f"{context}: {field} must be a non-empty list of strings")
+    return tuple(value)
+
+
+def _opt_string(value: object, default: str, field: str, context: str) -> str:
+    return default if value is None else _string(value, field, context)
+
+
+def _opt_int(value: object, default: int, field: str, context: str) -> int:
+    if value is None:
+        return default
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{context}: {field} must be a whole number")
+    if value <= 0:
+        raise ValueError(f"{context}: {field} must be greater than zero")
+    return value
+
+
+def _opt_float(value: object, default: float, field: str, context: str) -> float:
+    if value is None:
+        return default
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{context}: {field} must be a number")
+    if value <= 0:
+        raise ValueError(f"{context}: {field} must be greater than zero")
+    return float(value)
+
+
+def _opt_bool(value: object, default: bool, field: str, context: str) -> bool:
+    if value is None:
+        return default
+    if not isinstance(value, bool):
+        raise ValueError(f"{context}: {field} must be a boolean")
+    return value
+
+
+def _opt_severity(value: object, default: Severity, field: str, context: str) -> Severity:
+    if value is None:
+        return default
+    return severity_from_name(_string(value, field, context))
+
+
+def _state(
+    rule_id: str, severity: Severity, path: str, message: str, evidence: str
+) -> PendingFinding:
+    """A scanner-state finding: file-level, ours to word, and never suppressible."""
+    return PendingFinding(
+        rule_id=rule_id,
+        severity=severity,
+        path=path,
+        line=0,
+        roles=(),
+        message=message[:MAX_MESSAGE_CHARS],
+        evidence=truncate_evidence(evidence),
+        suppressible=False,
+    )
