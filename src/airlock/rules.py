@@ -19,6 +19,7 @@ from pathlib import Path
 from .fingerprint import PendingFinding, truncate_evidence
 from .model import (
     MAX_MESSAGE_CHARS,
+    STATE_RULE_IDS,
     FileEntry,
     Rule,
     RulePattern,
@@ -59,7 +60,7 @@ FALLBACK_LONG_LINE = Rule(
     roles=("source", "doc", "other"),
     detector="pattern",
     severity=Severity.HIGH,
-    suppressible=True,
+    suppressible=False,
     rationale="Unbounded lines are a regex denial of service and a hiding place.",
     pattern=RulePattern(kind="literal", value=("no literal ever matches this text",)),
     tests=RuleTests(positive="cfg_long_line", negative="cfg_long_line"),
@@ -248,7 +249,7 @@ def finding_for(
         roles=entry.roles,
         message=((message or rule.title)[:MAX_MESSAGE_CHARS]),
         evidence=truncate_evidence(entry.text if evidence is None else evidence),
-        suppressible=rule.suppressible,
+        suppressible=rule.suppressible and rule.id not in STATE_RULE_IDS,
         file_sha256=entry.sha256,
     )
 

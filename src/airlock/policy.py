@@ -726,10 +726,10 @@ def _entry_problem(entry: Suppression, by_rule: Mapping[str, Rule]) -> str | Non
     Checked against the rule data rather than against a finding, so a suppression of a rule that
     was made non-suppressible, or renamed, is reported even on a scan where it matched nothing.
     """
+    if entry.rule in STATE_RULE_IDS:
+        return "scanner-state findings cannot be suppressed"
     rule = by_rule.get(entry.rule)
     if rule is None:
-        if entry.rule in STATE_RULE_IDS:
-            return "scanner-state findings cannot be suppressed"
         return "no rule with that id is loaded in this build"
     if not rule.suppressible:
         return f"rule {entry.rule} is not suppressible"

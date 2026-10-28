@@ -345,6 +345,24 @@ class TestSuppressionThroughTheCLI:
         assert "suppression-invalid" in out
         assert "cfg-dynamic-code" in out
 
+    def test_a_loaded_long_line_rule_cannot_hide_unscanned_content(
+        self, repo: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        seed(repo)
+        write(repo, "postcss.config.mjs", "// " + "x" * 30_010 + "\n")
+        commit(repo)
+        digest = self.digest_for(repo, "cfg-long-line", capsys)
+        self.suppress(repo, "cfg-long-line", digest)
+
+        code, out = scan(repo, "--mode", "full", "--format", "json", capsys=capsys)
+        report = json.loads(out)
+        assert code == EXIT_FINDINGS
+        assert report["suppressed"] == []
+        for rule_id in ("cfg-long-line", "suppression-invalid"):
+            finding = next(f for f in report["findings"] if f["rule_id"] == rule_id)
+            assert finding["severity"] == "high"
+            assert finding["suppressible"] is False
+
     def test_a_wrong_fingerprint_suppresses_nothing(
         self, repo: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:

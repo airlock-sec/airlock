@@ -70,7 +70,7 @@ Status: v0.2 (red-team revision). Outline of decisions an agent must not violate
 ## 6. Exit codes and fail-closed findings [8]
 
 - Exit: 0 pass, 1 findings at or above `fail_on`, 2 config or usage error, 3 internal error.
-- Finding IDs for skips and states: `skipped-oversize`, `skipped-unreadable`, `skipped-symlink`, `skipped-unmerged`, `submodule-present`, `nul-in-text`, `non-utf8-text`, `cfg-long-line`, `detector-error`, `history-rewritten`, `no-trusted-base`, `policy-changed`, `policy-unknown-key`, `suppression-expiring`, `suppression-invalid`, `untrusted-policy-source`.
+- Skip and state findings are never suppressible, even when a loaded rule declares otherwise. IDs: `skipped-oversize`, `skipped-unreadable`, `skipped-symlink`, `skipped-unmerged`, `submodule-present`, `nul-in-text`, `non-utf8-text`, `cfg-long-line`, `detector-error`, `history-rewritten`, `no-trusted-base`, `policy-changed`, `policy-unknown-key`, `suppression-expiring`, `suppression-invalid`, `untrusted-policy-source`.
 
 ## 7. Detectors
 

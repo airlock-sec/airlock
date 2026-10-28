@@ -76,6 +76,7 @@ class TestShippedRuleSet:
         # B5: a suppression must not be able to hide remote code execution or a swapped binary.
         assert sorted(rule.id for rule in shipped_rules() if not rule.suppressible) == [
             "cfg-dynamic-code",
+            "cfg-long-line",
             "cfg-network-exec",
             "wasm-hash-mismatch",
             "wasm-unlisted",
