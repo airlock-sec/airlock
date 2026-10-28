@@ -1,0 +1,1 @@
+temporary probe for task 1.9: a diff with no ROADMAP.md edit must fail the gate
