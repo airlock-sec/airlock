@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from airlock import runner
 from airlock.collector import (
     SKIP_ENCODING,
     SKIP_OVERSIZE,
@@ -26,9 +27,11 @@ from airlock.collector import (
     git_text,
     list_tracked_files,
 )
+from airlock.detectors import DETECTOR_NAMES
 from airlock.fingerprint import number_occurrences
-from airlock.model import Policy, Severity
-from airlock.roles import ARCHIVE_ROLE, NATIVE_ROLE, SOURCE_ROLE, WASM_ROLE
+from airlock.model import EMPTY_MANIFEST, Finding, Policy, ScanContext, Severity
+from airlock.roles import ARCHIVE_ROLE, NATIVE_ROLE, SOURCE_ROLE, WASM_ROLE, known_roles
+from airlock.rules import load_role_globs, load_rules
 
 ROLE_GLOBS = {
     "tooling-config": ("**/postcss.config.*", "**/next.config.*"),
@@ -357,6 +360,74 @@ class TestDecoding:
         write(repo, "a.py", "﻿x = 1\n")
         commit(repo)
         assert entry_of(scan(repo), "a.py").text == "x = 1\n"
+
+    @pytest.mark.parametrize("newline", ["\n", "\r\n"], ids=["lf", "crlf"])
+    def test_tracked_line_endings_preserve_decoded_text(self, repo: Path, newline: str) -> None:
+        rel = "postcss.config.mjs"
+        text = newline.join(("// café", "", "export default {}", ""))
+        data = text.encode("utf-8")
+        write(repo, rel, data)
+        git(repo, "add", "--", rel)
+
+        result = scan(repo)
+
+        assert [entry.path for entry in result.entries] == [rel]
+        entry = entry_of(result, rel)
+        assert entry.text == text
+        assert entry.sha256 == hashlib.sha256(data).hexdigest()
+        assert entry.skip_reason is None
+        assert result.pending == ()
+        assert result.files_skipped == {}
+
+    def test_lf_and_crlf_keep_runner_lines_and_fingerprints_on_the_same_path(
+        self, repo: Path
+    ) -> None:
+        rules_root = Path(__file__).resolve().parents[2] / "rules"
+        role_globs = load_role_globs(rules_root / "roles.toml")
+        rules = load_rules(
+            rules_root / "builtin",
+            known_detectors=DETECTOR_NAMES,
+            known_roles=known_roles(role_globs),
+        )
+        policy = Policy()
+        rel = "postcss.config.mjs"
+        trigger = "".join(("ev", "al", "(input);"))
+        findings_by_ending: dict[str, list[Finding]] = {}
+        hashes: list[str | None] = []
+        for newline in ("\n", "\r\n"):
+            # Rewrite one tracked path so the path component cannot explain fingerprint changes.
+            text = newline.join(("// café", "", trigger, "", trigger, ""))
+            write(repo, rel, text.encode("utf-8"))
+            git(repo, "add", "--", rel)
+            collection = collect(repo, policy, role_globs)
+            assert collection.pending == ()
+            assert collection.files_skipped == {}
+            assert len(collection.entries) == 1
+            entry = collection.entries[0]
+            assert entry.text == text
+            hashes.append(entry.sha256)
+
+            findings = runner.scan(
+                ScanContext(
+                    entries=collection.entries,
+                    policy=policy,
+                    manifest=EMPTY_MANIFEST,
+                    rules=rules,
+                )
+            )
+            assert [(item.rule_id, item.path, item.line, item.severity) for item in findings] == [
+                ("cfg-dynamic-code", rel, 3, Severity.HIGH),
+                ("cfg-dynamic-code", rel, 5, Severity.HIGH),
+            ]
+            assert [item.evidence for item in findings] == [trigger, trigger]
+            assert [item.occurrence for item in findings] == [0, 1]
+            assert len({item.fingerprint for item in findings}) == 2
+            findings_by_ending[newline] = findings
+
+        assert hashes[0] != hashes[1]
+        assert [item.fingerprint for item in findings_by_ending["\n"]] == [
+            item.fingerprint for item in findings_by_ending["\r\n"]
+        ]
 
     def test_undecodable_bytes_in_a_source_file_are_still_scanned(self, repo: Path) -> None:
         write(repo, "broken.py", b"x = 1\nname = caf\xe9\n")
