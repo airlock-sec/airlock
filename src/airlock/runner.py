@@ -12,7 +12,7 @@ Two passes make up a scan:
 `number_occurrences` then assigns occurrence indices and sorts, so the same set of findings
 always produces the same fingerprints and the same report order.
 
-Suppression is applied by the caller once task 2.8 lands, because it needs the trusted policy,
+Suppression is applied by the caller (`cli.run_scan`), because it needs the trusted policy,
 which is not part of this module.
 """
 
