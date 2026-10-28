@@ -53,7 +53,7 @@ These come from `ARCHITECTURE_ESSENTIALS.md` section 2. Do not break them. If an
 
 ## 5. Commands
 
-These exist once task 1.4 is done. Run all of them before finishing.
+These are the checks CI runs (1.5). Run all of them before finishing.
 
 ```
 python -m pytest
@@ -61,8 +61,8 @@ ruff check .
 ruff format --check .
 mypy src
 python -m repo_guard scan --mode full          # self-scan; must report no HIGH findings
-scripts/check_roadmap_touched.sh               # once task 1.9 is done
-python scripts/roadmap_progress.py --check     # once task 1.9 is done
+scripts/check_roadmap_touched.sh               # the PR must change ROADMAP.md and its timestamp
+python scripts/roadmap_progress.py --check     # the progress table must match the task lines
 ```
 
 If a command does not exist yet, say so in the PR instead of silently skipping it.
