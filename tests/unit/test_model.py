@@ -7,7 +7,7 @@ from datetime import date
 
 import pytest
 
-from airlock import __version__, model
+from airlock import model
 from airlock.model import (
     BOOTSTRAP_POLICY,
     EMPTY_MANIFEST,
@@ -301,21 +301,29 @@ class TestPolicyAndManifest:
 class TestContextAndReport:
     def test_context_carries_only_what_a_detector_may_read(self) -> None:
         context = ScanContext(
-            mode=Mode.PR,
-            tool_version=__version__,
-            repo_head="b4a661b",
-            base="0" * 40,
-            entries=(FileEntry(path="a.js", size_bytes=1, sha256=DIGEST, roles=("source",)),),
+            entries=(FileEntry(path="a.js", sha256=DIGEST, roles=("source",)),),
             policy=BOOTSTRAP_POLICY,
             manifest=EMPTY_MANIFEST,
             rules=(),
         )
         assert context.entries[0].path == "a.js"
+        assert [field.name for field in dataclasses.fields(context)] == [
+            "entries",
+            "policy",
+            "manifest",
+            "rules",
+        ]
+        assert [field.name for field in dataclasses.fields(context.entries[0])] == [
+            "path",
+            "sha256",
+            "roles",
+            "text",
+            "skip_reason",
+        ]
 
     def test_file_entry_may_still_record_a_skip(self) -> None:
         entry = FileEntry(
             path="big.js",
-            size_bytes=9_999_999,
             sha256=DIGEST,
             roles=("source",),
             text=None,

@@ -131,7 +131,7 @@ A file may have several roles. Globs use a small internal matcher where `**` spa
 
 ### 6.3 Detectors
 
-A detector is a function `run(ctx) -> Iterable[Finding]` registered in a plain list. (An earlier draft used a Protocol class and a registry object; a list of functions is enough.) `ScanContext` exposes file entries with roles, the resolved policy and manifest, loaded rules and the scan mode.
+A detector is a function `run(ctx) -> Iterable[Finding]` registered in a plain list. (An earlier draft used a Protocol class and a registry object; a list of functions is enough.) `ScanContext` exposes exactly four things: the collected file entries with their roles, the trusted policy, the trusted manifest and the loaded rule data. It does not expose the trust model itself — see 7.9.
 
 Every call is wrapped: an exception becomes a HIGH `detector-error` and the remaining detectors still run. Findings a detector yielded before it raised are kept, so one failure on the tenth file costs the scan that file's coverage and nothing more. Third-party detector plugins are not supported, because loading external code would defeat the trust model.
 
@@ -328,6 +328,33 @@ class ScanReport:
     suppressed: list[Finding]
     exit_code: int
 ```
+
+### 7.9 FileEntry and ScanContext
+
+Both were drafted before the collectors, detectors and reporters existed, so task 2.13 settled them against use rather than against opinion: a field survives only if some rule, reporter or test reads it.
+
+```python
+@dataclass(frozen=True, slots=True)
+class FileEntry:
+    path: str
+    sha256: str | None          # absent when the whole file could not be read
+    roles: tuple[str, ...]
+    text: str | None = None
+    skip_reason: str | None = None
+
+@dataclass(frozen=True, slots=True)
+class ScanContext:
+    entries: tuple[FileEntry, ...]
+    policy: Policy
+    manifest: Manifest
+    rules: tuple[Rule, ...]
+```
+
+Dropped from `FileEntry`: `size_bytes`. The collector needs the size to decide whether a file is oversize or only partly read, and states it in those findings, but no rule is a function of it, and any entry that carries text can be measured with `len(text)`. It stayed a local variable in `collector.py`.
+
+Dropped from `ScanContext`: `mode`, `tool_version`, `repo_head`, `base`. Those describe the scan, not a file, and the only code that reads them is the reporters, which are handed `ScanReport` (7.8) and get them from there. Keeping them on the context would have made the trust model reachable to detector code, which is the wrong direction: `mode` decides which base the policy came from, that question is settled before a `ScanContext` exists, and a detector has no business re-opening it. A rule that genuinely needs the mode adds it back with a task that says why.
+
+The invariant this enforces is that detector code cannot see less than it needs and cannot see more than a finding should depend on. `tests/unit/test_model.py` asserts both field lists verbatim, so a re-added field is a deliberate edit to that test rather than an unnoticed one.
 
 ## 8. Fail-closed behavior
 

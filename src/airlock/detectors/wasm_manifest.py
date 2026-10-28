@@ -151,7 +151,7 @@ def run(ctx: ScanContext) -> Iterable[PendingFinding]:
         path = manifest_entry.paths[0]
         yield finding_for(
             stale_rule,
-            FileEntry(path=path, size_bytes=0, sha256=None, roles=(WASM_ROLE,)),
+            FileEntry(path=path, sha256=None, roles=(WASM_ROLE,)),
             0,
             evidence=manifest_entry.sha256,
             message=(

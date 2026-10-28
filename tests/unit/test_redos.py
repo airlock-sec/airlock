@@ -31,7 +31,7 @@ import pytest
 
 from airlock import fingerprint, runner
 from airlock.detectors import DETECTOR_NAMES, config_role
-from airlock.model import EMPTY_MANIFEST, FileEntry, Mode, Policy, Rule, ScanContext
+from airlock.model import EMPTY_MANIFEST, FileEntry, Policy, Rule, ScanContext
 from airlock.roles import known_roles
 from airlock.rules import load_role_globs, load_rules
 
@@ -152,7 +152,6 @@ PATTERNS = patterns_under_test()
 def entry(text: str) -> FileEntry:
     return FileEntry(
         path="postcss.config.js",
-        size_bytes=len(text),
         sha256=None,
         roles=("tooling-config", "source"),
         text=text,
@@ -161,10 +160,6 @@ def entry(text: str) -> FileEntry:
 
 def context(text: str) -> ScanContext:
     return ScanContext(
-        mode=Mode.FULL,
-        tool_version="0.0.0-test",
-        repo_head="0" * 40,
-        base=None,
         entries=(entry(text),),
         policy=Policy(),
         manifest=EMPTY_MANIFEST,
