@@ -1,0 +1,62 @@
+name: Scan false positive
+description: A shipped rule reported something that is not a compromise
+title: "fp: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Start with `airlock scan --mode full --format json` on the repository and copy the
+        finding out of it. A suppression is the owner's decision, not a request: if the finding
+        is real and you want it quiet, say so in the reason of a `[[suppress]]` entry in
+        `airlock.toml` rather than filing this.
+  - type: input
+    id: rule
+    attributes:
+      label: Rule id
+      description: The kebab-case id on the finding line, for example `cfg-appended-tail`
+    validations:
+      required: true
+  - type: input
+    id: path
+    attributes:
+      label: Path
+      description: Repo-relative path, forward slashes. Redact it if the repository is private
+    validations:
+      required: true
+  - type: input
+    id: fingerprint
+    attributes:
+      label: Fingerprint
+      description: The `sha256:...` value from the JSON report, so the duplicate is matchable
+    validations:
+      required: false
+  - type: textarea
+    id: what-it-is
+    attributes:
+      label: What the reported code actually does
+      description: |
+        One or two sentences. This is the part that decides whether the rule is wrong or the
+        role resolution that fed it is wrong, so say what the file is for rather than that it
+        looks harmless.
+    validations:
+      required: true
+  - type: textarea
+    id: shape
+    attributes:
+      label: The smallest version of it that still trips the rule
+      description: |
+        Describe the shape in words or paste the line. Do not paste a live-looking payload, a
+        real secret or a real Stellar seed; a fixture is assembled from fragments at test time,
+        and this repository should never hold the thing it scans for.
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity the rule reported
+      options:
+        - high
+        - warn
+        - info
+    validations:
+      required: true

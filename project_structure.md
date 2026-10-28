@@ -75,6 +75,7 @@ airlock/
 
   .github/
     CODEOWNERS                     # protected paths
+    ISSUE_TEMPLATE/                # false positive, and missed detection or coverage gap
     pull_request_template.md       # includes the ROADMAP checkbox
     workflows/                     # tests, lint, scorecard, scan (dogfood), roadmap-check, release
 ```

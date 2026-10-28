@@ -1,0 +1,55 @@
+name: Missed detection or coverage gap
+description: Something a scan should have reported and did not, or a shape that gets past it
+title: "gap: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        These are the reports that move the roadmap. Every case that turns out to be real becomes
+        a task with a task ID in `ROADMAP.md`, and the fix lands with a fixture that fails before
+        the change and passes after it.
+  - type: textarea
+    id: missed
+    attributes:
+      label: What the scan missed
+      description: |
+        The file, the line or the artifact, and what a correct report would have said. Describe
+        the mechanism in words. Do not paste a live-looking payload, a real secret or a real
+        Stellar seed, and do not attach a compiled exploit; a synthetic fixture is assembled from
+        fragments at test time.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it matters here
+      description: Which compromise this lets through, and whether a real campaign has used it
+    validations:
+      required: true
+  - type: dropdown
+    id: owner
+    attributes:
+      label: Which layer should have caught it
+      options:
+        - collector (the file was never read or never decoded)
+        - role resolution (it was read as the wrong kind of file)
+        - config_role (build tooling capabilities)
+        - wasm_manifest (artifact integrity)
+        - a rule that does not exist yet
+        - a ported malware_scan rule (3.6 or 3.7)
+        - trusted base or policy handling
+        - not sure
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: How to reproduce it
+      description: The mode, the command and the repository or fixture shape, so it can be tested
+      value: |
+        airlock version:
+        mode (pr, push, full):
+        command:
+        repository or fixture shape:
+    validations:
+      required: true
