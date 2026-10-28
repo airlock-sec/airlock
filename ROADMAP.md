@@ -1,6 +1,6 @@
 # ROADMAP: Airlock
 
-Last updated: 2026-10-27 23:00 UTC
+Last updated: 2026-10-28 10:51 UTC
 Roadmap version: 1
 
 This file is the single source of truth for remaining work. It is read before every task and updated after every change.
@@ -34,16 +34,16 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 | Phase | Name | Done | Total | Progress |
 |---|---|---|---|---|
 | 0 | Decisions and validation | 5 | 16 | 31% |
-| 1 | Repository bootstrap and self-protection | 2 | 12 | 17% |
-| 2 | Core engine | 13 | 13 | 100% |
+| 1 | Repository bootstrap and self-protection | 5 | 12 | 42% |
+| 2 | Core engine | 13 | 14 | 93% |
 | 3 | P0 detectors | 4 | 11 | 36% |
 | 4 | Action and dogfood | 0 | 7 | 0% |
-| 5 | Release v0.1.0 | 0 | 6 | 0% |
+| 5 | Release v0.1.0 | 0 | 7 | 0% |
 | 6 | Stellar detectors | 0 | 5 | 0% |
 | 7 | Hardening and edge cases | 0 | 12 | 0% |
 | 8 | Release v0.2.0 and community | 0 | 5 | 0% |
 | 9 (backlog) | Backlog | 0 | 10 | 0% |
-| **Phases 0 to 8** | **Readiness total** | **24** | **87** | **28%** |
+| **Phases 0 to 8** | **Readiness total** | **27** | **89** | **30%** |
 | Gates | G1 to G10 | 0 | 10 | 0% |
 <!-- PROGRESS:END -->
 
@@ -51,15 +51,26 @@ Six of the thirteen Phase 2 rows were ticked late: the commits for 2.2 to 2.6 la
 roadmap update, which the roadmap rule does not allow, so they are recorded here as of
 2026-10-27 with the tests that were run at the time.
 
-The bootstrap tasks that read "done when merged" (1.3, 1.8, 1.10, 1.11) stay unticked until the
-pull request lands, and 1.5 is not close: there is no CI workflow yet, so every check above was
-run by hand on the owner's machine. What does run: `airlock scan` executes the whole pipeline
-(2.10) over the shipped rule data, both P0 detectors are covered by fixtures the suite proves
-fire (3.1, 3.4), and a Wasm artifact now enters the trusted base with one command
-(`manifest add`, 3.5). What a user still cannot do is install it as an Action (4.1), and the
-rules ported from `malware_scan.py` (3.6, 3.7) are what the six reported campaigns actually
-need: until 3.6 lands, the bypass suite (3.9) cannot show all seven Appendix B cases failing
-closed, because two of them are invisible to the six-rule set shipped today.
+What runs: `airlock scan` executes the whole pipeline (2.10) over the shipped rule data in four
+report formats, both P0 detectors are covered by fixtures the suite proves fire (3.1, 3.4), and a
+Wasm artifact enters the trusted base with one command (`manifest add`, 3.5). What a user still
+cannot do is install it as an Action (4.1), and the rules ported from `malware_scan.py` (3.6, 3.7)
+are what the six reported campaigns actually need: until 3.6 lands, the bypass suite (3.9) cannot
+show all seven Appendix B cases failing closed, because two of them are invisible to the six-rule
+set shipped today.
+
+1.5 is still the reason every green number in this file was produced by hand on the owner's
+machine. Seven Phase 1 rows are open after this landing: 1.2 and 1.3 belong to the org's settings
+rather than to a file, 1.5 and 1.9 are the pair that gates every other claim in the table above,
+1.6 is unblocked today, 1.7 waits on 1.3, and 1.12 is the rename sweep that lets gate G7 be
+checked honestly.
+
+Six tasks, 0.4 and 2.9, 2.10, 2.12, 2.13 and 3.5, landed as pull requests #5 to #10 into each
+other's branches instead of into the default branch, so `main` carried none of that work until it
+arrived as one branch on 2026-10-28: the reporters, the CLI, the fixture and ReDoS harness, the
+model settle, the bypass probe and `manifest add`. Their rows were ticked when their tests
+passed, which was true on the branch and not true of `main`. Nothing was lost and nothing was
+reverted; the bookkeeping was wrong. See the changelog row for 2026-10-28.
 
 ## 3. Readiness gates
 
@@ -78,12 +89,16 @@ All must be true for 100%.
 
 ## 4. Current focus
 
-Phase 0, task 0.4: run the seven bypass tests against the existing `malware_scan.py`. Everything downstream depends on which of them are real.
+Phase 2 is complete and task 0.4 is closed: all seven Appendix B bypasses were run against
+`malware_scan.py` on 2026-10-27 and every one of them is confirmed, which settles which Phase 3
+rules are real.
 
-The scaffold is landed and its gates are green, which closes 1.4 and 2.1. Next on that path
-is 2.2 `collector.py`, the first module that touches untrusted input, and 1.5 CI so the same
-checks stop depending on one machine. The 0.4 result still decides which Phase 3 rules are
-real, so 0.4 remains the highest-value thing a person can do here.
+The two tasks that unblock the most are now 1.5 and 0.10. CI, because gates G2, G4 and G5 all
+read "runs in CI" and none of them can be checked while every green number in this file comes
+from one laptop. The clean-state corpus, because 3.3 threshold tuning, the 3.8 parity harness and
+the 4.6 corpus gate each list it as a dependency. 3.6 and 3.7, the rules ported from
+`malware_scan.py`, are the largest remaining P0 surface and the last thing between this build and
+a scan that would catch the shape of the six reported campaigns.
 
 ## 5. Phases and tasks
 
@@ -115,10 +130,10 @@ real, so 0.4 remains the highest-value thing a person can do here.
 - [ ] **1.5** CI workflows for tests, lint and type check: every action pinned by hash, top-level `permissions: contents: read`. S. Deps: 1.4. Done when: CI is green on the skeleton.
 - [ ] **1.6** Dependabot for GitHub Actions and pip, grouped weekly to limit noise. S. Deps: 1.1. Done when: config merged. Reminder: Dependabot PRs also need a roadmap changelog line.
 - [ ] **1.7** Scorecard workflow with a fine-grained token so Branch-Protection can be read. S. Deps: 1.3. Done when: Branch-Protection returns a score, not an error.
-- [ ] **1.8** `SECURITY.md`, `CONTRIBUTING.md` and `.github/pull_request_template.md` (with the roadmap checkbox), minimal issue templates. S. Deps: 1.1. Done when: each carries the roadmap rule.
+- [x] **1.8** `SECURITY.md`, `CONTRIBUTING.md` and `.github/pull_request_template.md` (with the roadmap checkbox), minimal issue templates. S. Deps: 1.1. Done when: each carries the roadmap rule. (done 2026-10-28: `SECURITY.md`, `CONTRIBUTING.md` and the PR template landed in c4cffef on 2026-10-27 and are on `main`; the template carries the roadmap checkbox and the task-ID field, and `CONTRIBUTING.md` states the rule in its own steps. The two minimal issue templates, a false positive against a shipped rule and a bypass or coverage gap, land with this pull request. Reading of "each carries the roadmap rule": it goes where a contributor meets it, in `CONTRIBUTING.md` and the PR template. `SECURITY.md` is a disclosure path for someone with no intent to contribute, and putting a roadmap obligation in it would be a claim about a reader who is not coming for the roadmap)
 - [ ] **1.9** Roadmap gate: `scripts/check_roadmap_touched.sh` (fails if the PR diff changes any file but not `ROADMAP.md`, or `Last updated` did not change), `scripts/roadmap_progress.py` (computes the progress table; `--check` fails if the table is stale) and a `roadmap-check.yml` workflow made a required check. M. Deps: 1.5. Done when: a test PR without a roadmap edit fails and one with it passes.
-- [ ] **1.10** `README.md` skeleton: what it is, status, quickstart placeholder, roadmap rule. S. Deps: 1.1. Done when: merged.
-- [ ] **1.11** Copy the doc set into the repo root: `PRD.md`, `ARCHITECTURE.md`, `ARCHITECTURE_ESSENTIALS.md`, `ROADMAP.md`, `AGENTS.md`, `CLAUDE.md`, `project_structure.md`. S. Deps: 1.1. Done when: merged.
+- [x] **1.10** `README.md` skeleton: what it is, status, quickstart placeholder, roadmap rule. S. Deps: 1.1. Done when: merged. (done 2026-10-27: README.md landed in c4cffef and merged in PR #1. The Status section now describes what this build does, and the quickstart stays a placeholder until 4.1 ships the Action)
+- [x] **1.11** Copy the doc set into the repo root: `PRD.md`, `ARCHITECTURE.md`, `ARCHITECTURE_ESSENTIALS.md`, `ROADMAP.md`, `AGENTS.md`, `CLAUDE.md`, `project_structure.md`. S. Deps: 1.1. Done when: merged. (done 2026-10-27: all seven are tracked at the repository root since 8dc19bf, merged in PR #1, which is the commit that added each of them)
 - [ ] **1.12** Rename sweep: `AGENTS.md`, `ARCHITECTURE.md`, `ARCHITECTURE_ESSENTIALS.md` and `CLAUDE.md` still call the tool repo-guard in 37 places (`src/repo_guard/`, `repo-guard.toml`, `python -m repo_guard`), contradicting D-01 and the code scaffolded under `src/airlock/`. `project_structure.md` is already corrected. S. Deps: 1.1. Done when: no `repo-guard` or `repo_guard` spelling survives outside this roadmap's changelog, so gate G7 can be checked honestly.
 
 ### Phase 2: Core engine
@@ -137,6 +152,7 @@ real, so 0.4 remains the highest-value thing a person can do here.
 - [x] **2.12** ReDoS timing harness and fixture-coverage test (every rule has a positive and a negative fixture). M. Deps: 2.5. Done when: the suite fails on a rule with no fixtures or a slow pattern. (done 2026-10-27: `tests/fixtures/` holds one builder per shipped rule, each with a positive and a negative case, and `tests/unit/test_fixtures.py` asks every rule in `rules/builtin/` for both halves through the engine pass and the whole detector registry. `tests/unit/test_redos.py` times each pattern, rule data and detector code alike, on cap-length adversarial lines. Both failure modes were checked by mutation, not assumed: a rule added to `config_role.toml` with no builder fails the gate, and `cfg-dynamic-code` rewritten to `(a+)+b` fails the timing test with `inf < 60.0` in ten seconds rather than hanging the run, because each measurement is taken in a child process with a wall-clock limit)
 - [x] **2.13** Settle the `FileEntry` and `ScanContext` drafts added to `model.py`: they currently carry only the fields `ARCHITECTURE.md` 6.1 and 6.3 describe, and `ARCHITECTURE.md` 7 lists neither. S. Deps: 2.2, 2.11. Done when: no field is unused, no detector needs a field the model lacks, and 7.x documents both. (done 2026-10-27 by audit rather than opinion: every field was grepped for a reader across `src` and `tests`. `FileEntry.size_bytes` had none outside the collector that decides to write it, so it is a local variable there and no longer a field; `ScanContext.mode`, `tool_version`, `repo_head` and `base` had none either, because the reporters read `ScanReport`, which still carries all four. What remains is `FileEntry` as path, hash, roles, text, skip reason and `ScanContext` as entries, policy, manifest, rules, which is exactly what a rule needs and nothing else. Dropping `mode` from the context also removes the trust model from detector reach, which is the direction the design wants: the base question is settled before a context exists. Both field lists are asserted verbatim in `tests/unit/test_model.py` so re-adding one is a deliberate edit, `ARCHITECTURE.md` 7.9 documents both models and 6.3 no longer claims the context carries the scan mode. Verified: `pytest` 433 passed, `ruff check` and `ruff format --check` clean on 42 files, `mypy src` clean on 24 files, self-scan exit 0 with 69 files and nothing skipped)
 
+- [ ] **2.14** Two collector gaps found by the 2026-10-28 audit. (a) `collector.list_tracked_files` drops every index entry whose stage is not 0, meaning a file in the middle of a merge conflict is scanned by nobody and said nothing about, which breaks the rule that no file is skipped silently and gives the case no state rule id. (b) The same function calls `subprocess.run` directly rather than through `git_text`, so a git timeout leaves the module as `subprocess.TimeoutExpired` instead of the `ValueError` the CLI turns into exit 2, contradicting this module's own docstring. S. Deps: 2.2. Done when: an unmerged path yields a finding with a rule id in `STATE_RULE_IDS`, a counted skip reason and a test over a real conflicted repository; every git call in the module goes through `git_text`.
 ### Phase 3: P0 detectors
 
 - [x] **3.1** `config_role` with tiered rules (`cfg-dynamic-code`, `cfg-network-exec`, `cfg-network`, `cfg-process-spawn`, `cfg-chain-endpoint`, `cfg-appended-tail`, `cfg-long-line`, `cfg-nul`). L. Deps: 2.5, 2.11. Done when: all positive fixtures fire and no negative fixture does. (done 2026-10-27: detector and rule data landed earlier, and the fixture half is now proved. `cfg-nul` is not a rule in this family; the collector reports a NUL after BOM handling as `nul-in-text` for every role, which is recorded in `ARCHITECTURE.md` 9.1 and in the header of `rules/builtin/config_role.toml`, so the id in this task line is the finding id, not a seventh pattern. Every positive fixture fires and fires only its own rule, except `cfg-network-exec`, whose positive is deliberately also a `cfg-network` and `cfg-dynamic-code` hit because the combination needs both halves)
@@ -169,6 +185,7 @@ real, so 0.4 remains the highest-value thing a person can do here.
 - [ ] **5.4** Reach a Scorecard score of 8 or higher on the repo. M. Deps: 1.7. Done when: score recorded. Gate G5.
 - [ ] **5.5** Tag `v0.1.0`; publish the commit SHA consumers should pin. S. Deps: 4.7, 5.1 to 5.4. Done when: tag exists and gates G1 to G10 are reviewed for v0.1.
 - [ ] **5.6** Update the LinkedIn post with measured numbers (before and after Scorecard, bypasses found and fixed), not intentions. S. Deps: 5.5. Done when: published.
+- [ ] **5.7** Ship the rule data inside the distribution. `pyproject.toml` puts only `src/airlock` in the wheel, and `cli.py` resolves `--rules-dir` and `--roles` from `Path(__file__).parents[2]`, which is the repository root in a source checkout and nothing at all in an installed one. Measured on 2026-10-28: building the wheel from the 3.5 branch and running `airlock scan` from a clean virtualenv gives `cannot read .../rules/roles.toml` and exit 2. It fails closed, so no scan can read as a pass, and the Action path (`ARCHITECTURE.md` 10, `$GITHUB_ACTION_PATH/src`) is unaffected because it runs from a checkout. S. Deps: 1.4. Done when: the rule files are in the built wheel, the defaults resolve from package data with the checkout layout as the fallback, and a scan run from an installed wheel against a scratch repository returns findings rather than a usage error. Or the opposite decision is recorded here and in `README.md`: pip is not a supported install path and only the pinned Action is.
 
 ### Phase 6: Stellar detectors (v0.2)
 
@@ -253,6 +270,7 @@ Newest first. One row per merged change.
 
 | Date (UTC) | Change | Tasks |
 |---|---|---|
+| 2026-10-28 10:51 | The six tasks that merged into each other's branches instead of into the default branch land as one pull request: 0.4 bypass probe, 2.9 reporters, 2.10 CLI, 2.12 fixture and ReDoS harness, 2.13 model settle, 3.5 `manifest add`. Verified on the branch being merged: `pytest` 455 passed, `ruff check` clean, `ruff format --check` clean on 43 files, `mypy src` clean over 24 files, and a real end-to-end run, `python3 -m airlock scan --mode full .`, reports 0 HIGH, 0 WARN and 2 INFO over 70 files scanned with nothing skipped and exits 0. Corrections to this file rather than new claims: section 2 still called suppression, the reporters and the CLI stubs after their rows were ticked, section 4 still named 2.2 and 0.4 as the next work, and 1.8, 1.10 and 1.11 stayed unticked although the files they describe merged in PR #1 on 2026-10-27 (c4cffef and 8dc19bf). The two minimal issue templates 1.8 asked for are added. Two gaps found while verifying this, recorded as tasks rather than prose: 2.14, an unmerged index path is dropped with no finding and a git timeout leaves `list_tracked_files` as `TimeoutExpired` instead of exit 2; 5.7, the built wheel carries no rule data, so an installed `airlock scan` exits 2 on a missing `rules/roles.toml`. Not verified: any of it running in CI, because 1.5 does not exist yet and every number above was produced on the owner's machine | 2.9, 2.10, 2.12, 2.13, 0.4, 3.5, 1.8, 1.10, 1.11, 2.14, 5.7 |
 | 2026-10-27 23:00 | `manifest add` and `manifest check` work. The writer is the interesting half, because `tomllib` reads TOML and nothing in the standard library writes it, and a writer for a protected path is a place where a tool can quietly rewrite the trusted base. It is therefore canonical rather than an editor: header emitted verbatim, entries sorted by `sha256`, each entry's `paths` sorted, so `parse(render(x)) == x` and a repeated run writes byte-identical content and reports "already lists every target". Where the model cannot carry something the file has, the command refuses instead of dropping it, which is why an entry-block comment and an unknown key in the entry region both abort before the rewrite: the first has no field to live in (`note =` does), and the second would be erased by a writer that emits from parsed data. An artifact has to look like an artifact: `\0asm` magic, inside the repo, under `max_file_bytes`, with a stated `source` and, for `origin = "built"`, a stated `build`. A second path for a known hash joins the existing entry and keeps the reviewed provenance, since re-declaring it is not what the operator approved. Nothing is staged or committed and the test checks that with git plumbing, because a tool that auto-commits the trusted base is the bypass this file exists to prevent. `manifest check` deliberately is not a second implementation of artifact accounting: `run_scan` gained a `keep` predicate, so numbering, suppression, fingerprints and the `fail_on` threshold all stay the scan's, and the check is the same pipeline with the report narrowed to the `wasm-` rules. The consequence is a decision rather than an accident, so it is written down in 7.7: an unlisted or swapped artifact exits 1, while `wasm-manifest-stale` and `wasm-path-moved` are named at WARN and exit 0, because the artifact that has left the tree is not the one that would ship. README quickstart, `ARCHITECTURE.md` 7.7 and the FR-12 wording follow the verbs. Verified: `pytest` 455 passed (22 more than at 2.13: 24 new tests, against one usage test that replaces the three parametrized `manifest remove` cases it used to run), `ruff check` and `ruff format --check` clean, `mypy src` clean on 24 files, self-scan exit 0 over 70 files with nothing skipped, plus a manual round trip in a temporary repository where one globbed command recorded two artifacts, left the manifest modified-unstaged, and `check` exited 0 both before and after the manifest commit. Not verified: no compiled contract has been through `add`, only generated Wasm-shaped bytes, and the two-step flow (FR-06) is still asserted by what the command prints rather than enforced by a required check, since 1.9 is open | 3.5, 7.7, FR-06, FR-12 |
 | 2026-10-27 22:36 | The seven bypass claims in `PRD.md` 2.3 are now measured instead of reviewed, and all seven hold. `scripts/bypass_probe.py` builds a temporary git repository per Appendix B case, copies in the external `malware_scan.py` it is handed with `--script` (read from `Tollcraft/soroban-budget-assert@main`; the script and its payloads are never committed here, and each trigger string is assembled from fragments at run time), commits a clean base and then the case, and runs the script the way the workflow runs it. Every case exits 0 and the workflow has no `continue-on-error`, so every case is a passing job. The details that reading the script did not settle: `\0asm` is a NUL inside the first 4 KB, so Wasm is dropped by the same test that drops any binary-looking text file while `.wasm` sits in no extension list either; the case-2 payload still passes `node --check`, so the silent skip costs the scan and not the attack; the inline `malware-scan: allow` marker is checked before the rule table, so a line can exempt itself from every rule; and `eval(decrypted)` scores one WARN with no HIGH, which is the real PolinRider shape passing a gate written against `eval(atob(`. Two of the seven needed more than a commit to record: item 4 is a property of where the scanner and its allowlist live, so it is marked confirmed by inspection with the reason, and the observed output is now in Appendix B rather than only a verdict in 2.3. PRD 2.3's `[Unverified]` marker, Appendix B's heading and open question 3 are corrected to match. This is what 3.9 has to fail closed against. Verified: the probe confirms `7 of 7` on two runs, `ruff check` and `ruff format --check` clean on `scripts/`, `pytest` 433 passed unchanged, and the self-scan now covers 70 files including `scripts/bypass_probe.py` itself with exit 0, which is the check that a file full of fragment-assembled trigger strings does not read as a payload. Not verified: whether any of the five dogfood repos tracks a directory in `SKIP_DIRS`, which decides how much real exposure case 7 has | 0.4, 2.3, FR-05, Appendix B |
 | 2026-10-27 22:22 | Phase 2 is complete. `FileEntry` and `ScanContext` were drafted before the code that consumes them, so 2.13 settled them by grepping every field for a reader instead of by argument. `FileEntry.size_bytes` had none outside the collector that decides whether a file is oversize or only partly read, so the size is a local variable there and the entry no longer carries it; a run of the scanner over this repository shows the oversize and change-during-read findings still stating the byte count themselves. `ScanContext.mode`, `tool_version`, `repo_head` and `base` had no reader at all, because the reporters render `ScanReport`, which keeps all four. The context is now entries, policy, manifest and rules, which is what a rule needs and nothing more; losing `mode` there also means detector code can no longer reach the trust model that chose its base, which is the direction 6.5 wants rather than a side effect of tidying. `test_model.py` asserts both field lists verbatim, so a re-added field has to be argued for in that test first. `ARCHITECTURE.md` 7.9 documents both models and the reasoning, and 6.3 no longer claims the context carries the scan mode. Verified: `pytest` 433 passed, `ruff check` and `ruff format --check` clean on 42 files, `mypy src` clean on 24 files, self-scan exit 0 over 69 files with nothing skipped. Not verified: whether a future detector genuinely needs the mode, which is the one field omission likely to be revisited, and the P0 rule set is still only as good as the synthetic fixtures that fire it (3.3, 3.6 to 3.10) | 2.13, 6.3, 7.9 |
