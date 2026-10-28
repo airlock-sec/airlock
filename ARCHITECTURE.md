@@ -181,7 +181,7 @@ Cost: a PR that adds a legitimate Wasm fixture fails until the manifest change m
 | github | `::error`, `::warning` and `::notice` commands; escapes `%`, `\r`, `\n`, `:` and `,` in properties; HIGH first; each severity capped, and a capped list ends with one annotation naming how many went unlisted |
 | json | Full `ScanReport` model, including every suppressed finding and its reason |
 | summary | Markdown to `$GITHUB_STEP_SUMMARY`: counts, skipped-file counts, every HIGH; evidence rendered only inside fenced code blocks with the fence length chosen to exceed any backtick run in the evidence, truncated to a fixed length. Rule ids and paths outside a fence are escaped, so no `-` or `#` is substituted where a heading or list marker could form |
-| sarif (P1) | SARIF 2.1.0 with `partialFingerprints["repoGuard/v1"]`; result count capped |
+| sarif (P1) | SARIF 2.1.0 with `partialFingerprints["airlock/v1"]` (D-09, ADR-019); result count capped; implementation deferred to task 7.6 |
 
 Evidence is attacker-controlled text. It is never rendered as raw markdown (B11). GitHub limits annotations per step and the size of step summaries; the design assumes truncation and so orders output by severity (B8). [Unverified: exact limits, task 0.9] Because the limits are unverified, the caps are reporter constants rather than policy settings: a repository cannot raise them, and 0.9 replaces the guesswork with measured numbers.
 
@@ -525,6 +525,7 @@ Notes:
 | ADR-016 | Soroban rules apply to contract crates only | Test-support libraries legitimately enable `testutils` | Needs `crate-type` detection |
 | ADR-017 | Roadmap gate as a required CI check | The roadmap rots unless a machine enforces it | Friction on tiny PRs |
 | ADR-018 | Line cap instead of regex timeouts | Python `re` cannot be interrupted safely mid-match | Lines over the cap are inspected only by length and entropy |
+| ADR-019 | SARIF uses `partialFingerprints["airlock/v1"]` (D-09, 2026-10-28) | Match the Airlock name before output consumers can depend on a key; the fingerprint algorithm is unchanged | No migration needed because SARIF has not shipped; reporter implementation stays deferred to task 7.6 |
 
 ## 14. Roadmap
 

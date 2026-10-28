@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import ast
 import dataclasses
+import re
 from datetime import date
+from pathlib import Path
 
 import pytest
 
@@ -360,6 +363,22 @@ class TestContextAndReport:
 
 
 class TestDocumentedConstants:
+    def test_sarif_reporter_row_uses_the_decided_fingerprint_key(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        architecture = (root / "ARCHITECTURE.md").read_text(encoding="utf-8")
+        # A mention in an ADR must not hide a stale key in the reporter table.
+        reporters = architecture.split("### 6.6 Reporters\n", 1)[1].split("\n## ", 1)[0]
+        rows = [line for line in reporters.splitlines() if line.startswith("| sarif (P1) |")]
+        assert len(rows) == 1
+        assert re.findall(r'partialFingerprints\["([^"]+)"\]', rows[0]) == ["airlock/v1"]
+
+    def test_sarif_stub_documents_the_decided_fingerprint_key(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        source = (root / "src/airlock/report/sarif.py").read_text(encoding="utf-8")
+        docstring = ast.get_docstring(ast.parse(source))
+        assert docstring is not None
+        assert re.findall(r'partialFingerprints\["([^"]+)"\]', docstring) == ["airlock/v1"]
+
     def test_every_state_rule_id_from_the_essentials_is_known(self) -> None:
         documented = {
             "skipped-oversize",

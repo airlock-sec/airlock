@@ -148,7 +148,7 @@ Priority: **P0** ships in v0.1.0, **P1** in v0.2.0, **Later** is backlog (`ROADM
 | FR-16 | `soroban_profile`, contextual to contract crates | P1 | No false positive on a test-support library crate |
 | FR-17 | `stellar_seed` | P1 | Checksum-valid seeds detected; scope decided after task 0.7 |
 | FR-18 | `cargo_vectors` | P1 | Fixtures pass |
-| FR-19 | SARIF 2.1.0 output | P1 | Validates against the schema; result count capped |
+| FR-19 | SARIF 2.1.0 output (deferred to task 7.6) | P1 | Validates against the schema; result count capped; uses `partialFingerprints["airlock/v1"]` (D-09, ADR-019), settled before shipping with no migration needed |
 | FR-20 | Git LFS pointer and submodule handling | P1 | LFS-stored Wasm is checked against the manifest or reported |
 | FR-21 | Extended config globs and vector roles (`vite`, `webpack`, `jest`, `.husky/*`, `devcontainer.json`, composite action files) | P1 | False-positive review on the six repos |
 | FR-22 | Watch mode: scheduled scan from a separate trusted repository, with an ancestry check against the last seen SHA | Later (decision D-04) | See ARCHITECTURE.md 16.2, item B2 |

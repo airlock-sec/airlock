@@ -1,6 +1,6 @@
 # ROADMAP: Airlock
 
-Last updated: 2026-10-28 14:36 UTC
+Last updated: 2026-10-28 14:40 UTC
 
 Roadmap version: 1
 
@@ -41,10 +41,10 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 | 4 | Action and dogfood | 0 | 7 | 0% |
 | 5 | Release v0.1.0 | 1 | 7 | 14% |
 | 6 | Stellar detectors | 0 | 5 | 0% |
-| 7 | Hardening and edge cases | 3 | 12 | 25% |
+| 7 | Hardening and edge cases | 4 | 12 | 33% |
 | 8 | Release v0.2.0 and community | 0 | 5 | 0% |
 | 9 (backlog) | Backlog | 0 | 10 | 0% |
-| **Phases 0 to 8** | **Readiness total** | **38** | **92** | **41%** |
+| **Phases 0 to 8** | **Readiness total** | **39** | **92** | **42%** |
 | Gates | G1 to G10 | 0 | 10 | 0% |
 <!-- PROGRESS:END -->
 
@@ -222,7 +222,7 @@ the shape of the six reported campaigns.
 - [ ] **7.9** Event matrix tests: fork PRs, `merge_group`, tag pushes, first commit, base equals head, base not an ancestor, rename detection. M. Deps: 4.1.
 - [x] **7.10** Output flooding tests: HIGH always visible despite caps. S. Deps: 2.9. (done 2026-10-28 by audit, #25: `tests/unit/test_report.py::TestGithubAnnotations::test_a_warn_flood_cannot_push_a_high_out_of_the_output` retains the HIGH before 200 WARNs; `test_each_severity_is_capped_and_the_withheld_count_is_said` reports 50 of 60 HIGHs and counts the ten withheld. `TestSummaryContent::test_every_high_is_listed_and_the_rest_are_counted` and `test_B8_a_warn_flood_keeps_every_high_visible` cover one HIGH with 500 WARNs and 20 HIGHs with 400 WARNs. These prove local renderer ordering and accounting, not hosted visibility or unlimited summary size. GitHub's actual limits and cap corrections remain 0.9; SARIF remains 7.6.)
 - [x] **7.11** Suppression churn tests: expiry warning, occurrence reindexing after edits. S. Deps: 2.8. (done 2026-10-28 by audit, #25: `tests/unit/test_suppression.py::TestExpiry` covers expiry yesterday, today, days 1/30/31, duplicate warning prevention and an injected UTC date. `TestOccurrences::test_B5_a_second_copy_of_a_suppressed_line_is_reported` returns the added copy; `test_deleting_the_first_copy_returns_the_later_suppression` returns the survivor after reindexing. `TestMatching::test_a_suppressed_line_that_moved_stays_suppressed` and `test_a_different_evidence_on_the_same_line_is_not_covered` distinguish movement from changed evidence. Real numbering and suppression run on synthetic findings; real-repository churn measurement remains unverified.)
-- [ ] **7.12** Settle the SARIF `partialFingerprints` key: `ARCHITECTURE.md` 6.6 still names it `repoGuard/v1` while the package is `airlock`. Decide the spelling before 7.6 emits output consumers store. S. Deps: 1.12.
+- [x] **7.12** Settle the SARIF `partialFingerprints` key after the rename. S. Deps: 1.12. (done 2026-10-28, #22: D-09 and ADR-019 settle `airlock/v1` in architecture 6.6, the SARIF stub, PRD FR-19 and essentials. No migration is needed before the reporter ships. Two tests in `TestDocumentedConstants` read the actual reporter row and stub docstring, so an unrelated mention cannot hide a stale key. Both failed before the documentation change. SARIF remains unimplemented under 7.6; the fingerprint algorithm is unchanged.)
 
 ### Phase 8: Release v0.2.0 and community
 
@@ -263,6 +263,7 @@ Parallelizable early: 0.6 to 0.14, 1.2, 1.6, 1.8, 1.10. The roadmap gate (1.9) s
 | D-06 | Keep, narrow or drop `stellar_seed` | Open | Depends on task 0.7 |
 | D-07 | Roadmap gate has no exemptions, including dependency bumps | Decided 2026-10-27 | Matches the owner's instruction; Dependabot is grouped weekly to limit noise |
 | D-08 | Cut jsmask, SARIF-in-v0.1, `init`, `rules test` CLI, `deploy_gate`, SEP-58 parser from v0.1 | Decided 2026-10-27 | `ARCHITECTURE.md` 16.4 |
+| D-09 | SARIF fingerprint key | Decided 2026-10-28 | `partialFingerprints["airlock/v1"]`, matching D-01; ADR-019. Replaces the draft `repoGuard/v1` before SARIF ships, so no consumer migration is needed. Algorithm unchanged; implementation remains 7.6. |
 
 ## 8. Risk register
 
@@ -284,6 +285,7 @@ Newest first. One row per merged change.
 
 | Date (UTC) | Change | Tasks |
 |---|---|---|
+| 2026-10-28 14:40 | Settle #22 with `partialFingerprints["airlock/v1"]` (D-09, ADR-019), replacing the draft `repoGuard/v1` before any SARIF release. Updated architecture 6.6, PRD FR-19, essentials, stub and issue draft. The algorithm is unchanged and the reporter remains unimplemented. Two new tests failed first on the old reporter row and missing stub key, then passed; they inspect those exact locations rather than any mention elsewhere. Local verification: 515 tests, lint and format, mypy (24 modules), self-scan 0 HIGH/0 WARN over 96 files, progress and diff checks. The obsolete spelling remains only in this roadmap's historical decision/changelog records. | 7.12, D-09 |
 | 2026-10-28 14:36 | Audit #25: record encoding, renderer-flooding and suppression-churn coverage with exact tests and residuals in their task rows. Added three LF/CRLF cases using one tracked path, real collection and shipped rules; line numbers and occurrence fingerprints agree while byte hashes differ. All passed before any production change, so the issue's requested red baseline is inapplicable: no reading or numbering code changed. No existing test was weakened. Local verification: 513 tests, lint and format (45 files), mypy (24 modules), self-scan 0 HIGH/0 WARN over 96 files with no skips, and progress check pass. The initial full run correctly rejected a stale progress table, which was regenerated. Phase 7 is 3/12; readiness is 38/92. Hosted rendering limits and Windows behavior remain separate tasks 0.9 and 7.8. | 7.3, 7.10, 7.11 |
 | 2026-10-28 14:29 | Refuse scanner-state suppressions before consulting rule data (#31). The shipped `cfg-long-line` and fallback flags now agree, and finding construction cannot advertise a state as suppressible even if a rule is misdeclared. Added 35 cases: every state ID with and without a loaded suppressible rule, shipped-data drift, conflicting cap-rule metadata, and CLI reproduction using a 30,013-character comment. Before: 19 failures, 16 passes; after: all 158 suppression/rules/CLI tests pass. The maintainer must already control trusted-base policy for this defect to apply; this is not a PR author's ability to approve their own suppression. Updated PRD FR-14, architecture 7.6, essentials and the structure map. The existing exact non-suppressible-rule assertion now includes `cfg-long-line`, preserving every prior member. Verified locally: 510 tests pass, lint and format checks pass, mypy clean on 24 modules, self-scan 0 HIGH/0 WARN over 96 tracked files. No threshold, severity or ordinary-rule suppression changed. | 2.15 |
 | 2026-10-28 13:52 | The batch is live: fifteen issues published as #20 to #34, and the thirteen labels they need created first (`Stellar Wave`, three `complexity: *`, seven `area: *`, `type: test`, `blocked`). Each body gained a `## Tech stack` block naming the files the work touches, the test command for that area and the protected paths in the way, which is what makes an issue pickable without a tour of the repository. 1.13 and 1.14 tick on the evidence in their own rows. Publishing found two defects in `scripts/create_wave_issues.sh`, both fixed here rather than papered over: the front-matter extractor treated the opening `---` as the closing one, so the first pass published each file's `slug:` and `labels:` header as part of the description, and the documented `--repo owner/name` form was rejected by a parser that only accepted `--repo=value`. Every body was re-sent from the corrected source, and the refusal path was exercised against a repository with no `Stellar Wave` label (exits 1, writes nothing). Verified after publishing: no `{{issue:` token and no leaked header remains in any of the fifteen bodies, #33 names #30 and #34 names #20 as their blockers, each `Closes #N` points at itself, all labels landed on all fifteen, and every `blob/main` link in the batch resolves to a tracked path. Also corrected: #34 no longer claims decision D-09, which #22 is the one proposing, and one structural defect in this file itself, where the earlier commit today left a blank line and a bare `|---|---|---|` in the middle of the changelog and cut the two newest rows off from their own table header. Not verified: whether Drips counts the `Stellar Wave` label on a repository it has not approved. The expectation, stated in `docs/wave/settings.md` before this happened, is that the label is stripped until the application succeeds, so these fifteen are ordinary GitHub issues until then and roll into the next Wave once it does. `SUPPORT.md` and `docs/wave/settings.md` are linked from every body and do not exist on `main` until #19 merges. Verified locally: 475 tests, ruff clean, format clean on 45 files, mypy clean on 24, self-scan 0 HIGH over 96 files, both gates green on #19's CI run | 1.13, 1.14, G10, 8.4 |
