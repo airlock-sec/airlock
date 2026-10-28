@@ -47,6 +47,7 @@ STATE_RULE_IDS = frozenset(
         "skipped-oversize",
         "skipped-unreadable",
         "skipped-symlink",
+        "skipped-unmerged",
         "submodule-present",
         "nul-in-text",
         "non-utf8-text",

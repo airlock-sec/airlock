@@ -20,6 +20,7 @@ from airlock.collector import (
     SKIP_OVERSIZE,
     SKIP_SUBMODULE,
     SKIP_SYMLINK,
+    SKIP_UNMERGED,
     check_runtime,
     collect,
     git_text,
@@ -59,6 +60,27 @@ def git(root: Path, *args: str) -> str:
     return result.stdout
 
 
+def git_lenient(root: Path, *args: str) -> int:
+    """Run git where a non-zero exit is the expected outcome, as it is for a conflicted merge."""
+    return subprocess.run(
+        [
+            "git",
+            "-C",
+            str(root),
+            "-c",
+            "user.name=airlock-test",
+            "-c",
+            "user.email=airlock-test@example.invalid",
+            "-c",
+            "core.hooksPath=/dev/null",
+            *args,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).returncode
+
+
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     root = tmp_path / "repo"
@@ -72,6 +94,29 @@ def write(root: Path, rel: str, data: bytes | str) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data.encode() if isinstance(data, str) else data)
     return path
+
+
+def conflict(root: Path, *rels: str) -> None:
+    """Leave every path in `rels` unmerged in the index, as a real merge conflict does.
+
+    Two branches edit the same lines, so `git merge` exits non-zero and the paths sit at
+    stages 1, 2 and 3 with no stage 0 entry. All paths conflict in one merge: git refuses to
+    start a second one while any path is unmerged.
+    """
+    if not rels:
+        rels = ("app.py",)
+    for rel in rels:
+        write(root, rel, "value = base\n")
+    commit(root)
+    git(root, "checkout", "-q", "-b", "other")
+    for rel in rels:
+        write(root, rel, "value = theirs\n")
+    commit(root)
+    git(root, "checkout", "-q", "main")
+    for rel in rels:
+        write(root, rel, "value = ours\n")
+    commit(root)
+    assert git_lenient(root, "merge", "-q", "--no-edit", "other") != 0
 
 
 def commit(root: Path) -> str:
@@ -196,6 +241,65 @@ class TestSubmodules:
         assert entry_of(result, "vendor/lib").skip_reason == SKIP_SUBMODULE
 
 
+class TestUnmergedPaths:
+    """A file in the middle of a merge conflict has no committed version to scan (task 2.14).
+
+    The index holds stages 1, 2 and 3 for it and no stage 0, and the working copy holds
+    conflict markers. Dropping the path because none of those is the answer would be the
+    silent skip the hard rules forbid, so it is reported as a skip with a reason.
+    """
+
+    def test_a_conflicted_path_is_reported_instead_of_dropped(self, repo: Path) -> None:
+        conflict(repo)
+        result = scan(repo)
+        entry = entry_of(result, "app.py")
+        assert entry.skip_reason == SKIP_UNMERGED
+        assert entry.text is None
+        assert entry.sha256 is None
+        assert "skipped-unmerged" in rule_ids(result.pending)
+        assert result.files_skipped == {SKIP_UNMERGED: 1}
+
+    def test_the_listing_keeps_the_path_and_marks_it_unmerged(self, repo: Path) -> None:
+        conflict(repo)
+        app = [entry for entry in list_tracked_files(repo) if entry.path == "app.py"]
+        assert len(app) == 1
+        assert app[0].is_unmerged
+
+    def test_one_conflicted_path_yields_one_finding_not_one_per_staged_version(
+        self, repo: Path
+    ) -> None:
+        conflict(repo)
+        ids = rule_ids(scan(repo).pending)
+        assert ids.count("skipped-unmerged") == 1
+        assert [entry.path for entry in scan(repo).entries].count("app.py") == 1
+
+    def test_a_conflict_in_a_tooling_config_is_high_elsewhere_warn(self, repo: Path) -> None:
+        conflict(repo, "postcss.config.mjs", "app.py")
+        severities = {
+            finding.rule_id: finding.severity
+            for finding in scan(repo).pending
+            if finding.path == "postcss.config.mjs"
+        }
+        assert severities["skipped-unmerged"] is Severity.HIGH
+        plain = {
+            finding.rule_id: finding.severity
+            for finding in scan(repo).pending
+            if finding.path == "app.py"
+        }
+        assert plain["skipped-unmerged"] is Severity.WARN
+
+    def test_a_conflicted_path_survives_numbering_into_a_finding(self, repo: Path) -> None:
+        conflict(repo)
+        unmerged = [
+            finding
+            for finding in number_occurrences(scan(repo).pending)
+            if finding.rule_id == "skipped-unmerged"
+        ]
+        assert len(unmerged) == 1
+        assert unmerged[0].fingerprint.startswith("sha256:")
+        assert unmerged[0].suppressible is False
+
+
 class TestLimits:
     def test_oversize_is_warn_for_ordinary_roles(self, repo: Path) -> None:
         write(repo, "big.py", "x" * 500)
@@ -304,6 +408,20 @@ class TestStartupChecks:
     def test_git_text_carries_the_failure_message(self, repo: Path) -> None:
         with pytest.raises(ValueError):
             git_text(repo, "rev-parse", "--verify", "HEAD")
+
+    def test_a_git_timeout_is_a_config_error_from_either_caller(
+        self, repo: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The listing call has its own git invocation, so it has to fail the same way (2.14)."""
+
+        def raise_timeout(*_args: object, **_kwargs: object) -> None:
+            raise subprocess.TimeoutExpired(["git"], 1)
+
+        monkeypatch.setattr(subprocess, "run", raise_timeout)
+        with pytest.raises(ValueError, match="git failed to run"):
+            git_text(repo, "status", "--short")
+        with pytest.raises(ValueError, match="git failed to run"):
+            list_tracked_files(repo)
 
 
 class TestStateFindingsAreFindings:
