@@ -379,6 +379,23 @@ class TestDocumentedConstants:
         assert docstring is not None
         assert re.findall(r'partialFingerprints\["([^"]+)"\]', docstring) == ["airlock/v1"]
 
+    def test_seed_scope_decision_has_cited_design_and_requirement(self) -> None:
+        # Guard the resolved documentation gate, not the unimplemented detector (0.7).
+        root = Path(__file__).resolve().parents[2]
+        roadmap = (root / "ROADMAP.md").read_text(encoding="utf-8")
+        decision = next(line for line in roadmap.splitlines() if line.startswith("| D-06 |"))
+        assert "| Decided " in decision and "**KEEP**" in decision
+        assert "- [x] **0.7**" in roadmap
+
+        architecture = (root / "ARCHITECTURE.md").read_text(encoding="utf-8")
+        seed_design = architecture.split("### 9.4 ", 1)[1].split("### 9.5 ", 1)[0]
+        assert "[Unverified" not in seed_design
+        assert "sep-0023.md" in seed_design and "strkey/main.go" in seed_design
+
+        prd = (root / "PRD.md").read_text(encoding="utf-8")
+        requirement = next(line for line in prd.splitlines() if line.startswith("| FR-17 |"))
+        assert "D-06" in requirement and "checksum-valid" in requirement
+
     def test_every_state_rule_id_from_the_essentials_is_known(self) -> None:
         documented = {
             "skipped-oversize",

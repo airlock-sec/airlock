@@ -426,7 +426,60 @@ Wasm binary basics: magic `00 61 73 6D`, then version `01 00 00 00`. [Verified: 
 
 ### 9.4 `stellar_seed` (P1)
 
-Candidate regex `\bS[A-Z2-7]{55}\b`. For each candidate: base32 decode to 35 bytes; version byte 0x90; CRC16-XModem over the first 33 bytes equals the little-endian last 2 bytes. Report only checksum-valid candidates. Suppressible, because committed testnet seeds are common. Scope: tracked files; history scan is Later. Test against reference vectors before release. [Unverified: byte details recalled from memory]
+**D-06: KEEP, owner-approved 2026-10-28 UTC (task 0.7, issue #24).** Retain the
+planned offline detector for checksum-valid plaintext Stellar secret seeds in tracked
+files. This is a scope decision, not an implementation: `strkey.py` and the detector
+remain stubs until tasks 6.2 and 6.3.
+
+Candidate regex `\bS[A-Z2-7]{55}\b`, applied only to collected text on lines at or
+under `line_cap`. No assignment keyword or entropy threshold is required. For each
+candidate:
+
+1. Require exactly 56 canonical uppercase RFC4648 Base32 characters, without padding.
+   Decode to exactly 35 bytes and require re-encoding to reproduce the candidate.
+2. Require version byte `0x90` (`18 << 3`), followed by a 32-byte Ed25519 seed.
+3. Compute CRC16-XMODEM over those first 33 bytes. Require it to equal the final
+   2-byte checksum interpreted as little endian. Report only checksum-valid candidates.
+
+**[Verified: source inspection, 2026-10-28 UTC]** Encoding references:
+
+- [SEP-0023, specification](https://github.com/stellar/stellar-protocol/blob/62a67297ea14562ada30702d7e0f9d1cfbbfd2fa/ecosystem/sep-0023.md#specification):
+  seed version, 32-byte payload, CRC polynomial, unpadded Base32 and canonical round trip.
+- [`stellar/go`, `strkey/main.go`](https://github.com/stellar/go/blob/aab2ea4aca889ebebb11148a542e2165a0778f9a/strkey/main.go):
+  `VersionByteSeed`, `Decode` and `Encode` confirm the version and little-endian
+  checksum over version plus payload. Its
+  [CRC helper](https://github.com/stellar/go/blob/aab2ea4aca889ebebb11148a542e2165a0778f9a/strkey/internal/crc16/main.go#L1-L13)
+  specifies XMODEM (polynomial `0x1021`, initial value and final XOR zero, no reflection).
+  One version byte + 32 payload bytes + 2 checksum bytes gives 35 bytes, or 56 Base32 characters.
+
+**Tool overlap, verified by source inspection only at these revisions:**
+
+| Tool and pinned source | Finding |
+|---|---|
+| Gitleaks [`config/gitleaks.toml`](https://github.com/gitleaks/gitleaks/blob/5f6ec56cfa6f8c67648d863582c7ae2f206d5c1c/config/gitleaks.toml) | 222 rules; no dedicated Stellar/StrKey checksum detector. `generic-api-key` may incidentally match a seed in suitable keyword/assignment context with entropy >= 3.5. It does not validate StrKey checksums or guarantee coverage of a bare seed. |
+| TruffleHog [`pkg/detectors/privatekey/privatekey.go`](https://github.com/trufflesecurity/trufflehog/blob/0301dc36bd6762d2a20a8317ae00375eb5ba90a9/pkg/detectors/privatekey/privatekey.go#L39-L79) and [`pkg/engine/defaults/defaults.go`](https://github.com/trufflesecurity/trufflehog/blob/0301dc36bd6762d2a20a8317ae00375eb5ba90a9/pkg/engine/defaults/defaults.go#L1246) | No dedicated Stellar detector in the inspected revision. `privatekey` handles PEM-style private-key blocks, not plaintext StrKey seeds; the `generic.Scanner` registration is commented out. |
+
+Neither tool was executed for this comparison. This is not a coverage benchmark or a
+claim that either can never report a seed through another rule or custom configuration.
+The owner retained the small, offline checksum-specific check rather than relying on
+incidental generic matches; Airlock does not replace a general secret scanner.
+
+**Limits and fixtures.** Valid test vectors also pass the checksum. It checks encoding
+integrity, not whether a seed is funded, live, used on testnet or safe to publish; none
+of those facts is inferable from the encoding. Findings remain suppressible with a
+reason through the existing trusted-base, occurrence-aware mechanism, including deliberate
+test vectors in tests or docs. No automatic testnet or test-directory exemption.
+
+Scope is plaintext in tracked files, including tests and docs, subject to the collector's
+read limits and skip findings. Split or concatenated strings, additional encodings,
+hex seeds, mnemonics and git history are outside this detector's scope. Word-character
+adjacency (including underscores) can prevent the candidate regex from matching;
+checksum validation cannot recover a candidate the regex never found.
+
+Tasks 6.2 and 6.3 must test reference-derived valid and invalid encodings, boundary
+cases and suppression before release. Build seeds at test time from documented reference
+bytes or fragments, never commit a complete live-looking seed or import reference code
+at scan time. No network access, balance lookup or live-key verification during a scan.
 
 ### 9.5 `cargo_vectors` (P1)
 
@@ -558,7 +611,7 @@ exercised by these benign cases. Task 4.1 remains open, including the composite 
 | ADR-002 | One repository | Solo maintainer; no second tool has a reason to exist yet | Rules and code release together |
 | ADR-003 | Trusted base for policy: PR base in `pr`, pre-push SHA in `push` | A change must not approve its own findings, including a credentialed push | Bootstrap friction; new-branch pushes are weaker |
 | ADR-004 | Fail closed on skips, errors and unreadable input | A green result must mean something | More findings to triage at first |
-| ADR-005 | No inline suppressions; fingerprint-keyed, occurrence-aware, with a reason | Inline markers are an attacker's bypass manual | Slightly slower suppression flow |
+| ADR-005 | No inline suppressions; fingerprint-keyed, occurrence-aware, with a reason (also for retained `stellar_seed`, D-06) | Inline markers are an attacker's bypass manual | Slightly slower suppression flow; valid seed test vectors are not automatically exempt |
 | ADR-006 | Rules are data, detectors are code, no plugins | Loading external code defeats the trust model | Contributors add rules via PR |
 | ADR-007 | No YAML parsing in v0.1 | Avoid a runtime dependency | Workflow-aware rules are deferred |
 | ADR-008 | SARIF deferred to P1 | Needs an extra permission and upload step; step summary and annotations suffice at first | Less code-scanning integration at launch |

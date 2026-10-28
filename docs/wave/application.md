@@ -47,7 +47,7 @@ Say this plainly rather than letting a reviewer find it.
 | The seven bypasses are confirmed against the real script, with a reproducible harness | Done 2026-10-27; `scripts/bypass_probe.py` reproduces it |
 | Five of the seven fail closed under Airlock today, measured | True; two (Cargo runner, `vendor/` payload) need rules that are not written yet, which are issues 11 and 13 in this batch |
 | A repository can install it as a GitHub Action | Not built. `action.yml` is task 4.1, issue 15 |
-| It detects Stellar-specific compromise (Soroban size limits, SEP metadata, secret seeds) | Not built. Phase 6, and `stellar_seed` is still decision D-06 |
+| It detects Stellar-specific compromise (Soroban size limits, SEP metadata, secret seeds) | Not built. D-06 is owner-approved KEEP as of 2026-10-28 UTC for offline checksum-valid plaintext tracked-file seeds; implementation remains 6.2/6.3. This does not add size-limit or SEP-metadata checks. |
 | There is a release to pin | No tag, no release, no attestation. Phase 5 |
 | Someone outside this repository uses it | No adoption evidence at all |
 
@@ -80,9 +80,10 @@ Airlock (HIGH, exit 1) is the whole argument in ninety seconds, it can be produc
 > Wave, and each one grounded in a file and a line rather than in a plan. Five are Trivial, which is
 > the tier this tracker is thinnest on and the only entry point into a codebase this specialized:
 > confirming a runner launch mechanism, measuring GitHub's annotation limits against constants the
-> code already uses, settling one fingerprint-key spelling left over from a rename, checking whether
-> gitleaks already covers Stellar seeds, and auditing three hardening rows that shipped tests may
-> already satisfy. Seven are Medium, including one real defect found while writing these: a rule id
+> code already uses, settling one fingerprint-key spelling left over from a rename, recording the
+> Stellar seed scope decision (0.7, now owner-approved KEEP after source comparison, not tool execution),
+> and auditing three hardening rows that shipped tests may already satisfy. Seven are Medium,
+> including one real defect found while writing these: a rule id
 > that is both scanner-state and a loaded rule makes a non-suppressible class of finding
 > suppressible, reproduced on the shipped build. Three are High and they are the coverage that
 > decides whether the tool catches the class it was built for: the text-side rules that reach
