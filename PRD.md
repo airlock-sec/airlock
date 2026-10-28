@@ -223,7 +223,7 @@ Field definitions are in `ARCHITECTURE.md` section 7.
 
 - **Determinism:** same inputs, same findings, same order (severity first, then path, line, rule).
 - **Performance:** target under 30 seconds for the largest of the six repos on a standard GitHub runner. [Unverified: unmeasured target]
-- **ReDoS bound:** each regex rule must finish within 50 ms on a 1 MB adversarial input in the test suite. [Target, unmeasured]
+- **ReDoS bound:** a line past `line_cap` never reaches a regex, so the bound is per cap-length line: every pattern the scanner runs against attacker text must finish one 20 000-character adversarial line within 60 ms in the test suite. Measured (task 2.12): the rule-data patterns worst at about 10 ms, `config_role`'s dangerous-command test at about 20 ms, and 1 MB of adversarial text through the whole engine at about 440 ms. Each measurement runs in a child process, so a pattern that backtracks fails the suite instead of hanging it. [Measured 2026-10-27: one machine, one run per pattern]
 - **Offline:** no network access during a scan, no telemetry.
 - **Runtime dependencies:** none in v0.1 (Python standard library only; Python 3.11 or newer).
 - **Tool supply chain:** the Airlock repository passes its own scan, pins every Action by hash, uses top-level read-only permissions, publishes release attestations and targets a Scorecard score of 8 or higher. [Target, unmeasured]
