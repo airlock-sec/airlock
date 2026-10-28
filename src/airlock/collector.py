@@ -42,14 +42,20 @@ SKIP_UNREADABLE = "unreadable"
 SKIP_SYMLINK = "symlink"
 SKIP_SUBMODULE = "submodule"
 SKIP_ENCODING = "encoding"
+SKIP_UNMERGED = "unmerged"
 
 
 @dataclass(frozen=True, slots=True)
 class IndexEntry:
-    """One line of `git ls-files --stage` output."""
+    """One path from `git ls-files --stage`, with the index stage it was seen at."""
 
     mode: str
     path: str
+    stage: int = 0
+
+    @property
+    def is_unmerged(self) -> bool:
+        return self.stage != 0
 
     @property
     def is_symlink(self) -> bool:
@@ -76,17 +82,26 @@ class Collection:
         return counts
 
 
-def git_text(repo_root: Path, *args: str) -> str:
-    """Run one git command in the scanned repo and return stdout. Never uses a shell."""
+def git_bytes(repo_root: Path, *args: str, timeout: int = 120) -> bytes:
+    """Run one git command in the scanned repo and return raw stdout. Never uses a shell.
+
+    Every git call in this module goes through here, so a timeout or a missing binary fails
+    the same way whoever asked git. The CLI turns that `ValueError` into exit code 2.
+    """
     argv = ["git", "-C", str(repo_root), *args]
     try:
-        result = subprocess.run(argv, capture_output=True, timeout=120, check=False)
+        result = subprocess.run(argv, capture_output=True, timeout=timeout, check=False)
     except (OSError, subprocess.SubprocessError) as exc:
         raise ValueError(f"git failed to run: {exc}") from exc
     if result.returncode != 0:
         detail = result.stderr.decode("utf-8", errors="replace").strip()
         raise ValueError(detail or f"git exited with code {result.returncode}")
-    return result.stdout.decode("utf-8", errors="replace").strip()
+    return result.stdout
+
+
+def git_text(repo_root: Path, *args: str) -> str:
+    """One git command as text, with the surrounding whitespace removed."""
+    return git_bytes(repo_root, *args).decode("utf-8", errors="replace").strip()
 
 
 def check_runtime(repo_root: Path) -> str:
@@ -112,18 +127,16 @@ def check_runtime(repo_root: Path) -> str:
 
 
 def list_tracked_files(repo_root: Path) -> tuple[IndexEntry, ...]:
-    """Tracked paths from the index, sorted. Untracked files are out of scope."""
-    raw = subprocess.run(
-        ["git", "-C", str(repo_root), "ls-files", "-z", "--stage"],
-        capture_output=True,
-        timeout=300,
-        check=False,
-    )
-    if raw.returncode != 0:
-        detail = raw.stderr.decode("utf-8", errors="replace").strip()
-        raise ValueError(detail or "git ls-files failed")
-    entries: list[IndexEntry] = []
-    for record in raw.stdout.split(b"\0"):
+    """Tracked paths from the index, sorted, one record per path.
+
+    An unmerged path is kept, flagged, and never dropped: git lists it once per staged
+    version (stages 1, 2 and 3, with no stage 0), and a scanner that only read stage 0 would
+    report nothing at all about a file sitting in a merge conflict. The repeat collapses into
+    one entry so the path produces one finding.
+    """
+    raw = git_bytes(repo_root, "ls-files", "-z", "--stage", timeout=300)
+    by_path: dict[str, IndexEntry] = {}
+    for record in raw.split(b"\0"):
         if not record:
             continue
         meta, _, path = record.partition(b"\t")
@@ -131,13 +144,11 @@ def list_tracked_files(repo_root: Path) -> tuple[IndexEntry, ...]:
         if len(fields) != 3:
             raise ValueError(f"unparsable git index entry: {record[:120]!r}")
         mode, _, stage = fields
-        if int(stage) != 0:
-            # An unmerged path during a conflict resolution. The index holds several
-            # versions; scanning a merge result would report findings against a file that
-            # does not exist yet.
-            continue
-        entries.append(IndexEntry(mode=mode.decode(), path=os.fsdecode(path)))
-    return tuple(sorted(entries, key=lambda entry: entry.path))
+        entry = IndexEntry(mode=mode.decode(), path=os.fsdecode(path), stage=int(stage))
+        seen = by_path.get(entry.path)
+        if seen is None or entry.stage < seen.stage:
+            by_path[entry.path] = entry
+    return tuple(sorted(by_path.values(), key=lambda entry: entry.path))
 
 
 def _state(
@@ -187,6 +198,32 @@ def _collect_one(
 ) -> tuple[FileEntry, tuple[PendingFinding, ...]]:
     findings: list[PendingFinding] = []
     target = repo_root / entry.path
+
+    if entry.is_unmerged:
+        # Nothing here is read, not even the working copy: its conflict markers are a merge
+        # result nobody has agreed on, and scanning them would report a file that does not
+        # exist yet. The roles come from the path alone, so the severity still follows
+        # whether this is a file a rule would have cared about.
+        roles = resolve_roles(entry.path, b"", role_globs)
+        findings.append(
+            _state(
+                "skipped-unmerged",
+                Severity.HIGH if _sensitive(roles) else Severity.WARN,
+                entry.path,
+                roles,
+                "unmerged in the index: the path has staged versions and no committed "
+                "content, so nothing was scanned",
+            )
+        )
+        return (
+            FileEntry(
+                path=entry.path,
+                sha256=None,
+                roles=roles,
+                skip_reason=SKIP_UNMERGED,
+            ),
+            tuple(findings),
+        )
 
     if entry.is_submodule:
         findings.append(

@@ -110,7 +110,7 @@ Removed since v0.1 of this document: `jsmask.py`, `wasmparse.py`, `detectors/dep
 
 ### 6.1 Collector
 
-- Lists tracked files with `git ls-files -z --stage`. Entries with mode 160000 are submodules and yield `submodule-present` (INFO, P1 hardening). Untracked files are out of scope.
+- Lists tracked files with `git ls-files -z --stage`. Entries with mode 160000 are submodules and yield `submodule-present` (INFO, P1 hardening). Untracked files are out of scope. A path the index holds unmerged (stages 1 to 3, no stage 0) is kept as one entry and yields `skipped-unmerged`; it is never dropped for having no committed version.
 - **No default directory skips.** The first draft skipped `node_modules/`, `target/`, `dist/`, `.next/` and `vendor/` and reported them as INFO. That let an attacker hide a payload in a committed vendor directory (B6). If a repo tracks a very large vendored tree, policy may list `low_priority_dirs`, which only suppress WARN-level content rules there. HIGH rules, role magic and config-role globs still apply.
 - Reads each file once: size, first 4096 bytes and (lazily) the full bytes and SHA-256.
 - Decoding: honor a UTF-8 or UTF-16 BOM; otherwise decode UTF-8 strictly. Undecodable text yields `non-utf8-text` (HIGH in sensitive roles, WARN elsewhere). A NUL byte after BOM handling yields `nul-in-text`.
@@ -379,6 +379,7 @@ The invariant this enforces is that detector code cannot see less than it needs 
 | Undecodable text | `non-utf8-text` (HIGH sensitive roles, else WARN) |
 | Line over `line_cap` | `cfg-long-line` (HIGH in `tooling-config`, else WARN); regex skipped for that line |
 | Symlink | `skipped-symlink` (INFO) |
+| Unmerged index entry (merge conflict) | `skipped-unmerged` (HIGH for sensitive roles, else WARN); no version of the file is read |
 | Submodule | `submodule-present` (INFO) |
 | Archive present | `wasm-archive-skipped` (WARN) |
 | Detector raises | `detector-error` (HIGH) |
