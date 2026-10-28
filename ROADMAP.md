@@ -1,6 +1,6 @@
 # ROADMAP: Airlock
 
-Last updated: 2026-10-28 14:40 UTC
+Last updated: 2026-10-28 14:52 UTC
 
 Roadmap version: 1
 
@@ -34,7 +34,7 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 <!-- PROGRESS:START -->
 | Phase | Name | Done | Total | Progress |
 |---|---|---|---|---|
-| 0 | Decisions and validation | 5 | 16 | 31% |
+| 0 | Decisions and validation | 6 | 16 | 38% |
 | 1 | Repository bootstrap and self-protection | 10 | 14 | 71% |
 | 2 | Core engine | 15 | 15 | 100% |
 | 3 | P0 detectors | 4 | 11 | 36% |
@@ -44,7 +44,7 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 | 7 | Hardening and edge cases | 4 | 12 | 33% |
 | 8 | Release v0.2.0 and community | 0 | 5 | 0% |
 | 9 (backlog) | Backlog | 0 | 10 | 0% |
-| **Phases 0 to 8** | **Readiness total** | **39** | **92** | **42%** |
+| **Phases 0 to 8** | **Readiness total** | **40** | **92** | **43%** |
 | Gates | G1 to G10 | 0 | 10 | 0% |
 <!-- PROGRESS:END -->
 
@@ -97,17 +97,19 @@ All must be true for 100%.
 
 ## 4. Current focus
 
-Phase 2 is complete, 14 rows of 14 as of 2026-10-28, and task 0.4 is closed: all seven Appendix B
+Phase 2 is complete, 15 rows of 15 as of 2026-10-28, and task 0.4 is closed: all seven Appendix B
 bypasses were run against `malware_scan.py` on 2026-10-27 and every one of them is confirmed,
 which settles which Phase 3 rules are real.
 
-The two tasks that unblock the most are now finishing 1.5 in CI and 0.10. The CI skeleton is
-written and passes locally; what it needs is one observed green run on GitHub, and the roadmap
-gate (1.9) becomes real the same day it is configured as a required check (1.3, 0.13). After
-that, the corpus, because 3.3 threshold tuning, the 3.8 parity harness and the 4.6 corpus gate
-each list it as a dependency. 3.6 and 3.7, the rules ported from `malware_scan.py`, are the
-largest remaining P0 surface and the last thing between this build and a scan that would catch
-the shape of the six reported campaigns.
+0.8 closed on 2026-10-28 14:51 and 1.5 and 1.9 closed earlier the same day, so what unblocks the
+most now is 0.10 and 3.6. The corpus, because 3.3 threshold tuning, the 3.8 parity harness and the
+4.6 corpus gate each list it as a dependency. The rules ported from `malware_scan.py` are the
+largest remaining P0 surface, the last thing between this build and a scan that would catch the
+shape of the six reported campaigns, and a dependency of the 3.9 bypass regressions. The composite
+Action (4.1) is unblocked rather than blocked: its two dependencies, 0.8 and 2.10, are both done,
+and 0.8 verified the exact launch path, so what remains is the Action itself. Making the two CI
+checks *required* (1.3, with 0.13's org-plan question) is the largest thing still open that no
+pull request can close, because it is repository settings rather than a file.
 
 ## 5. Phases and tasks
 
@@ -120,7 +122,7 @@ the shape of the six reported campaigns.
 - [x] **0.5** Decide D-01 (name), D-02 (license) and D-03 (host org). S. Done when: the decision log has an entry for each. (done 2026-10-27: Airlock, Apache-2.0, `airlock-sec/airlock`)
 - [ ] **0.6** Search GitHub and the Stellar docs for existing Soroban or Stellar repo-hygiene tools. S. Done when: findings are in the changelog and PRD 2.4 is updated.
 - [ ] **0.7** Check whether gitleaks and TruffleHog already detect Stellar secret seeds. S. Done when: D-06 (keep, narrow or drop `stellar_seed`) is decided.
-- [ ] **0.8** Test `python3 -I -c` with an explicit `sys.path` insert in a scratch workflow on `ubuntu-latest`. S. Done when: result recorded; `ARCHITECTURE.md` 10 marked Verified or corrected.
+- [x] **0.8** Test `python3 -I -c` with an explicit `sys.path` insert in a scratch workflow on `ubuntu-latest`. S. Done when: result recorded; `ARCHITECTURE.md` 10 marked Verified or corrected. (done 2026-10-28 14:51: the launch works, observed on GitHub rather than reasoned about. [PR run `40706458871`](https://github.com/wagmiiii/airlock-isolation-probe/actions/runs/40706458871) and [dispatch run `40706400064`](https://github.com/wagmiiii/airlock-isolation-probe/actions/runs/40706400064) both succeeded on `ubuntu-latest` (Ubuntu 24.04.5, CPython 3.11.17) against trusted Airlock pinned at `17079ac7ad830deb2b31e991a84f849ee3074959`, and the log lines below were read out of the hosted log rather than written from the workflow source. Every invocation used the exact prefix from the section 10 sketch. `ASSERTED_EXIT full=0`, `pr=0`, `shallow=2`: the full and real-pull-request-base scans each printed `0 HIGH` (`8 file(s) scanned, nothing skipped`), and a deliberately shallow checkout of the same PR failed closed with exit 2 on `base 3c569b5948ea is not reachable in this checkout` without fetching. The isolation half is the part that mattered: benign shadow packages were staged at `airlock/` and `src/airlock/` in the *scanned* checkout with `PYTHONPATH` pointed at them, plus `sitecustomize.py`/`usercustomize.py` sentinels, and the workflow asserted `airlock.__file__` and `airlock.cli.__file__` resolved under `trusted-airlock/src`, that `sys.flags.no_user_site=1`, and that no sentinel file was written. `ARCHITECTURE.md` 10 now carries that evidence and its own caveats, section 15 question 1 and the essentials known-unknowns line are resolved. Not covered, and the reason 4.1 stays open: `GITHUB_ACTION_PATH` was set by hand, so the composite Action's own setup, its `push` coverage and the rest of the input matrix are still unverified; exit 1 and exit 3 were not exercised by these benign cases; and [probe PR #1](https://github.com/wagmiiii/airlock-isolation-probe/pull/1), which retains the reproduction, is still open, not merged.)
 - [ ] **0.9** Confirm GitHub limits from the docs: annotations per step, step summary size, SARIF size and result count, behavior of `github.event.before` (new branch, force push), `merge_group` events. S. Done when: numbers are in `ARCHITECTURE.md` 6.6 and 15 and marked Verified.
 - [ ] **0.10** Build the clean-state corpus: copy tooling configs, Wasm fixtures and Cargo manifests from the six repos into `tests/corpus/` (no secrets). M. Done when: corpus is committed and documented. cost-profiler joins once it is public.
 - [ ] **0.11** Read SEP-55 and SEP-58 text; record metadata keys and status. S. Done when: `PRD.md` 11 item 6 is answered.
@@ -285,6 +287,7 @@ Newest first. One row per merged change.
 
 | Date (UTC) | Change | Tasks |
 |---|---|---|
+| 2026-10-28 14:52 | Close #20: the `python3 -I -c` launch that `ARCHITECTURE.md` 10 sketched is verified on a hosted runner, so 0.8 moves from `[ ]` to `[x]` and question 1 of section 15 and the essentials known-unknowns line stop calling it unknown. `ARCHITECTURE.md` 10 gains an evidence subsection with the two green runs (`40706458871` PR, `40706400064` dispatch, both attempt 1), the pinned trusted Airlock commit, the runner and CPython versions, the exact launch prefix each invocation used, and the observed exits 0 / 0 / 2 for the full, real-pull-request-base and deliberately-shallow cases; the shallow one failed closed on an unreachable base without the scanner fetching, which is the section 8 behavior being demonstrated rather than asserted. The isolation claim is the part a reader cannot get from the sketch: benign shadow packages staged under `airlock/` and `src/airlock/` in the *scanned* checkout with `PYTHONPATH` pointed at them and `sitecustomize`/`usercustomize` sentinels, against a run that resolved both module origins under `trusted-airlock/src` and found no sentinel written. Every quoted line above was read out of the hosted log for run `40706458871` before it was written into this repository, which is also how the two differing image versions (`20261012.334.1` reported by the setup header against `ImageVersion=20261023.334.3` in the environment) ended up recorded as a difference instead of smoothed into one number. Documentation only: no source, rule or test changed. Stated limits, because the issue is narrower than the task it feeds: `GITHUB_ACTION_PATH` was set by hand, so the composite Action's own setup, its `push` coverage and the rest of the input matrix stay unverified and 4.1 stays open; exits 1 and 3 were not exercised by these benign cases; and the probe pull request that retains the reproduction is still open, not merged. Section 4 was still describing 1.5 as the work that unblocks the most and Phase 2 as 14 of 14, so both are corrected here (15 of 15, and 0.10 plus 3.6 as the current blockers) rather than left contradicting the table. Verified locally after the edits, Python 3.14.0 in the checked-out virtualenv while CI runs 3.11: `pytest` 515 passed, `ruff check` clean, `ruff format --check` clean on 45 files, `mypy src` clean on 24 files, `airlock scan --mode full .` 0 HIGH · 0 WARN · 2 INFO over 96 files with nothing skipped, `roadmap_progress.py --check` exit 0 with the table regenerated by the script rather than retyped. Not verified locally: `check_roadmap_touched.sh`, which compares committed trees, so it runs against this commit after it exists and on the pull request in CI. | 0.8, 4.1, 10, 15 |
 | 2026-10-28 14:40 | Settle #22 with `partialFingerprints["airlock/v1"]` (D-09, ADR-019), replacing the draft `repoGuard/v1` before any SARIF release. Updated architecture 6.6, PRD FR-19, essentials, stub and issue draft. The algorithm is unchanged and the reporter remains unimplemented. Two new tests failed first on the old reporter row and missing stub key, then passed; they inspect those exact locations rather than any mention elsewhere. Local verification: 515 tests, lint and format, mypy (24 modules), self-scan 0 HIGH/0 WARN over 96 files, progress and diff checks. The obsolete spelling remains only in this roadmap's historical decision/changelog records. | 7.12, D-09 |
 | 2026-10-28 14:36 | Audit #25: record encoding, renderer-flooding and suppression-churn coverage with exact tests and residuals in their task rows. Added three LF/CRLF cases using one tracked path, real collection and shipped rules; line numbers and occurrence fingerprints agree while byte hashes differ. All passed before any production change, so the issue's requested red baseline is inapplicable: no reading or numbering code changed. No existing test was weakened. Local verification: 513 tests, lint and format (45 files), mypy (24 modules), self-scan 0 HIGH/0 WARN over 96 files with no skips, and progress check pass. The initial full run correctly rejected a stale progress table, which was regenerated. Phase 7 is 3/12; readiness is 38/92. Hosted rendering limits and Windows behavior remain separate tasks 0.9 and 7.8. | 7.3, 7.10, 7.11 |
 | 2026-10-28 14:29 | Refuse scanner-state suppressions before consulting rule data (#31). The shipped `cfg-long-line` and fallback flags now agree, and finding construction cannot advertise a state as suppressible even if a rule is misdeclared. Added 35 cases: every state ID with and without a loaded suppressible rule, shipped-data drift, conflicting cap-rule metadata, and CLI reproduction using a 30,013-character comment. Before: 19 failures, 16 passes; after: all 158 suppression/rules/CLI tests pass. The maintainer must already control trusted-base policy for this defect to apply; this is not a PR author's ability to approve their own suppression. Updated PRD FR-14, architecture 7.6, essentials and the structure map. The existing exact non-suppressible-rule assertion now includes `cfg-long-line`, preserving every prior member. Verified locally: 510 tests pass, lint and format checks pass, mypy clean on 24 modules, self-scan 0 HIGH/0 WARN over 96 tracked files. No threshold, severity or ordinary-rule suppression changed. | 2.15 |

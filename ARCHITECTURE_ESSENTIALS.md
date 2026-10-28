@@ -137,7 +137,7 @@ action.yml   pyproject.toml   airlock.toml   wasm-manifest.toml
 ## 14. Known unknowns (do not assume) [15]
 
 - SEP-58 metadata key names and Soroban metadata section names.
-- Whether `-I -c` plus explicit `sys.path` behaves as designed on `ubuntu-latest`.
+- Composite Action integration (4.1) remains unverified. The exact `-I -c` launch with a trusted `sys.path` insert passed on `ubuntu-latest` / CPython 3.11.17 on 2026-10-28: trusted origins, no shadow execution, full/PR/shallow exits 0/0/2. The probe manually set `GITHUB_ACTION_PATH`; it did not ship an Action. Task 0.8 is resolved; evidence and runner details: [ARCHITECTURE.md section 10](ARCHITECTURE.md#task-08-observed-isolation-evidence).
 - `tail_max_len` and `tail_entropy` values (placeholders until tuned on corpus).
 - Overlap of `stellar_seed` with gitleaks and TruffleHog.
 - Resolver-2 feature behavior for `testutils` inheritance.
