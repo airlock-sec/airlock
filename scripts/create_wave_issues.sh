@@ -27,19 +27,39 @@ dir="docs/wave/issues"
 for arg in "$@"; do
     case "$arg" in
         --apply) apply=1 ;;
-        --repo) echo "create_wave_issues: --repo needs a value; use --repo owner/name" >&2; exit 2 ;;
+        --repo) want_repo=1 ;;
         --repo=*) repo="${arg#--repo=}" ;;
+        --dir) want_dir=1 ;;
         --dir=*) dir="${arg#--dir=}" ;;
         -h|--help)
             sed -n '2,20p' "$0"
             exit 0
             ;;
         *)
+            if [ "${want_repo:-0}" -eq 1 ]; then
+                repo="$arg"
+                want_repo=0
+                continue
+            fi
+            if [ "${want_dir:-0}" -eq 1 ]; then
+                dir="$arg"
+                want_dir=0
+                continue
+            fi
             echo "create_wave_issues: unknown argument $arg" >&2
             exit 2
             ;;
     esac
 done
+
+if [ "${want_repo:-0}" -eq 1 ]; then
+    echo "create_wave_issues: --repo needs a value; use --repo owner/name" >&2
+    exit 2
+fi
+if [ "${want_dir:-0}" -eq 1 ]; then
+    echo "create_wave_issues: --dir needs a value" >&2
+    exit 2
+fi
 
 if [ ! -d "$dir" ]; then
     echo "create_wave_issues: no issue directory at $dir" >&2
@@ -61,8 +81,10 @@ read_field() {
 }
 
 body_from() {
-    # Everything after the closing front-matter delimiter.
-    awk 'started { print } /^---$/ { started = 1 }' "$1"
+    # Everything after the closing front-matter delimiter. Counting the delimiters rather than
+    # setting a flag on the first one matters: the file opens with `---`, so a flag test starts
+    # the body at the `slug:` line and publishes the front matter as part of the description.
+    awk '/^---$/ { fence++; next } fence >= 2' "$1"
 }
 
 if [ "$apply" -eq 1 ]; then
