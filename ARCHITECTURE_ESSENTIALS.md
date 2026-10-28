@@ -88,7 +88,7 @@ Key behaviors:
 - `config_role` targets role `tooling-config` (postcss, tailwind, next, eslint, babel configs). Capabilities, not signatures. [9.1]
 - `cfg-dynamic-code` is HIGH and not suppressible. Network or spawn alone is WARN; combined is HIGH.
 - `wasm_manifest` identifies Wasm by magic `00 61 73 6D`, never by extension. [9.2]
-- `stellar_seed` reports only checksum-valid candidates. [9.4]
+- D-06: owner-approved KEEP (2026-10-28 UTC). Planned `stellar_seed` is offline, checksum-valid plaintext in tracked files; valid test vectors also match, with no funding or live-use inference. Explicit reasoned suppressions only; implementation remains 6.2/6.3. [9.4]
 
 ## 8. Trust model [4]
 
@@ -139,7 +139,7 @@ action.yml   pyproject.toml   airlock.toml   wasm-manifest.toml
 - SEP-58 metadata key names and Soroban metadata section names.
 - Composite Action integration (4.1) remains unverified. The exact `-I -c` launch with a trusted `sys.path` insert passed on `ubuntu-latest` / CPython 3.11.17 on 2026-10-28: trusted origins, no shadow execution, full/PR/shallow exits 0/0/2. The probe manually set `GITHUB_ACTION_PATH`; it did not ship an Action. Task 0.8 is resolved; evidence and runner details: [ARCHITECTURE.md section 10](ARCHITECTURE.md#task-08-observed-isolation-evidence).
 - `tail_max_len` and `tail_entropy` values (placeholders until tuned on corpus).
-- Overlap of `stellar_seed` with gitleaks and TruffleHog.
+- Executed seed coverage of Gitleaks/TruffleHog and custom configurations; source-only comparison is verified in 9.4, not a runtime benchmark.
 - Resolver-2 feature behavior for `testutils` inheritance.
 - GitHub limits: annotations per step, step summary size, SARIF size; required-check behavior when a job is deleted.
 

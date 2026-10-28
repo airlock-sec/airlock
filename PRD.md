@@ -146,7 +146,7 @@ Priority: **P0** ships in v0.1.0, **P1** in v0.2.0, **Later** is backlog (`ROADM
 | FR-14 | ReDoS bound: lines over `line_cap` skip regex rules and raise non-suppressible `cfg-long-line`; every pattern passes an adversarial timing test | P0 | No scan exceeds the runtime target on a 5 MB single-line file |
 | FR-15 | Roadmap gate: `scripts/check_roadmap_touched.sh`, PR template checkbox and a required CI check | P0 | A PR that changes any file but not `ROADMAP.md` fails |
 | FR-16 | `soroban_profile`, contextual to contract crates | P1 | No false positive on a test-support library crate |
-| FR-17 | `stellar_seed` | P1 | Checksum-valid seeds detected; scope decided after task 0.7 |
+| FR-17 | `stellar_seed`: offline, checksum-valid plaintext Stellar seeds in tracked files (D-06: KEEP, owner-approved 2026-10-28 UTC) | P1 | Canonical 56-character seeds detected within collector and line limits; invalid checksum, version or length rejected. Valid test vectors also detected unless explicitly suppressed with a reason. No funding or live-use inference. Implementation remains tasks 6.2 and 6.3. |
 | FR-18 | `cargo_vectors` | P1 | Fixtures pass |
 | FR-19 | SARIF 2.1.0 output (deferred to task 7.6) | P1 | Validates against the schema; result count capped; uses `partialFingerprints["airlock/v1"]` (D-09, ADR-019), settled before shipping with no migration needed |
 | FR-20 | Git LFS pointer and submodule handling | P1 | LFS-stored Wasm is checked against the manifest or reported |
@@ -189,7 +189,7 @@ Network alone is WARN because some legitimate Next.js configs fetch at build tim
 
 **`soroban_profile`** (P1). The release profile in the Stellar-ecosystem example sets `opt-level = "z"`, `overflow-checks = true`, `debug = 0`, `strip = "symbols"`, `debug-assertions = false`, `panic = "abort"`, `codegen-units = 1`, `lto = true`. [Verified: Stellar docs and a Chainlink Stellar tutorial] Applies only to contract crates (`crate-type` includes `cdylib`) and only to the workspace root manifest, because Cargo ignores profiles in non-root manifests. [Verified: Cargo behavior] Missing or false `overflow-checks` is HIGH, other deviations WARN. `testutils` under `[dependencies]` of a contract crate is HIGH. It is not flagged in library crates: `soroban-budget-assert` is a test-support library and plausibly needs `testutils` as a normal dependency. [Unverified: Cargo.toml not inspected]
 
-**`stellar_seed`** (P1). Detect Stellar secret seeds (56 characters, `S` prefix, strkey checksum). Suppressible with a reason, because committed testnet seeds in tests and docs are common. [Verified: strkey format; Unverified: checksum details until tested against reference vectors]
+**`stellar_seed`** (P1, planned). D-06 retains offline detection of checksum-valid plaintext Stellar seeds in tracked files, including tests and docs. Require canonical uppercase Base32, 56 characters with `S` prefix, 35 decoded bytes, version `0x90`, a 32-byte seed and a little-endian CRC16-XMODEM checksum over the first 33 bytes. [Verified: source inspection, 2026-10-28 UTC; pinned SEP-0023 and `stellar/go` references in `ARCHITECTURE.md` 9.4.] Checksum-valid test vectors are not exempt: validity says nothing about funding, live use or testnet use. Findings remain suppressible with a reason through the existing trusted-base, occurrence-aware mechanism. No assignment context or entropy threshold is required. Collector limits and `line_cap` still apply; word-character adjacency can prevent a regex match. Split strings, other encodings, hex seeds, mnemonics and history are outside this detector's scope. Reference-derived tests and implementation remain tasks 6.2 and 6.3; no network or live-key verification during a scan.
 
 **`cargo_vectors`** (P1). `.cargo/config.toml` `runner`, `linker` or `rustc-wrapper` containing a shell; custom `build = "<path>"`; git dependencies without `rev`; `[patch]` or `[replace]` to git or path sources; `build.rs` network or shell capability.
 
@@ -280,7 +280,7 @@ No calendar dates are promised. Phases, tasks and exit criteria live in `ROADMAP
 1. Resolved 2026-10-27: name Airlock, repository `airlock-sec/airlock` (decisions D-01, D-03). Because it sits outside the Tollcraft repositories, it likely needs its own Drips Wave application if you want Wave coverage. [Unverified]
 2. Resolved 2026-10-27: Apache-2.0 (the `LICENSE` file already in the repository; decision D-02). The Tollcraft and Accensa repos mix MIT and Apache-2.0, so dogfooding crosses licenses, which is fine for scanning.
 3. Resolved 2026-10-27 (task 0.4): all seven bypasses are real. Each case was run as a commit in a scratch repository against the real script and every one exits 0, which passes the job; `scripts/bypass_probe.py` reproduces it and Appendix B records what each case produced.
-4. Do gitleaks or TruffleHog already detect Stellar secret seeds? (task 0.7)
+4. Resolved 2026-10-28 UTC (task 0.7, D-06): **KEEP**, approved by the owner. At the pinned revisions cited in `ARCHITECTURE.md` 9.4, Gitleaks has 222 rules and no dedicated Stellar/StrKey checksum detector; `generic-api-key` may incidentally match via keyword/assignment context and entropy >= 3.5. TruffleHog has no dedicated Stellar detector; `privatekey` handles PEM blocks and the generic detector registration is commented out. This is source inspection, not executed-tool coverage. Retain the offline checksum-valid plaintext tracked-file detector, not a general secret scanner; implementation stays in 6.2 and 6.3.
 5. Where does stellar-cli store identities, and is there a keychain option? (not needed until a detector depends on it)
 6. SEP-58 final status and metadata key names. (task 0.11)
 7. Can a required status check be pinned to a trusted source, and which ruleset, required-check and required-workflow features does the `airlock-sec` org plan provide? (tasks 0.13, 0.16) [Unverified: recalled from GitHub features, not checked]
@@ -297,6 +297,7 @@ No calendar dates are promised. Phases, tasks and exit criteria live in `ROADMAP
 - Cargo ignores `[profile.*]` in non-root manifests.
 - Scorecard results for five repos as of 2026-10-26.
 - The existing script's `SKIP_DIRS` skips `node_modules/`, `target/`, `dist/`, `.next/` and `vendor/` (read from the pasted source).
+- Stellar seed encoding and the source-level Gitleaks/TruffleHog comparison at pinned revisions, 2026-10-28 UTC (`ARCHITECTURE.md` 9.4). Neither tool was executed; valid test vectors pass the checksum too.
 
 **Unverified or untested**
 
@@ -304,7 +305,8 @@ No calendar dates are promised. Phases, tasks and exit criteria live in `ROADMAP
 - Whether any of the five repos carries a tracked `node_modules/`, `dist/` or `vendor/` directory today, which decides how much real exposure bypass 7 has.
 - RUSTSEC-2026-0387 (not found in search); RUSTSEC-2024-0436 believed to be the unmaintained `paste` crate.
 - GitHub limits on annotations, step summaries and SARIF; `github.event.before` behavior on new branches and force pushes; `merge_group` events.
-- Aptos RPC hostnames, stellar-cli identity storage, gitleaks overlap, SEP-58 key names.
+- Aptos RPC hostnames, stellar-cli identity storage, SEP-58 key names.
+- Executed Gitleaks/TruffleHog seed coverage and custom configurations; Airlock's planned seed implementation and reference-vector tests (6.2, 6.3).
 - Performance, ReDoS and Scorecard targets; all effort sizing.
 
 ## 13. Red-team review (summary)
