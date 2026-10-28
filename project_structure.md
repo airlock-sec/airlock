@@ -23,6 +23,7 @@ airlock/
   CLAUDE.md                        # Claude Code entry point; imports AGENTS.md                              (done)
   project_structure.md             # this file                                                               (done)
   CONTRIBUTING.md                  # human contributor guide; carries the roadmap rule                       (1.8)
+  SUPPORT.md                       # where to ask, the exact CI commands, the rules that reject PRs          (1.13)
   SECURITY.md                      # how to report a vulnerability in airlock itself                         (1.8)
   LICENSE                          # per decision D-02                                                       (1.1)
   action.yml                       # composite GitHub Action (protected)                                     (4.1)
@@ -65,6 +66,13 @@ airlock/
     bypass_probe.py                # roadmap 0.4: runs Appendix B against the external script it is given
     check_roadmap_touched.sh       # CI gate: PR must change ROADMAP.md                                      (1.9)
     roadmap_progress.py            # computes and checks the progress table                                  (1.9)
+    create_wave_issues.sh          # publishes docs/wave/issues; dry run unless --apply                      (1.14)
+
+  docs/
+    wave/
+      issues/NN-<slug>.md          # one file per Wave issue: front matter (title, labels, roadmap) + body   (1.14)
+      settings.md                  # repo settings to apply for program readiness: topics, labels, ruleset   (1.13)
+      application.md               # the Drips application text and its pre-flight checklist                 (8.4)
 
   tests/
     unit/                          # one test module per source module
@@ -148,6 +156,8 @@ model  <-  fingerprint, roles, rules  <-  collector, policy  <-  detectors  <-  
 | `AGENTS.md`, `CLAUDE.md` | Agent instructions | Workflow, commands or boundaries change |
 | `project_structure.md` | This map | A file or directory is added, moved or removed |
 | `README.md`, `CONTRIBUTING.md` | Users and contributors | User-visible behavior or process changes |
+| `SUPPORT.md` | What a contributor runs before opening a PR | A CI command, a protected path or a rejection rule changes |
+| `docs/wave/` | Program readiness: issue batch, repo settings, application draft | An issue's scope changes, or a setting in this batch is applied |
 
 If a code change contradicts a doc, fix the doc in the same PR. If a doc statement is [Unverified], do not build on it; run the task that verifies it (Phase 0).
 

@@ -1,0 +1,212 @@
+# Wave readiness: repository settings
+
+Everything in this file is a setting on `airlock-sec/airlock`, not a code change. None of it has been
+applied. Each command is written so the owner can run it, or approve an agent running it, one
+section at a time.
+
+Verified against the live repository on 2026-10-28 with read-only calls:
+
+| Checked | Result |
+|---|---|
+| Topics | none (`"topics": []`) |
+| Labels | the nine stock GitHub labels only; no `Stellar Wave`, no `complexity: *`, no `area: *` |
+| Rulesets | `[]`, and the endpoint answers, so repository rulesets are available on this plan |
+| Branch protection on `main` | `Branch not protected` (404) |
+| Releases | none |
+| Tags | none |
+| Description | present: "command-line scanner and GitHub Action that audits Stellar and Soroban open-source repositories for supply-chain compromise and release-integrity gaps." |
+
+The ruleset endpoint returning `[]` rather than a permissions error is the useful one: it means the
+plan supports repository rulesets, which is the open half of task 0.13 and 0.16. That is an inference
+from an API response and not a plan confirmation, so 0.16 still needs the org's own answer.
+
+## 1. Order of operations
+
+The order matters because of one mechanic: on a repository Drips has not approved, the `Stellar
+Wave` label is removed automatically. So labels and issues can be created any time, but they score
+nothing until approval lands, and an issue published before approval looks live to a contributor while
+being invisible to the program.
+
+1. Topics and labels (harmless, needed by everything after).
+2. Branch protection naming the two checks that already run (section 4). This is the one piece of
+   Phase 10 hygiene that is not cosmetic: it is what makes a red gate mean something.
+3. A `v0.0.1` pre-release tag (section 5).
+4. The Drips application (see `application.md`), and wait for the decision. A rejected repository
+   cannot re-apply, so this step goes last on purpose.
+5. Only after approval: publish the fifteen issues with `sh scripts/create_wave_issues.sh --apply`,
+   then confirm on the Drips dashboard that the points counted.
+
+`scripts/create_wave_issues.sh` refuses to create anything while the repository has no `Stellar Wave`
+label, which is step 1's check as well as a guard against running step 5 out of order.
+
+## 2. Topics
+
+```
+gh api -X PUT repos/airlock-sec/airlock/topics -f names[]=supply-chain -f names[]=security \
+  -f names[]=wasm -f names[]=soroban -f names[]=stellar -f names[]=github-actions \
+  -f names[]=scanner -f names[]=python -f names[]=devsecops -f names[]=smart-contracts \
+  -f names[]=dependency-audit -f names[]=ci
+```
+
+Chosen for what a Stellar maintainer would search for, not for volume. `python3`, `cli` and
+`linter` were left out: they are true and they are noise. The list is twelve, which is under GitHub's
+cap, and the endpoint is a full replacement, so re-running it with a different list overwrites rather
+than appends.
+
+## 3. Labels
+
+`Stellar Wave` must be created by hand or by the bot; the exact spelling matters, since it is the
+string Drips matches.
+
+```
+gh label create "Stellar Wave" --repo airlock-sec/airlock \
+  --color "5319E7" --description "In the Stellar Wave builder program"
+
+gh label create "complexity: trivial" --repo airlock-sec/airlock --color "C2E0C6" \
+  --description "100 points: one bounded change with obvious acceptance criteria"
+gh label create "complexity: medium"  --repo airlock-sec/airlock --color "FBC2D7" \
+  --description "150 points: standard change touching several parts of the codebase"
+gh label create "complexity: high"    --repo airlock-sec/airlock --color "D4C5F9" \
+  --description "200 points: complex engineering or a security-critical surface"
+
+gh label create "area: engine"    --repo airlock-sec/airlock --color "0E8A16" --description "collector, runner, fingerprint, suppression, reporters"
+gh label create "area: rules"     --repo airlock-sec/airlock --color "0E8A16" --description "rules/*.toml and the detectors that read them"
+gh label create "area: detectors" --repo airlock-sec/airlock --color "0E8A16" --description "a detector's scope, its fixtures or its rule data decision"
+gh label create "area: action"    --repo airlock-sec/airlock --color "0E8A16" --description "action.yml and the runner's execution environment"
+gh label create "area: ci"        --repo airlock-sec/airlock --color "0E8A16" --description ".github/workflows and scripts/"
+gh label create "area: docs"      --repo airlock-sec/airlock --color "0E8A16" --description "README and the design documents"
+gh label create "area: tests"     --repo airlock-sec/airlock --color "0E8A16" --description "tests/ layout, fixtures, corpus, harnesses"
+
+gh label create "type: test" --repo airlock-sec/airlock --color "F9D0C4" \
+  --description "Work whose deliverable is test coverage rather than behavior"
+gh label create "blocked"    --repo airlock-sec/airlock --color "E9969A" \
+  --description "Cannot be completed until another issue or task lands"
+```
+
+`bug`, `documentation`, `enhancement` and `good first issue` already exist as stock labels and are
+reused as they are. No `area: security` label: every area here is security, so the label would carry
+no information.
+
+## 4. Branch protection
+
+The check names below are the real ones, read from the two workflows rather than guessed:
+`.github/workflows/ci.yml` has job `checks`, and `.github/workflows/roadmap-check.yml` has job
+`roadmap`. Both were confirmed as check-run names on the live repository: pull request #18's head
+commit carries exactly `checks` and `roadmap`, both reported by the `github-actions` app, whose
+integration ID is `15368`. A required check whose name does not match a job that runs is worse than
+no required check, because it blocks every pull request forever, and because the mismatch reads as
+"the gate is configured" when it is not.
+
+```json
+{
+  "name": "protect-main",
+  "target": "branch",
+  "enforcement": "active",
+  "bypass_actors": [],
+  "conditions": { "ref_name": { "include": ["~DEFAULT_BRANCH"], "exclude": [] } },
+  "rules": [
+    { "type": "creation" },
+    { "type": "update" },
+    { "type": "deletion" },
+    { "type": "non_fast_forward" },
+    { "type": "pull_request",
+      "parameters": {
+        "required_approver_count": 1,
+        "dismiss_stale_reviews_on_push": true,
+        "require_code_owner_review": false,
+        "authorized_actor_names": ["Gabbydunkk"],
+        "required_review_teams": [],
+        "dismissal_restrictions": []
+      } },
+    { "type": "required_status_checks",
+      "parameters": {
+        "required_status_checks": [
+          { "context": "checks", "integration_id": 15368 },
+          { "context": "roadmap", "integration_id": 15368 }
+        ],
+        "strict_required_status_checks_policy": true
+      } }
+  ]
+}
+```
+
+Run it as:
+
+```
+gh api -X POST repos/airlock-sec/airlock/rulesets --input ruleset.json
+```
+
+Three notes on choices in that document:
+
+- **`strict_required_status_checks_policy: true`** means a pull request must be up to date with
+  `main` before it can merge, so a green gate cannot be stale against the branch it would land on.
+- **`required_status_checks` never runs a check; it only requires one.** A contributor who deletes
+  the workflow file does not get a green light, they get a pull request that can never merge, which
+  is the behavior `PRD.md` wants and task 4.5 tests. It also means a new required job must exist
+  before it is listed here, not after.
+- **`integration_id: 15368`** is the GitHub Actions app. Without it the context string is ambiguous
+  against checks from other apps.
+- **`authorized_actor_names` lists the account that owns this repository.** `airlock-sec` currently
+  has one member, `Gabbydunkk`, which is what the API reports. If a second maintainer is added, that
+  list is a security boundary and belongs in the same pull request as the change, not in a settings
+  edit nobody reviewed. Task 1.2 (account hardening) is the precondition for trusting it.
+
+This closes the file-editable half of task 1.3. `CODEOWNERS` for the protected paths is the other
+half and is a normal pull request; `.github/CODEOWNERS` does not exist yet. Task 1.2 (account
+hardening) and 0.16 (what the org plan actually allows) stay open, and 0.16 is the reason to check
+whether `authorized_actor_names` and the bypass list are the right shape before trusting this file.
+
+## 5. A release tag
+
+The guide asks for a version tag. `ROADMAP.md` 5.5 gates `v0.1.0` behind Phases 0 to 5 and a review
+of gates G1 to G10, and the repository is at 36% of that, so cutting `v0.1.0` today would be a claim
+this file contradicts two sections later.
+
+`pyproject.toml` and `airlock.__version__` both already read `0.0.1`, so the honest tag is `v0.0.1`
+as a pre-release, described as what it is:
+
+```
+gh release create v0.0.1 --prerelease --title "v0.0.1 (pre-release)" --notes-file /tmp/notes.md
+```
+
+Draft notes:
+
+> Pre-release, not a version to depend on. `v0.1.0` is gated on Phases 0 to 5 of
+> [`ROADMAP.md`](https://github.com/airlock-sec/airlock/blob/main/ROADMAP.md), and three of the four
+> things a consumer would want are not built: the composite Action (`action.yml`, task 4.1), the
+> Stellar-specific detectors (Phase 6) and SARIF output (7.6).
+>
+> What does work, from a source checkout on Python 3.11 or newer:
+>
+> ```
+> python -m pip install .
+> python -m airlock scan --mode full .
+> ```
+>
+> Twelve rules across two rule files, two detectors, four report formats (`console`, `github`,
+> `json`, and the step summary), fingerprint-keyed suppressions with expiry, a Wasm manifest with
+> `airlock manifest add` and `check`, and fail-closed skips. Exit 0 only when nothing reached the
+> threshold.
+>
+> There is no signed artifact and no build provenance at this tag: task 5.3 adds those, and 5.5 is
+> the first release that carries them. Pin a commit SHA, not this tag, if you are reading the code
+> rather than installing it.
+
+No contract addresses belong in the body: Airlock deploys nothing, which is the one item in the
+builder guide's Phase 10 list that does not transfer to this repository.
+
+## 6. What is deliberately not here
+
+- **The `Stellar Wave` label applied to anything before approval.** It would be stripped, and the
+  strip is silent.
+- **A docs site** (guide Phase 11). `PRD.md`, `ARCHITECTURE.md`, `ARCHITECTURE_ESSENTIALS.md`,
+  `project_structure.md` and this roadmap already describe the design five ways, and task 5.2 is
+  going to generate a rule reference from the rule data. A sixth hand-written copy would be a sixth
+  thing to keep true. Revisit after 5.2.
+- **`contrib.rocks` in the README.** The image would render one avatar. Add it when the first
+  external contributor lands, which is the point of the whole exercise.
+- **Auto-merge, or a bot that merges Wave pull requests.** `AGENTS.md` section 9 forbids it, and a
+  scanner that reviews its own reviewer is the failure mode this tool exists to catch.
+- **Dependabot** (1.6). It is issue 04 in this batch on purpose: the roadmap gate has no exemptions
+  and decision D-07 says it must not gain any silently, so enabling Dependabot before that question
+  is settled produces permanently red bot pull requests.
