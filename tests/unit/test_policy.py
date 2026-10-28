@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from airlock import policy
 from airlock.fingerprint import PendingFinding, number_occurrences
 from airlock.model import (
     BOOTSTRAP_POLICY,
@@ -25,7 +26,9 @@ from airlock.policy import (
     MANIFEST_FILENAME,
     POLICY_FILENAME,
     ZERO_SHA,
+    ManifestAdd,
     TrustedConfig,
+    manifest_add,
     manifest_from_toml,
     policy_from_toml,
     resolve_policy,
@@ -548,3 +551,170 @@ class TestProtectedPaths:
 
         with pytest.raises(ValueError, match="repo-relative"):
             resolve_policy(repo, Mode.PR, head, base=head, manifest_path="/etc/passwd")
+
+
+def wasm_bytes(seed_word: str) -> bytes:
+    """A generated artifact: magic, version preamble, one custom section naming its seed."""
+    body = seed_word.encode()
+    preamble = b"\x01\x00\x00\x00"
+    section = b"\x00" + str(len(body)).encode() + b"\x01a" + body
+    return b"\x00asm" + preamble + section
+
+
+def add(root: Path, *targets: str, **fields: str) -> ManifestAdd:
+    return manifest_add(
+        root,
+        targets,
+        origin=fields.pop("origin", "built"),
+        source=fields.pop("source", "contracts/counter"),
+        build=fields.pop("build", "cargo build --release"),
+        **fields,
+    )
+
+
+def artifact(root: Path, rel: str, word: str) -> Path:
+    path = root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(wasm_bytes(word))
+    return path
+
+
+class TestManifestAdd:
+    def test_a_first_add_writes_a_manifest_that_states_the_two_step_flow(
+        self, tmp_path: Path
+    ) -> None:
+        artifact(tmp_path, "target/counter.wasm", "counter")
+        change = add(tmp_path, "target/counter.wasm")
+
+        assert len(change.added) == 1 and change.extended == ()
+        assert "two-step flow" in change.text
+        assert "[[wasm]]" in change.text
+
+    def test_the_written_text_parses_back_to_the_same_entries(self, tmp_path: Path) -> None:
+        artifact(tmp_path, "target/counter.wasm", "counter")
+        artifact(tmp_path, "target/other.wasm", "other")
+        change = add(tmp_path, "target/counter.wasm", "target/other.wasm")
+
+        written, findings = manifest_from_toml(change.text, path=MANIFEST_FILENAME, source="test")
+        assert findings == ()
+        assert {(entry.sha256, entry.paths) for entry in written.entries} == {
+            (entry.sha256, tuple(sorted(entry.paths))) for entry in change.added
+        }
+
+    def test_adding_the_same_target_again_writes_nothing_new(self, tmp_path: Path) -> None:
+        artifact(tmp_path, "target/counter.wasm", "counter")
+        first = add(tmp_path, "target/counter.wasm").text
+        (tmp_path / MANIFEST_FILENAME).write_text(first, encoding="utf-8")
+
+        again = add(tmp_path, "target/counter.wasm")
+        assert again.unchanged
+        assert again.text == first
+
+    def test_a_second_path_with_a_known_hash_joins_the_reviewed_entry(self, tmp_path: Path) -> None:
+        artifact(tmp_path, "target/counter.wasm", "same")
+        artifact(tmp_path, "dist/copy.wasm", "same")
+        first = add(tmp_path, "target/counter.wasm", source="contracts/counter")
+        (tmp_path / MANIFEST_FILENAME).write_text(first.text, encoding="utf-8")
+
+        second = add(tmp_path, "dist/copy.wasm", source="something else", build="rm -rf")
+
+        assert len(second.extended) == 1 and second.added == ()
+        entry = second.extended[0]
+        assert entry.paths == ("target/counter.wasm", "dist/copy.wasm")
+        # The first stated provenance is the reviewed one, so a later add cannot restate it.
+        assert entry.source == "contracts/counter" and entry.build == "cargo build --release"
+
+    def test_the_repositories_own_header_survives_an_add(self, tmp_path: Path) -> None:
+        header = (
+            "# Our artifacts, and why each one is here.\n"
+            "# Reviewed by the release owner.\n\nversion = 1\n"
+        )
+        (tmp_path / MANIFEST_FILENAME).write_text(header, encoding="utf-8")
+        artifact(tmp_path, "a.wasm", "a")
+
+        assert add(tmp_path, "a.wasm").text.startswith(header)
+
+    def test_a_comment_inside_an_entry_block_is_refused_rather_than_dropped(
+        self, tmp_path: Path
+    ) -> None:
+        text = (
+            'version = 1\n\n[[wasm]]\nsha256 = "' + "a" * 64 + '"\n'
+            'paths = ["a.wasm"]\norigin = "built"\nsource = "s"\nbuild = "b"\n'
+        )
+        commented = text.replace('origin = "built"', 'origin = "built"  # reviewed 2026-10-27')
+        (tmp_path / MANIFEST_FILENAME).write_text(commented, encoding="utf-8")
+        artifact(tmp_path, "b.wasm", "b")
+
+        with pytest.raises(ValueError, match="the writer emits them from data only"):
+            add(tmp_path, "b.wasm")
+
+    def test_a_misspelled_key_is_refused_before_the_rewrite(self, tmp_path: Path) -> None:
+        # `notes` is an unknown key, so the loader reports it as a finding instead of raising, and
+        # a rewrite from parsed data would silently drop it. A misspelled *required* key is a
+        # parse error, which is refused earlier.
+        text = (
+            'version = 1\n\n[[wasm]]\nsha256 = "' + "a" * 64 + '"\n'
+            'paths = ["a.wasm"]\norigin = "built"\nsource = "s"\nbuild = "b"\nnotes = "keep me"\n'
+        )
+        (tmp_path / MANIFEST_FILENAME).write_text(text, encoding="utf-8")
+        artifact(tmp_path, "b.wasm", "b")
+
+        with pytest.raises(ValueError, match="fix those keys first"):
+            add(tmp_path, "b.wasm")
+
+    def test_a_file_without_the_wasm_magic_is_refused(self, tmp_path: Path) -> None:
+        (tmp_path / "pointer.wasm").write_text("version https://git-lfs.github.com/spec/v1\n")
+
+        with pytest.raises(ValueError, match="does not start with the Wasm magic"):
+            add(tmp_path, "pointer.wasm", origin="vendored")
+
+    def test_an_origin_built_without_a_build_command_is_refused(self, tmp_path: Path) -> None:
+        artifact(tmp_path, "a.wasm", "a")
+
+        with pytest.raises(ValueError, match="--build is required"):
+            add(tmp_path, "a.wasm", build="")
+
+    def test_an_artifact_the_collector_would_skip_is_refused(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        artifact(tmp_path, "big.wasm", "x" * 400)
+        monkeypatch.setattr(policy, "MAX_ARTIFACT_BYTES", 100)
+
+        with pytest.raises(ValueError, match="over the 100 byte ceiling"):
+            add(tmp_path, "big.wasm")
+
+    def test_a_note_needing_escapes_round_trips(self, tmp_path: Path) -> None:
+        artifact(tmp_path, "a.wasm", "a")
+        note = 'copied from "upstream\\release",\nsecond line'
+        change = add(tmp_path, "a.wasm", note=note)
+
+        written, _ = manifest_from_toml(change.text, path=MANIFEST_FILENAME, source="test")
+        assert written.entries[0].note == note
+
+    def test_entries_come_out_in_hash_order_whatever_the_add_order(self, tmp_path: Path) -> None:
+        artifact(tmp_path, "z.wasm", "zeta")
+        artifact(tmp_path, "a.wasm", "alpha")
+        first = add(tmp_path, "z.wasm", "a.wasm")
+        second = add(tmp_path, "a.wasm", "z.wasm")
+
+        assert first.text == second.text
+        written, _ = manifest_from_toml(first.text, path=MANIFEST_FILENAME, source="test")
+        assert [entry.sha256 for entry in written.entries] == sorted(
+            entry.sha256 for entry in written.entries
+        )
+
+    def test_a_path_outside_the_repository_is_refused(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="repo-relative"):
+            add(tmp_path, "../elsewhere/a.wasm")
+
+    def test_a_manifest_path_outside_the_repository_is_refused(self, tmp_path: Path) -> None:
+        artifact(tmp_path, "a.wasm", "a")
+
+        with pytest.raises(ValueError, match="repo-relative"):
+            manifest_add(
+                tmp_path,
+                ("a.wasm",),
+                manifest_path="../etc/wasm.toml",
+                origin="built",
+                source="s",
+            )

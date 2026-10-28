@@ -16,7 +16,7 @@ from typing import Any
 
 from airlock import roles
 from airlock.detectors import DETECTOR_NAMES, config_role
-from airlock.model import FileEntry, Manifest, Mode, Policy, ScanContext, Severity
+from airlock.model import FileEntry, Manifest, Policy, ScanContext, Severity
 from airlock.rules import load_role_globs, load_rules
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -39,17 +39,13 @@ def make_entry(
     entry_roles: tuple[str, ...] | None = None,
 ) -> FileEntry:
     roles_ = entry_roles if entry_roles is not None else (roles.TOOLING_CONFIG_ROLE, "source")
-    return FileEntry(path=path, size_bytes=len(text), sha256=None, roles=roles_, text=text)
+    return FileEntry(path=path, sha256=None, roles=roles_, text=text)
 
 
 def make_context(entries: list[FileEntry], **policy: Any) -> ScanContext:
     values: dict[str, Any] = {"line_cap": 90, "tail_max_len": 60, "tail_entropy": 4.5}
     values.update(policy)
     return ScanContext(
-        mode=Mode.FULL,
-        tool_version="0.0.0-test",
-        repo_head="0" * 40,
-        base=None,
         entries=tuple(entries),
         policy=Policy(**values),
         manifest=Manifest(),
@@ -78,7 +74,7 @@ class TestRoleGating:
 
     def test_a_file_the_collector_could_not_read_is_left_to_the_collector(self) -> None:
         unreadable = FileEntry(
-            path="next.config.js", size_bytes=10, sha256=None, roles=(roles.TOOLING_CONFIG_ROLE,)
+            path="next.config.js", sha256=None, roles=(roles.TOOLING_CONFIG_ROLE,)
         )
         assert run_ids([unreadable]) == []
 

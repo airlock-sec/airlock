@@ -12,7 +12,7 @@ from typing import Any
 
 from airlock import roles
 from airlock.detectors import DETECTOR_NAMES, wasm_manifest
-from airlock.model import FileEntry, Manifest, Mode, Policy, ScanContext, Severity, WasmEntry
+from airlock.model import FileEntry, Manifest, Policy, ScanContext, Severity, WasmEntry
 from airlock.rules import load_role_globs, load_rules
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -34,7 +34,7 @@ def make_rules() -> tuple[Any, ...]:
 
 
 def make_entry(path: str, sha: str | None, *, entry_roles: tuple[str, ...]) -> FileEntry:
-    return FileEntry(path=path, size_bytes=8, sha256=sha, roles=entry_roles, text=None)
+    return FileEntry(path=path, sha256=sha, roles=entry_roles, text=None)
 
 
 def wasm(path: str, sha: str | None = BUILD_A) -> FileEntry:
@@ -57,10 +57,6 @@ def listed(path: str, sha: str = BUILD_A) -> WasmEntry:
 
 def run(entries: list[FileEntry], manifest: Manifest) -> list[Any]:
     ctx = ScanContext(
-        mode=Mode.FULL,
-        tool_version="0.0.0-test",
-        repo_head="0" * 40,
-        base=None,
         entries=tuple(entries),
         policy=Policy(),
         manifest=manifest,
@@ -98,7 +94,6 @@ class TestUnlisted:
     def test_an_artifact_the_collector_could_not_hash_is_unlisted(self) -> None:
         unreadable = FileEntry(
             path="counter.wasm",
-            size_bytes=0,
             sha256=None,
             roles=(roles.WASM_ROLE,),
             skip_reason="skipped-oversize",

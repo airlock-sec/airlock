@@ -199,9 +199,7 @@ def _collect_one(
             )
         )
         return (
-            FileEntry(
-                path=entry.path, size_bytes=0, sha256=None, roles=(), skip_reason=SKIP_SUBMODULE
-            ),
+            FileEntry(path=entry.path, sha256=None, roles=(), skip_reason=SKIP_SUBMODULE),
             tuple(findings),
         )
 
@@ -220,7 +218,6 @@ def _collect_one(
         return (
             FileEntry(
                 path=entry.path,
-                size_bytes=0,
                 sha256=None,
                 roles=resolve_roles(entry.path, b"", role_globs),
                 skip_reason=SKIP_SYMLINK,
@@ -245,7 +242,6 @@ def _collect_one(
         return (
             FileEntry(
                 path=entry.path,
-                size_bytes=0,
                 sha256=None,
                 roles=resolve_roles(entry.path, b"", role_globs),
                 skip_reason=SKIP_UNREADABLE,
@@ -269,7 +265,6 @@ def _collect_one(
         return (
             FileEntry(
                 path=entry.path,
-                size_bytes=size_bytes,
                 sha256=None,
                 roles=roles,
                 skip_reason=SKIP_OVERSIZE,
@@ -296,7 +291,6 @@ def _collect_one(
             return (
                 FileEntry(
                     path=entry.path,
-                    size_bytes=size_bytes,
                     sha256=None,
                     roles=roles,
                     skip_reason=SKIP_UNREADABLE,
@@ -311,7 +305,7 @@ def _collect_one(
         # detector rules work on bytes, and running text rules over them would only produce
         # noise. The roles came from magic, so nothing here depends on the extension.
         return (
-            FileEntry(path=entry.path, size_bytes=size_bytes, sha256=sha256, roles=roles),
+            FileEntry(path=entry.path, sha256=sha256, roles=roles),
             tuple(findings),
         )
 
@@ -343,7 +337,6 @@ def _collect_one(
             return (
                 FileEntry(
                     path=entry.path,
-                    size_bytes=size_bytes,
                     sha256=sha256,
                     roles=roles,
                     skip_reason=SKIP_ENCODING,
@@ -356,7 +349,6 @@ def _collect_one(
     return (
         FileEntry(
             path=entry.path,
-            size_bytes=size_bytes,
             sha256=sha256,
             roles=roles,
             text=text,

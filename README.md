@@ -5,9 +5,12 @@ for supply-chain compromise and release-integrity gaps. Python 3.11+, standard l
 
 ## Status
 
-Pre-implementation scaffold. The repository holds the design documents, the package layout
-and the core data models. There is **no working scanner yet**: `airlock scan` exits 2 by
-design, so nothing can mistake an unbuilt tool for a passing one. Progress is in
+Building. The core engine runs: `airlock scan` collects a repository, applies the registered
+rules and reports findings with exit codes 0/1/2/3, in console, GitHub-annotation, JSON and
+step-summary form. Two P0 detectors are registered (`config_role` for JS/TS build tooling,
+`wasm_manifest` for Wasm artifact integrity); the Soroban-side detectors and the composite
+GitHub Action are not built yet, so there is no `uses: airlock-sec/airlock@…` line to copy into
+a workflow. Do not treat a scan from this build as complete coverage. Progress is in
 [`ROADMAP.md`](ROADMAP.md); the design is in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## What it will check
@@ -32,7 +35,32 @@ dependency-viability tool and not a replacement for a code review.
 
 ## Quickstart
 
-Not usable yet. Planned shape (task 4.1 and 4.2):
+Run a scan against the repository you are standing in:
+
+```bash
+PYTHONPATH=src python3 -m airlock scan --mode full
+```
+
+`--mode full` reads policy from the working tree and says so in the report with an INFO finding.
+The trust models a scan really depends on are `--event pull_request --base <sha>` and
+`--event push --before <sha>`, which read policy from the commit the change started at; both need
+a checkout with history, so `actions/checkout` has to run with `fetch-depth: 0`.
+
+If the repository commits Wasm artifacts, record each one and then verify the tree:
+
+```bash
+PYTHONPATH=src python3 -m airlock manifest add target/*/*.wasm \
+  --origin built --source contracts/counter \
+  --build "cargo build --release --target wasm32-unknown-unknown"
+PYTHONPATH=src python3 -m airlock manifest check
+```
+
+`add` writes `wasm-manifest.toml` and stages nothing: land that diff on its own before the pull
+request that adds the files, which is the flow the trusted base assumes (FR-06). `check` reports
+only the artifact findings, so an unlisted or swapped artifact fails the gate and a stale entry
+does not.
+
+The Action shape below is planned (tasks 4.1 and 4.2) and is not usable yet:
 
 ```yaml
 - uses: airlock-sec/airlock@<full commit sha>   # pin the SHA, not a tag

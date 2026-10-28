@@ -131,7 +131,7 @@ A file may have several roles. Globs use a small internal matcher where `**` spa
 
 ### 6.3 Detectors
 
-A detector is a function `run(ctx) -> Iterable[Finding]` registered in a plain list. (An earlier draft used a Protocol class and a registry object; a list of functions is enough.) `ScanContext` exposes file entries with roles, the resolved policy and manifest, loaded rules and the scan mode.
+A detector is a function `run(ctx) -> Iterable[Finding]` registered in a plain list. (An earlier draft used a Protocol class and a registry object; a list of functions is enough.) `ScanContext` exposes exactly four things: the collected file entries with their roles, the trusted policy, the trusted manifest and the loaded rule data. It does not expose the trust model itself — see 7.9.
 
 Every call is wrapped: an exception becomes a HIGH `detector-error` and the remaining detectors still run. Findings a detector yielded before it raised are kept, so one failure on the tenth file costs the scan that file's coverage and nothing more. Third-party detector plugins are not supported, because loading external code would defeat the trust model.
 
@@ -177,13 +177,13 @@ Cost: a PR that adds a legitimate Wasm fixture fails until the manifest change m
 
 | Reporter | Notes |
 |---|---|
-| console | Severity, rule, `path:line`, message; summary line |
-| github | `::error` and `::warning` commands; escapes `%`, `\r`, `\n`, `:` and `,` in properties; HIGH first; WARN annotations capped |
-| json | Full `ScanReport` model |
-| summary | Markdown to `$GITHUB_STEP_SUMMARY`: counts, skipped-file counts, every HIGH; evidence rendered only inside fenced code blocks with the fence length chosen to exceed any backtick run in the evidence, truncated to a fixed length |
+| console | Severity, rule, `path:line`, message; summary line with counts, suppressed count and skip accounting |
+| github | `::error`, `::warning` and `::notice` commands; escapes `%`, `\r`, `\n`, `:` and `,` in properties; HIGH first; each severity capped, and a capped list ends with one annotation naming how many went unlisted |
+| json | Full `ScanReport` model, including every suppressed finding and its reason |
+| summary | Markdown to `$GITHUB_STEP_SUMMARY`: counts, skipped-file counts, every HIGH; evidence rendered only inside fenced code blocks with the fence length chosen to exceed any backtick run in the evidence, truncated to a fixed length. Rule ids and paths outside a fence are escaped, so no `-` or `#` is substituted where a heading or list marker could form |
 | sarif (P1) | SARIF 2.1.0 with `partialFingerprints["repoGuard/v1"]`; result count capped |
 
-Evidence is attacker-controlled text. It is never rendered as raw markdown (B11). GitHub limits annotations per step and the size of step summaries; the design assumes truncation and so orders output by severity (B8). [Unverified: exact limits, task 0.9]
+Evidence is attacker-controlled text. It is never rendered as raw markdown (B11). GitHub limits annotations per step and the size of step summaries; the design assumes truncation and so orders output by severity (B8). [Unverified: exact limits, task 0.9] Because the limits are unverified, the caps are reporter constants rather than policy settings: a repository cannot raise them, and 0.9 replaces the guesswork with measured numbers.
 
 ## 7. Data models
 
@@ -313,6 +313,19 @@ note   = "fixture for conformance tests"
 
 Keyed by hash so the same Wasm at several paths needs one entry and a rename produces a WARN instead of a HIGH.
 
+**The writer is canonical, not an editor** (task 3.5, `policy.py`). `manifest_to_toml` emits the header verbatim, then entries sorted by `sha256` with each entry's `paths` sorted, so `parse(render(x)) == x` holds and two runs on the same tree produce the same bytes. Idempotence is what makes `manifest add` safe to run in a pipeline: a second call reports "already lists every target" and writes nothing.
+
+Two refusals exist because a writer that silently drops what the model cannot carry is a lie:
+
+- **Comments inside an entry block** are refused ("the writer emits them from data only"). A free-text comment attached to `[[wasm]]` has no field to live in, so keeping it would mean hand-editing the parse, and dropping it would delete a reviewer's note. `note =` is the field for that.
+- **Unknown keys in the entry region** are refused before anything is written, naming them, because the rewrite emits from parsed data and would erase them. (A header outside the recognised shape is preserved as-is; only the entry region is rewritten.)
+
+`manifest add` also checks the artifact itself: `\0asm` magic is required (a `*.wasm` LFS pointer is refused, not recorded), the file must sit inside the repo and be at most `max_file_bytes`, `--source` is always required, and `--build` is required when `origin = "built"`. Provenance is stated once per entry; joining a second path to a known hash keeps the reviewed `source`/`build` rather than overwriting it.
+
+**Nothing is staged or committed.** `wasm-manifest.toml` is a protected path, so the command writes the file and tells the operator to land that diff on its own branch first (FR-06). A tool that auto-commits the trusted base would be the bypass it is meant to prevent.
+
+`manifest check` is one scan with `run_scan(..., keep=wasm-* findings)`, not a second implementation of artifact accounting. Numbering and suppression still run over every finding, so fingerprints and occurrence indices match a full scan; only the exit code is decided over the kept set, against the same `fail_on` threshold. Consequently an unlisted or swapped artifact exits 1 while manifest rot (`wasm-manifest-stale`, `wasm-path-moved`) is named at WARN and exits 0 — the deleted artifact is not shipping, so there is nothing to stop.
+
 ### 7.8 ScanReport
 
 ```python
@@ -328,6 +341,33 @@ class ScanReport:
     suppressed: list[Finding]
     exit_code: int
 ```
+
+### 7.9 FileEntry and ScanContext
+
+Both were drafted before the collectors, detectors and reporters existed, so task 2.13 settled them against use rather than against opinion: a field survives only if some rule, reporter or test reads it.
+
+```python
+@dataclass(frozen=True, slots=True)
+class FileEntry:
+    path: str
+    sha256: str | None          # absent when the whole file could not be read
+    roles: tuple[str, ...]
+    text: str | None = None
+    skip_reason: str | None = None
+
+@dataclass(frozen=True, slots=True)
+class ScanContext:
+    entries: tuple[FileEntry, ...]
+    policy: Policy
+    manifest: Manifest
+    rules: tuple[Rule, ...]
+```
+
+Dropped from `FileEntry`: `size_bytes`. The collector needs the size to decide whether a file is oversize or only partly read, and states it in those findings, but no rule is a function of it, and any entry that carries text can be measured with `len(text)`. It stayed a local variable in `collector.py`.
+
+Dropped from `ScanContext`: `mode`, `tool_version`, `repo_head`, `base`. Those describe the scan, not a file, and the only code that reads them is the reporters, which are handed `ScanReport` (7.8) and get them from there. Keeping them on the context would have made the trust model reachable to detector code, which is the wrong direction: `mode` decides which base the policy came from, that question is settled before a `ScanContext` exists, and a detector has no business re-opening it. A rule that genuinely needs the mode adds it back with a task that says why.
+
+The invariant this enforces is that detector code cannot see less than it needs and cannot see more than a finding should depend on. `tests/unit/test_model.py` asserts both field lists verbatim, so a re-added field is a deliberate edit to that test rather than an unnoticed one.
 
 ## 8. Fail-closed behavior
 
@@ -449,10 +489,10 @@ Notes:
 ## 12. Testing strategy
 
 - **Unit tests** for every module.
-- **Fixtures:** every rule has one positive and one negative fixture, enforced inside the pytest suite.
-- **Synthetic only.** Trigger strings are assembled at test time from fragments (for example `'ev' + 'al('`), written to a temp directory and scanned. The repository never stores a live-looking payload. Wasm fixtures are minimal generated byte strings (`\0asm\x01\0\0\0` plus a trivial section).
+- **Fixtures:** every rule has one positive and one negative fixture, enforced inside the pytest suite. The rule file names its builders, so the gate can ask every shipped rule for both halves and fail on a missing one (`tests/unit/test_fixtures.py`, task 2.12).
+- **Synthetic only.** Trigger strings are assembled at test time from fragments (for example `'ev' + 'al('`), handed to the scanner as already-collected files (path, bytes, roles, hash) and run through the engine pass and the whole detector registry. The repository never stores a live-looking payload. Wasm fixtures are minimal generated byte strings (`\0asm\x01\0\0\0` plus a trivial section). A temporary git repository is used only where the git state itself is under test (trusted base, bypass cases), because there the collector has to run for real.
 - **Bypass regression tests:** the seven cases in `PRD.md` Appendix B, plus any later discovered evasion, each asserting fail-closed.
-- **ReDoS timing test:** each pattern runs against adversarial inputs (long runs of a single character, nested repeats) and must finish within the budget.
+- **ReDoS timing test:** each pattern runs against adversarial inputs (long runs of a single character, nested repeats, the pattern's own literal fragments repeated and left as a near miss) at the length `line_cap` allows, and must finish within the budget. The measurement runs in a child process with a wall-clock limit, so a pattern that backtracks fails the suite instead of hanging it, and a canary pattern is asserted to breach the same budget.
 - **Trusted-base tests:** a pushed commit that edits policy and adds a payload; a force push; a new branch; an unresolvable base.
 - **Parity test:** old `malware_scan.py` versus the ported rules on a shared corpus; no lost findings.
 - **Golden outputs:** JSON (and SARIF once it exists).

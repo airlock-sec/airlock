@@ -54,15 +54,15 @@ Scorecard reports were run on five repositories (Tollcraft: `soroban-budget-asse
 
 ### 2.3 What the current in-repo gate leaves open
 
-Each of the five repos runs `.github/workflows/malware-scan.yml` with `.github/scripts/malware_scan.py`. It is good work (about eight detector types Scorecard lacks), but a review found these weaknesses. [Unverified: none has been executed yet; Appendix B is the test plan]
+Each of the five repos runs `.github/workflows/malware-scan.yml` with `.github/scripts/malware_scan.py`. It is good work (about eight detector types Scorecard lacks), but a review found these weaknesses. Verified 2026-10-27: items 1, 2, 3, 5, 6 and 7 were each executed as a commit in a scratch repository with the real script copied in, and all six exit 0, which means the job passes (`run: python3 -I .github/scripts/malware_scan.py`, no `continue-on-error`). Item 4 is a property of where the files live, not of a rule, so it is confirmed by reading the workflow: the scan step is checked out from the PR's own head, and the allowlist and the scanner are in the tree it reads. The harness is `scripts/bypass_probe.py` (`--script` pointing at the external copy), and the detailed observations are in Appendix B. Airlock's fail-closed regressions for the same shapes are `tests/bypass/` (task 3.9).
 
-1. Wasm files are skipped silently because they begin with a NUL byte and `.wasm` is not in the binary extension list.
-2. Any text file containing a NUL byte in its first 4 KB, or larger than 5 MB, is skipped silently.
-3. `.github/malware-scan-allow.txt` uses `fnmatch`, so a single `*` line can disable the scan; the inline `malware-scan: allow` marker exempts any line from any rule.
-4. The scanner and its allowlist live inside the tree being scanned, so a PR or a credentialed attacker can edit them.
-5. The key PolinRider behavior (decode, then `eval`) scores only WARN unless it uses a literal `eval(atob(` style form.
-6. No rule for Cargo-specific execution vectors, and no rule for `.cargo/config.toml`.
-7. Tracked files under `node_modules/`, `target/`, `dist/`, `.next/` and `vendor/` are skipped entirely, so a payload committed in any of those directories is never inspected.
+1. Wasm files are skipped silently because they begin with a NUL byte and `.wasm` is not in the binary extension list. **Confirmed**: `\0asm` puts a NUL in the first 4 KB, which the size/NUL test treats as binary noise and drops the file without a finding, and `.wasm` is absent from the extension list, so nothing else claims it either.
+2. Any text file containing a NUL byte in its first 4 KB, or larger than 5 MB, is skipped silently. **Confirmed**: `// <NUL>` plus a decode-and-eval line yields zero findings, and `node --check` still accepts that file, so the NUL costs the scan and not the payload.
+3. `.github/malware-scan-allow.txt` uses `fnmatch`, so a single `*` line can disable the scan; the inline `malware-scan: allow` marker exempts any line from any rule. **Confirmed for both halves**: a one-line `*` allowlist hides a `Buffer.from` decode-and-eval in `loader.js`, and the same payload with the marker in its own line is exempt with no rule change.
+4. The scanner and its allowlist live inside the tree being scanned, so a PR or a credentialed attacker can edit them. **Confirmed by inspection** (see the note above): the step is checked out from the head under scan, and the script even excludes its own path from the scan, so a rewrite of the rule table is both possible and invisible.
+5. The key PolinRider behavior (decode, then `eval`) scores only WARN unless it uses a literal `eval(atob(` style form. **Confirmed**: `eval(decrypted)` in `postcss.config.mjs` produces one WARN and zero HIGH, and only HIGH affects the exit code.
+6. No rule for Cargo-specific execution vectors, and no rule for `.cargo/config.toml`. **Confirmed**: a `runner = ["sh", "-c", …]` build runner is not read by any rule and exits 0.
+7. Tracked files under `node_modules/`, `target/`, `dist/`, `.next/` and `vendor/` are skipped entirely, so a payload committed in any of those directories is never inspected. **Confirmed**: the same decode-and-eval under `vendor/thing/` exits 0.
 
 ### 2.4 Why this needs to be Stellar-specific
 
@@ -198,11 +198,22 @@ Network alone is WARN because some legitimate Next.js configs fetch at build tim
 ### 6.3 CLI
 
 ```
-airlock scan     [--mode pr|push|full] [--base <sha>] [--config <path>]
-                    [--fail-on high|warn] [--format console|json|github] [--output <path>]
-airlock manifest add <path> [--origin built|vendored|generated] [--source <path>]
-airlock manifest check
+airlock scan     [path] [--mode pr|push|full] [--event <name>] [--base <sha>] [--before <sha>]
+                    [--config <path>] [--wasm-manifest <path>]
+                    [--fail-on info|warn|high] [--format console|json|github] [--output <path>]
+                    [--rules-dir <path>] [--roles <path>]
+airlock manifest add <path>… --origin built|vendored|generated --source <text>
+                    [--build <text>] [--note <text>] [--repo <path>]
+                    [--wasm-manifest <path>]
+airlock manifest check [path] [--wasm-manifest <path>] [--config <path>]
+                    [--rules-dir <path>] [--roles <path>] [--format …] [--output <path>]
 ```
+
+`--event` is how the Action passes `github.event_name`, and it implies a mode: `pull_request` to `pr`, `push` to `push`, `workflow_dispatch` and `schedule` to `full`. An event that is not one of those four is a usage error rather than a default, because picking a trust model silently is the bypass B1 is about. Giving both `--event` and a contradicting `--mode` is also a usage error.
+
+`--rules-dir` and `--roles` point at the rule data that shipped with the tool, which is what the Action does with `$GITHUB_ACTION_PATH`. They exist so a source checkout and a test can name a copy explicitly; a scanned repository's own `rules/` is never a valid argument, and `fail_on`, `--format` and the step summary are all this command writes.
+
+`manifest add` (task 3.5) records artifacts by hash and writes the manifest with a hand-written canonical writer, because the standard library reads TOML and does not write it. It refuses with exit 2 rather than degrade: a file without Wasm magic (so a git LFS pointer is not recorded as an artifact), a target or manifest path outside the repository, an artifact over `max_file_bytes`, missing provenance (`--source` always, `--build` when `origin = "built"`), and a manifest whose entry region holds comments or unknown keys that a writer emitting from parsed data would lose. It stages and commits nothing: `wasm-manifest.toml` is a protected path, so the operator lands that diff in its own pull request before the one that adds the files (FR-06). `manifest check` is the scan pipeline with the report narrowed to the `wasm-` rules, so its exit code follows `fail_on` instead of a threshold of its own, and one set of artifact accounting answers the question in both commands.
 
 No `init` command: the README carries a copy-paste workflow snippet. No `rules test` command: the pytest suite does that job.
 
@@ -217,7 +228,7 @@ Field definitions are in `ARCHITECTURE.md` section 7.
 
 - **Determinism:** same inputs, same findings, same order (severity first, then path, line, rule).
 - **Performance:** target under 30 seconds for the largest of the six repos on a standard GitHub runner. [Unverified: unmeasured target]
-- **ReDoS bound:** each regex rule must finish within 50 ms on a 1 MB adversarial input in the test suite. [Target, unmeasured]
+- **ReDoS bound:** a line past `line_cap` never reaches a regex, so the bound is per cap-length line: every pattern the scanner runs against attacker text must finish one 20 000-character adversarial line within 60 ms in the test suite. Measured (task 2.12): the rule-data patterns worst at about 10 ms, `config_role`'s dangerous-command test at about 20 ms, and 1 MB of adversarial text through the whole engine at about 440 ms. Each measurement runs in a child process, so a pattern that backtracks fails the suite instead of hanging it. [Measured 2026-10-27: one machine, one run per pattern]
 - **Offline:** no network access during a scan, no telemetry.
 - **Runtime dependencies:** none in v0.1 (Python standard library only; Python 3.11 or newer).
 - **Tool supply chain:** the Airlock repository passes its own scan, pins every Action by hash, uses top-level read-only permissions, publishes release attestations and targets a Scorecard score of 8 or higher. [Target, unmeasured]
@@ -268,7 +279,7 @@ No calendar dates are promised. Phases, tasks and exit criteria live in `ROADMAP
 
 1. Resolved 2026-10-27: name Airlock, repository `airlock-sec/airlock` (decisions D-01, D-03). Because it sits outside the Tollcraft repositories, it likely needs its own Drips Wave application if you want Wave coverage. [Unverified]
 2. Resolved 2026-10-27: Apache-2.0 (the `LICENSE` file already in the repository; decision D-02). The Tollcraft and Accensa repos mix MIT and Apache-2.0, so dogfooding crosses licenses, which is fine for scanning.
-3. Which of the seven bypasses are real? (task 0.4)
+3. Resolved 2026-10-27 (task 0.4): all seven bypasses are real. Each case was run as a commit in a scratch repository against the real script and every one exits 0, which passes the job; `scripts/bypass_probe.py` reproduces it and Appendix B records what each case produced.
 4. Do gitleaks or TruffleHog already detect Stellar secret seeds? (task 0.7)
 5. Where does stellar-cli store identities, and is there a keychain option? (not needed until a detector depends on it)
 6. SEP-58 final status and metadata key names. (task 0.11)
@@ -290,7 +301,7 @@ No calendar dates are promised. Phases, tasks and exit criteria live in `ROADMAP
 **Unverified or untested**
 
 - Drips Wave maintainers specifically being hit.
-- Whether the seven bypasses in section 2.3 work (Appendix B).
+- Whether any of the five repos carries a tracked `node_modules/`, `dist/` or `vendor/` directory today, which decides how much real exposure bypass 7 has.
 - RUSTSEC-2026-0387 (not found in search); RUSTSEC-2024-0436 believed to be the unmaintained `paste` crate.
 - GitHub limits on annotations, step summaries and SARIF; `github.event.before` behavior on new branches and force pushes; `merge_group` events.
 - Aptos RPC hostnames, stellar-cli identity storage, gitleaks overlap, SEP-58 key names.
@@ -339,16 +350,21 @@ Enforcement: `scripts/check_roadmap_touched.sh` in CI plus a PR template checkbo
 | Scanner in the audited tree | `malware-scan.yml` | Principle 3, FR-06, FR-11 |
 | Tracked `vendor/` and `dist/` directories skipped | `malware_scan.py` | FR-05 |
 
-## Appendix B: Bypass test plan (run before trusting section 2.3)
+## Appendix B: Bypass test plan (run 2026-10-27 against the real script)
 
 In a scratch repo with the current script copied in, commit each case and run the script. Exit code 0 where it should fail confirms the bypass.
 
-1. A `.wasm` file of any content.
-2. `printf '// \0\neval(x)\n' > next.config.mjs` (then run `node next.config.mjs` to confirm it still executes).
-3. A payload line ending in `// malware-scan: allow`, containing `eval(Buffer.from(a,'base64'))`.
-4. An allowlist file containing a single `*`.
-5. `eval(decrypted)` inside `postcss.config.mjs`.
-6. A `.cargo/config.toml` with a `runner` that invokes a shell command.
-7. A file under `vendor/` (or `dist/`) containing `eval(Buffer.from(a,'base64'))`.
+`scripts/bypass_probe.py` does exactly this and is reproducible: it builds one temporary git
+repository per case, copies in the script passed with `--script`, commits a clean base and then the
+case, and runs the script from the repository root with `-I`, which is how the workflow runs it. All
+seven cases below ran on 2026-10-27 (Python 3.14, `main` at `Tollcraft/soroban-budget-assert`).
+
+1. A `.wasm` file of any content. **Confirmed, 0 findings** — `\0asm` is a NUL within the first 4 KB, so the file is dropped by the binary/NUL test before any rule reads it, and `.wasm` is not in `BINARY_EXT`, so even the native-binary finding cannot reach it.
+2. `printf '// \0\neval(x)\n' > next.config.mjs` (then run `node next.config.mjs` to confirm it still executes). **Confirmed, 0 findings** — `node --check` accepts the file, so the NUL costs the scan and not the payload. This is the shape that matters most: the skip is silent, so an unscanned file and a clean file look identical in the output.
+3. A payload line ending in `// malware-scan: allow`, containing `eval(Buffer.from(a,'base64'))`. **Confirmed, 0 findings** — the marker is checked before the rule table, so any line can exempt itself from every rule with no path change.
+4. An allowlist file containing a single `*`. **Confirmed, 0 findings** — `fnmatch` against one glob, so a two-byte file in `.github/malware-scan-allow.txt` disables the scan for the whole tree, and the allowlist itself is not scanned by anything.
+5. `eval(decrypted)` inside `postcss.config.mjs`. **Confirmed, 0 HIGH** — one WARN `dynamic-eval`, and only HIGH affects the exit code. The literal `atob`/`Buffer.from` requirement is what makes the real PolinRider shape (decode first, then eval a variable) invisible to a gate that scores HIGH.
+6. A `.cargo/config.toml` with a `runner` that invokes a shell command. **Confirmed, 0 findings** — no rule reads that file.
+7. A file under `vendor/` (or `dist/`) containing `eval(Buffer.from(a,'base64'))`. **Confirmed, 0 findings** — `SKIP_DIRS` is matched against the path prefix before the file is opened.
 
 Each becomes a permanent regression test in Airlock and must fail closed.
