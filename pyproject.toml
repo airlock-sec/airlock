@@ -27,6 +27,12 @@ Repository = "https://github.com/airlock-sec/airlock"
 [tool.hatch.build.targets.wheel]
 packages = ["src/airlock"]
 
+# The scanner reads its rules at start-up, so a wheel without `rules/` cannot scan at all: it
+# fails with a missing-file error and exits 2 (5.7). The data is bundled inside the package and
+# `cli.rules_root` prefers that copy when it is there.
+[tool.hatch.build.targets.wheel.force-include]
+"rules" = "airlock/rules"
+
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11"]
 

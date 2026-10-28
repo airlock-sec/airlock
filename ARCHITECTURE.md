@@ -476,6 +476,7 @@ Notes:
 - Consumers use `permissions: contents: read` and the full commit SHA.
 - Consumers should make the check a **required status check**. Without it, a PR that deletes the workflow step simply never runs the scan. [Unverified: how GitHub treats a required check whose job no longer exists; task 4.5 tests it]
 - Review Action SHA bumps by hand and do not auto-merge them (B12).
+- An installed copy carries its own rule data. `pyproject.toml` force-includes `rules/` at `airlock/rules` in the wheel and `cli.rules_root` prefers that copy, falling back to `rules/` two levels above the package directory, which is the checkout layout `$GITHUB_ACTION_PATH` uses. Without the bundled data an installed `airlock scan` cannot scan: it exits 2 on a missing `roles.toml` rather than reporting nothing, and 5.7 measured that shape before fixing it.
 
 ## 11. Self-protection of the repo-guard repo
 

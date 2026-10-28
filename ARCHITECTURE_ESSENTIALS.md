@@ -40,7 +40,7 @@ Status: v0.2 (red-team revision). Outline of decisions an agent must not violate
 ## 3. Stack
 
 - Python 3.11+, `tomllib`, `hashlib`, `subprocess` (fixed argv, never a shell), `re`, `json`.
-- Build: `pyproject.toml`, `src/` layout, hatchling. Dev only: pytest, ruff, mypy.
+- Build: `pyproject.toml`, `src/` layout, hatchling. Dev only: pytest, ruff, mypy. The wheel carries `rules/` inside the package, because a scanner with no rules cannot scan.
 - Output v0.1: console, GitHub commands, JSON, step summary. SARIF is P1. [ADR-008]
 - Distribution: composite Action, consumers pin the full commit SHA. PyPI is Later.
 - No YAML parser. [ADR-007]

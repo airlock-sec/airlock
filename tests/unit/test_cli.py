@@ -13,12 +13,13 @@ from __future__ import annotations
 
 import json
 import subprocess
+import tomllib
 from pathlib import Path
 
 import pytest
 
 from airlock import detectors
-from airlock.cli import DEFAULT_ROLES_FILE, DEFAULT_RULES_DIR, main
+from airlock.cli import DEFAULT_ROLES_FILE, DEFAULT_RULES_DIR, REPO_ROOT, main, rules_root
 from airlock.model import EXIT_CONFIG, EXIT_FINDINGS, EXIT_INTERNAL, EXIT_PASS, Mode
 
 CLEAN_CONFIG = "export default { plugins: [] }\n"
@@ -126,6 +127,37 @@ class TestUsage:
 
     def test_the_shipped_rule_data_loads_without_any_flag(self) -> None:
         assert DEFAULT_RULES_DIR.is_dir() and DEFAULT_ROLES_FILE.is_file()
+
+    def test_an_installed_package_resolves_its_own_copy_of_the_rule_data(
+        self, tmp_path: Path
+    ) -> None:
+        """The wheel layout (5.7): `site-packages/airlock`, with the data one level in."""
+        package = tmp_path / "site-packages" / "airlock"
+        (package / "rules" / "builtin").mkdir(parents=True)
+        (package / "rules" / "roles.toml").write_text("[]\n", encoding="utf-8")
+        assert rules_root(package) == package / "rules"
+
+    def test_a_source_checkout_resolves_the_repository_root(self, tmp_path: Path) -> None:
+        """Two layouts, one function: `src/airlock` has no data inside it, so the parent wins."""
+        package = tmp_path / "src" / "airlock"
+        package.mkdir(parents=True)
+        (tmp_path / "rules" / "builtin").mkdir(parents=True)
+        (tmp_path / "rules" / "roles.toml").write_text("[]\n", encoding="utf-8")
+        assert rules_root(package) == tmp_path / "rules"
+
+    def test_a_package_with_no_rule_data_anywhere_does_not_resolve_invisibly(
+        self, tmp_path: Path
+    ) -> None:
+        package = tmp_path / "site-packages" / "airlock"
+        package.mkdir(parents=True)
+        assert not (rules_root(package) / "roles.toml").is_file()
+
+    def test_the_built_distribution_carries_the_rule_data(self) -> None:
+        """`rules/` outside the package builds a wheel that cannot scan (5.7)."""
+        config = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+        wheel = config["tool"]["hatch"]["build"]["targets"]["wheel"]
+        assert wheel["packages"] == ["src/airlock"]
+        assert wheel["force-include"]["rules"] == "airlock/rules"
 
 
 class TestExitCodes:
