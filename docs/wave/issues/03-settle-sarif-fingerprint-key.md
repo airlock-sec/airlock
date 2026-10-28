@@ -57,6 +57,14 @@ when the name it will use is settled and documented.
 - [ ] `python -m pytest`, `ruff check .`, `ruff format --check .` and `mypy src` all pass.
 - [ ] PR description includes `Closes #{{issue:self}}`.
 
+## Tech stack
+
+- Runtime: Python 3.11, standard library only. [`AGENTS.md`](https://github.com/airlock-sec/airlock/blob/main/AGENTS.md) section 4 forbids adding a runtime dependency, and a scan never touches the network, so a helper library is not an option here.
+- Where the stale spelling lives: [`ARCHITECTURE.md`](https://github.com/airlock-sec/airlock/blob/main/ARCHITECTURE.md) 6.6, in the `sarif (P1)` row of the reporter table.
+- What it must agree with: [`src/airlock/fingerprint.py`](https://github.com/airlock-sec/airlock/blob/main/src/airlock/fingerprint.py), which computes the digest, and the verbatim-assertion style already used in [`tests/unit/test_model.py`](https://github.com/airlock-sec/airlock/blob/main/tests/unit/test_model.py).
+- The deliverable is one decision plus one test that fails when the document and the code drift again, and a decision-log row in [`ROADMAP.md`](https://github.com/airlock-sec/airlock/blob/main/ROADMAP.md) section 7.
+- Out of scope: writing `sarif.py`. SARIF output is 7.6 and stays deferred; this issue only settles the key that issue will use.
+
 ### **Contact & Support**
 - [`SUPPORT.md`](https://github.com/airlock-sec/airlock/blob/main/SUPPORT.md) — where to ask, the commands CI runs, and the rules that most often get a pull request rejected
 - [`SECURITY.md`](https://github.com/airlock-sec/airlock/blob/main/SECURITY.md) — private disclosure only; never open an issue about a bypass

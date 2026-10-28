@@ -74,6 +74,14 @@ not a mirror.
 - [ ] `python -m pytest`, `ruff check .`, `ruff format --check .` and `mypy src` all pass.
 - [ ] PR description includes `Closes #{{issue:self}}`.
 
+## Tech stack
+
+- Runtime: Python 3.11, standard library only. [`AGENTS.md`](https://github.com/airlock-sec/airlock/blob/main/AGENTS.md) section 4 forbids adding a runtime dependency, and a scan never touches the network, so a helper library is not an option here.
+- Directory: [`tests/corpus`](https://github.com/airlock-sec/airlock/blob/main/tests/corpus), which holds a `.gitkeep` today. Baselines go under [`tests/golden`](https://github.com/airlock-sec/airlock/blob/main/tests/golden) if the issue's chosen design needs them.
+- The collision to plan around: [`.github/workflows/ci.yml`](https://github.com/airlock-sec/airlock/blob/main/.github/workflows/ci.yml) runs `airlock scan --mode full .` over the whole tree, so a real-world snapshot is scanned by the build that is supposed to stay green.
+- Allowed resolutions are a separate corpus job with its own baseline, or owner-issued suppressions in [`airlock.toml`](https://github.com/airlock-sec/airlock/blob/main/airlock.toml). A skip, a `.gitignore` entry or a default directory exclusion is not a resolution; those are the bypasses this project exists to close.
+- No secrets and no live-looking payload in the corpus. Copy tooling configs, Cargo manifests and Wasm fixtures, and say which commit each came from.
+
 ### **Contact & Support**
 - [`SUPPORT.md`](https://github.com/airlock-sec/airlock/blob/main/SUPPORT.md) — where to ask, the commands CI runs, and the rules that most often get a pull request rejected
 - [`SECURITY.md`](https://github.com/airlock-sec/airlock/blob/main/SECURITY.md) — private disclosure only; never open an issue about a bypass

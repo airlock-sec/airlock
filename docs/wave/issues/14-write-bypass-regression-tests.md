@@ -93,6 +93,14 @@ scope for this issue's own pull request either; they are in scope for the issue 
 - [ ] `ROADMAP.md` carries a changelog row with a UTC date, `Last updated` moved, and `python scripts/roadmap_progress.py --check` passing.
 - [ ] PR description includes `Closes #{{issue:self}}`.
 
+## Tech stack
+
+- Runtime: Python 3.11, standard library only. [`AGENTS.md`](https://github.com/airlock-sec/airlock/blob/main/AGENTS.md) section 4 forbids adding a runtime dependency, and a scan never touches the network, so a helper library is not an option here.
+- Harness to split: [`scripts/bypass_probe.py`](https://github.com/airlock-sec/airlock/blob/main/scripts/bypass_probe.py) already holds the seven cases as data (`CASES`, `build`, `commit`, `scan`), and its `--script` contract must keep working.
+- Destination: [`tests/bypass`](https://github.com/airlock-sec/airlock/blob/main/tests/bypass), which holds a `.gitkeep` today.
+- Payloads are assembled from fragments at test time, the way the probe does it. Committing a live-looking payload fails [`AGENTS.md`](https://github.com/airlock-sec/airlock/blob/main/AGENTS.md) section 4 and will close the pull request.
+- Run before pushing: `python -m pytest tests/bypass` and `python -m pytest tests/unit/test_collector.py`, since a bypass case that needs a real git tree is the one place the collector runs for real here.
+
 ### **Contact & Support**
 - [`SUPPORT.md`](https://github.com/airlock-sec/airlock/blob/main/SUPPORT.md) — where to ask, the commands CI runs, and the rules that most often get a pull request rejected
 - [`SECURITY.md`](https://github.com/airlock-sec/airlock/blob/main/SECURITY.md) — private disclosure only; never open an issue about a bypass

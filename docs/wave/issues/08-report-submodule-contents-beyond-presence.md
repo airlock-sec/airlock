@@ -69,6 +69,14 @@ what the checkout handed you). Also out: history scanning of unreachable gitlink
 - [ ] `python -m pytest`, `ruff check .`, `ruff format --check .` and `mypy src` all pass, and `airlock scan --mode full .` reports no HIGH findings.
 - [ ] PR description includes `Closes #{{issue:self}}`.
 
+## Tech stack
+
+- Runtime: Python 3.11, standard library only. [`AGENTS.md`](https://github.com/airlock-sec/airlock/blob/main/AGENTS.md) section 4 forbids adding a runtime dependency, and a scan never touches the network, so a helper library is not an option here.
+- Code: [`src/airlock/collector.py`](https://github.com/airlock-sec/airlock/blob/main/src/airlock/collector.py), which emits `submodule-present` and carries the `SKIP_SUBMODULE` reason, and {L('src/airlock/policy.py')} for the state-finding side.
+- Existing test to extend: `test_a_gitlink_yields_submodule_present` in [`tests/unit/test_collector.py`](https://github.com/airlock-sec/airlock/blob/main/tests/unit/test_collector.py).
+- A gitlink records a mode, a path and a commit; the URL lives in `.gitmodules`, which is a separate read and may disagree with the index. Say which one a finding names.
+- Protected path: [`src/airlock/collector.py`](https://github.com/airlock-sec/airlock/blob/main/src/airlock/collector.py) is fail-closed machinery. A change there must not turn a skip into a silent pass, and needs owner review.
+
 ### **Contact & Support**
 - [`SUPPORT.md`](https://github.com/airlock-sec/airlock/blob/main/SUPPORT.md) — where to ask, the commands CI runs, and the rules that most often get a pull request rejected
 - [`SECURITY.md`](https://github.com/airlock-sec/airlock/blob/main/SECURITY.md) — private disclosure only; never open an issue about a bypass

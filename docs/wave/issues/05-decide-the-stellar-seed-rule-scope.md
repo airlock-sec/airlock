@@ -59,6 +59,14 @@ decision blocks the work behind it. That is what this issue unblocks.
 - [ ] No live-looking seed is committed anywhere in the repository: test vectors are constructed from a documented reference, and a real-looking `S…` string in a fixture is a rejection.
 - [ ] PR description includes `Closes #{{issue:self}}`.
 
+## Tech stack
+
+- Runtime: Python 3.11, standard library only. [`AGENTS.md`](https://github.com/airlock-sec/airlock/blob/main/AGENTS.md) section 4 forbids adding a runtime dependency, and a scan never touches the network, so a helper library is not an option here.
+- Code today: [`src/airlock/detectors/stellar_seed.py`](https://github.com/airlock-sec/airlock/blob/main/src/airlock/detectors/stellar_seed.py) and [`src/airlock/strkey.py`](https://github.com/airlock-sec/airlock/blob/main/src/airlock/strkey.py) are stubs of a few lines each, registered as neither `DETECTORS` nor `DETECTOR_NAMES` in [`src/airlock/detectors/__init__.py`](https://github.com/airlock-sec/airlock/blob/main/src/airlock/detectors/__init__.py).
+- Design text: [`ARCHITECTURE.md`](https://github.com/airlock-sec/airlock/blob/main/ARCHITECTURE.md) 9.4, which carries a `[Unverified: byte details recalled from memory]` marker, and decision D-06 in [`ROADMAP.md`](https://github.com/airlock-sec/airlock/blob/main/ROADMAP.md).
+- Three honest outcomes: keep the rule, narrow it, or drop it because gitleaks and TruffleHog already cover it. A drop closes this issue and deletes the stub, so write the comparison in the pull request either way.
+- Do not commit a live-looking seed while testing the tools you compare. Build any probe key from fragments, per [`AGENTS.md`](https://github.com/airlock-sec/airlock/blob/main/AGENTS.md) section 4.
+
 ### **Contact & Support**
 - [`SUPPORT.md`](https://github.com/airlock-sec/airlock/blob/main/SUPPORT.md) — where to ask, the commands CI runs, and the rules that most often get a pull request rejected
 - [`SECURITY.md`](https://github.com/airlock-sec/airlock/blob/main/SECURITY.md) — private disclosure only; never open an issue about a bypass

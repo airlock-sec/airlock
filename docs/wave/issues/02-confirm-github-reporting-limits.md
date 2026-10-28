@@ -63,6 +63,14 @@ Do not raise the caps as a side effect of this issue without the measurement to 
 - [ ] `python -m pytest`, `ruff check .`, `ruff format --check .` and `mypy src` all pass.
 - [ ] PR description includes `Closes #{{issue:self}}`.
 
+## Tech stack
+
+- Runtime: Python 3.11, standard library only. [`AGENTS.md`](https://github.com/airlock-sec/airlock/blob/main/AGENTS.md) section 4 forbids adding a runtime dependency, and a scan never touches the network, so a helper library is not an option here.
+- Constants this measures: `HIGH_ANNOTATIONS`, `WARN_ANNOTATIONS` and `INFO_ANNOTATIONS` in [`src/airlock/report/github.py`](https://github.com/airlock-sec/airlock/blob/main/src/airlock/report/github.py), and the truncation in [`src/airlock/report/summary.py`](https://github.com/airlock-sec/airlock/blob/main/src/airlock/report/summary.py).
+- Design text being corrected: [`ARCHITECTURE.md`](https://github.com/airlock-sec/airlock/blob/main/ARCHITECTURE.md) 6.6 and 15, both of which carry `[Unverified: exact limits, task 0.9]`.
+- Method: a workflow that emits a known number of annotations and a known-size summary, then the run's own output as the measurement. GitHub's documented limits and the observed behavior are two different columns; record both.
+- Run before pushing: `python -m pytest tests/unit/test_report.py` and `python -m pytest tests/unit`, since a changed cap moves a test expectation.
+
 ### **Contact & Support**
 - [`SUPPORT.md`](https://github.com/airlock-sec/airlock/blob/main/SUPPORT.md) — where to ask, the commands CI runs, and the rules that most often get a pull request rejected
 - [`SECURITY.md`](https://github.com/airlock-sec/airlock/blob/main/SECURITY.md) — private disclosure only; never open an issue about a bypass

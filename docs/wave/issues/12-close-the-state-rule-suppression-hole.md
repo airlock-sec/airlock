@@ -96,6 +96,14 @@ in the list for the same reason `skipped-oversize` is.
 - [ ] `src/airlock/policy.py` and `rules/` are protected paths: the pull request needs owner review, and no existing check may be loosened to make the fix fit.
 - [ ] PR description includes `Closes #{{issue:self}}`.
 
+## Tech stack
+
+- Runtime: Python 3.11, standard library only. [`AGENTS.md`](https://github.com/airlock-sec/airlock/blob/main/AGENTS.md) section 4 forbids adding a runtime dependency, and a scan never touches the network, so a helper library is not an option here.
+- Code: `_entry_problem` in [`src/airlock/policy.py`](https://github.com/airlock-sec/airlock/blob/main/src/airlock/policy.py), and `STATE_RULE_IDS` in the same module. The fix is an ordering change, not a new mechanism.
+- Tests: [`tests/unit/test_suppression.py`](https://github.com/airlock-sec/airlock/blob/main/tests/unit/test_suppression.py) carries the existing suppression cases; the new one needs an id that is in both sets, which `cfg-long-line` is.
+- Run the reproduction in the issue body before changing anything, against this checkout (`PYTHONPATH=src python3 -m airlock scan --mode full <scratch-repo>`), so the test you write is the one that fails first.
+- Protected path: [`src/airlock/policy.py`](https://github.com/airlock-sec/airlock/blob/main/src/airlock/policy.py) is the trusted-base module and needs owner review. Do not weaken the non-suppressible list to make a test pass.
+
 ### **Contact & Support**
 - [`SUPPORT.md`](https://github.com/airlock-sec/airlock/blob/main/SUPPORT.md) — where to ask, the commands CI runs, and the rules that most often get a pull request rejected
 - [`SECURITY.md`](https://github.com/airlock-sec/airlock/blob/main/SECURITY.md) — private disclosure only; never open an issue about a bypass

@@ -77,6 +77,14 @@ rules.
 - [ ] `ROADMAP.md` carries a changelog row with a UTC date, `Last updated` moved, and `python scripts/roadmap_progress.py --check` passing.
 - [ ] PR description includes `Closes #{{issue:self}}`.
 
+## Tech stack
+
+- Runtime: Python 3.11, standard library only. [`AGENTS.md`](https://github.com/airlock-sec/airlock/blob/main/AGENTS.md) section 4 forbids adding a runtime dependency, and a scan never touches the network, so a helper library is not an option here.
+- Roles first: [`rules/roles.toml`](https://github.com/airlock-sec/airlock/blob/main/rules/roles.toml) and `SENSITIVE_ROLES` in [`src/airlock/roles.py`](https://github.com/airlock-sec/airlock/blob/main/src/airlock/roles.py). A workflow file resolves to `doc` today, which is why no rule reads one.
+- Rules: a new file under [`rules/builtin`](https://github.com/airlock-sec/airlock/blob/main/rules/builtin), with fixtures in [`tests/fixtures`](https://github.com/airlock-sec/airlock/blob/main/tests/fixtures). There is no YAML parser in this build and ADR-007 keeps it out of v0.1, so these are raw text patterns over lines, not parsed documents.
+- Self-scan consequence: [`.github/workflows/ci.yml`](https://github.com/airlock-sec/airlock/blob/main/.github/workflows/ci.yml) runs the scanner over this repository's own workflows, so a new rule fires here first. That is a true positive or a false positive to argue, not something to suppress yourself.
+- Run before pushing: `python -m pytest tests/unit/test_fixtures.py tests/unit/test_redos.py` and `python -m airlock scan --mode full .`, and quote the self-scan output.
+
 ### **Contact & Support**
 - [`SUPPORT.md`](https://github.com/airlock-sec/airlock/blob/main/SUPPORT.md) — where to ask, the commands CI runs, and the rules that most often get a pull request rejected
 - [`SECURITY.md`](https://github.com/airlock-sec/airlock/blob/main/SECURITY.md) — private disclosure only; never open an issue about a bypass

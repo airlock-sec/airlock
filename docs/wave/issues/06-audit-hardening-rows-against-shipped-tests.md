@@ -63,6 +63,14 @@ a defect the CRLF tests actually find.
 - [ ] `python -m pytest`, `ruff check .`, `ruff format --check .` and `mypy src` all pass.
 - [ ] PR description includes `Closes #{{issue:self}}`.
 
+## Tech stack
+
+- Runtime: Python 3.11, standard library only. [`AGENTS.md`](https://github.com/airlock-sec/airlock/blob/main/AGENTS.md) section 4 forbids adding a runtime dependency, and a scan never touches the network, so a helper library is not an option here.
+- Rows under audit: 7.3, 7.10 and 7.11 in [`ROADMAP.md`](https://github.com/airlock-sec/airlock/blob/main/ROADMAP.md).
+- Tests to read first: [`tests/unit/test_collector.py`](https://github.com/airlock-sec/airlock/blob/main/tests/unit/test_collector.py), [`tests/unit/test_suppression.py`](https://github.com/airlock-sec/airlock/blob/main/tests/unit/test_suppression.py), [`tests/unit/test_report.py`](https://github.com/airlock-sec/airlock/blob/main/tests/unit/test_report.py) and [`tests/unit/test_redos.py`](https://github.com/airlock-sec/airlock/blob/main/tests/unit/test_redos.py). The issue body names the specific cases that look like they already cover each row.
+- Deliverable is a verdict per row with the test name that proves it, and a new task only where the proof is missing. One gap is already known: CRLF handling at the collector.
+- Run before pushing: `python -m pytest tests/unit` and read the failure list rather than the pass count, because a row that looks covered may be covered by a test that asserts something adjacent.
+
 ### **Contact & Support**
 - [`SUPPORT.md`](https://github.com/airlock-sec/airlock/blob/main/SUPPORT.md) — where to ask, the commands CI runs, and the rules that most often get a pull request rejected
 - [`SECURITY.md`](https://github.com/airlock-sec/airlock/blob/main/SECURITY.md) — private disclosure only; never open an issue about a bypass

@@ -84,6 +84,14 @@ any change to the twelve existing rules.
 - [ ] `ROADMAP.md` carries a changelog row with a UTC date, `Last updated` moved, and `python scripts/roadmap_progress.py --check` passing.
 - [ ] PR description includes `Closes #{{issue:self}}`.
 
+## Tech stack
+
+- Runtime: Python 3.11, standard library only. [`AGENTS.md`](https://github.com/airlock-sec/airlock/blob/main/AGENTS.md) section 4 forbids adding a runtime dependency, and a scan never touches the network, so a helper library is not an option here.
+- Data: a new file under [`rules/builtin`](https://github.com/airlock-sec/airlock/blob/main/rules/builtin), leaving the seven `cfg-*` rules in [`rules/builtin/config_role.toml`](https://github.com/airlock-sec/airlock/blob/main/rules/builtin/config_role.toml) as they are.
+- Roles: [`rules/roles.toml`](https://github.com/airlock-sec/airlock/blob/main/rules/roles.toml) decides which files a rule reaches, and today six of the seven `cfg-*` rules are `tooling-config` only. Widening a glob is a false-positive decision, not a formatting one, so show corpus evidence in the pull request.
+- Fixtures: [`tests/fixtures`](https://github.com/airlock-sec/airlock/blob/main/tests/fixtures) builders, one positive and one negative per rule. The suite fails without both, and [`src/airlock/detectors/builtin_patterns.py`](https://github.com/airlock-sec/airlock/blob/main/src/airlock/detectors/builtin_patterns.py) is the detector these rules point at.
+- Run before pushing: `python -m pytest tests/unit/test_fixtures.py tests/unit/test_redos.py` and `python -m airlock scan --mode full .`. State the worst ReDoS measurement you saw.
+
 ### **Contact & Support**
 - [`SUPPORT.md`](https://github.com/airlock-sec/airlock/blob/main/SUPPORT.md) — where to ask, the commands CI runs, and the rules that most often get a pull request rejected
 - [`SECURITY.md`](https://github.com/airlock-sec/airlock/blob/main/SECURITY.md) — private disclosure only; never open an issue about a bypass

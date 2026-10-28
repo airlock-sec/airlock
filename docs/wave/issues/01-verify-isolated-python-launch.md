@@ -67,6 +67,14 @@ it instead of landing the change here.
 - [ ] `python -m pytest`, `ruff check .`, `ruff format --check .` and `mypy src` all pass (they should be unaffected; a change to a doc is still gated by the suite).
 - [ ] PR description includes `Closes #{{issue:self}}`.
 
+## Tech stack
+
+- Runtime: Python 3.11, standard library only. [`AGENTS.md`](https://github.com/airlock-sec/airlock/blob/main/AGENTS.md) section 4 forbids adding a runtime dependency, and a scan never touches the network, so a helper library is not an option here.
+- Surface: a scratch repository and one throwaway workflow. Nothing in [`src/airlock`](https://github.com/airlock-sec/airlock/blob/main/src/airlock) changes; the launch line imports [`src/airlock/cli.py`](https://github.com/airlock-sec/airlock/blob/main/src/airlock/cli.py)'s `main` from `$GITHUB_ACTION_PATH/src`, and that import path is the thing under test.
+- Design text being verified: [`ARCHITECTURE.md`](https://github.com/airlock-sec/airlock/blob/main/ARCHITECTURE.md) section 10, which carries the `[Unverified]` marker this issue removes.
+- Run before pushing: `python -m airlock scan --mode full .` locally, then read the runner's log for the module path the child process actually resolved.
+- Evidence this issue asks for is a runner log and a shadowing test, not a green pytest run. Paste the log into the pull request.
+
 ### **Contact & Support**
 - [`SUPPORT.md`](https://github.com/airlock-sec/airlock/blob/main/SUPPORT.md) — where to ask, the commands CI runs, and the rules that most often get a pull request rejected
 - [`SECURITY.md`](https://github.com/airlock-sec/airlock/blob/main/SECURITY.md) — private disclosure only; never open an issue about a bypass

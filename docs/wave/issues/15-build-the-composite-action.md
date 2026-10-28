@@ -90,6 +90,14 @@ output (7.6), and any change to how the reporters format findings.
 - [ ] `python -m pytest`, `ruff check .`, `ruff format --check .`, `mypy src` and `python scripts/roadmap_progress.py --check` pass.
 - [ ] `ROADMAP.md` records 4.1's state with a changelog row and a UTC date, `Last updated` moved, and the PR description includes `Closes #{{issue:self}}`.
 
+## Tech stack
+
+- Runtime: Python 3.11, standard library only. [`AGENTS.md`](https://github.com/airlock-sec/airlock/blob/main/AGENTS.md) section 4 forbids adding a runtime dependency, and a scan never touches the network, so a helper library is not an option here.
+- New file: `action.yml`, composite, at the repository root. It is a protected path and listed in `.github/CODEOWNERS`.
+- Code it calls: `main` in [`src/airlock/cli.py`](https://github.com/airlock-sec/airlock/blob/main/src/airlock/cli.py), the `EVENT_MODES` table that maps an event name to a trust model, and `rules_root`, which already resolves the `$GITHUB_ACTION_PATH` layout.
+- No `pip install` in the Action and no fetch: the scanner code comes from the pinned Action's own checkout, which is the whole point of the `-I` launch line and the reason this issue waits on the launch experiment.
+- Design text to update in the same pull request: [`ARCHITECTURE.md`](https://github.com/airlock-sec/airlock/blob/main/ARCHITECTURE.md) 10 and 11. Caller-side usage docs are task 4.2 and stay out of scope.
+
 ### **Contact & Support**
 - [`SUPPORT.md`](https://github.com/airlock-sec/airlock/blob/main/SUPPORT.md) — where to ask, the commands CI runs, and the rules that most often get a pull request rejected
 - [`SECURITY.md`](https://github.com/airlock-sec/airlock/blob/main/SECURITY.md) — private disclosure only; never open an issue about a bypass

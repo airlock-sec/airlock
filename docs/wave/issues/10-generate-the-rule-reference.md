@@ -62,6 +62,14 @@ say so in the pull request instead of inventing a justification.
 - [ ] `scripts/` is a protected path, so the pull request needs owner review.
 - [ ] PR description includes `Closes #{{issue:self}}`.
 
+## Tech stack
+
+- Runtime: Python 3.11, standard library only. [`AGENTS.md`](https://github.com/airlock-sec/airlock/blob/main/AGENTS.md) section 4 forbids adding a runtime dependency, and a scan never touches the network, so a helper library is not an option here.
+- Parser to reuse, not rewrite: [`src/airlock/rules.py`](https://github.com/airlock-sec/airlock/blob/main/src/airlock/rules.py) already loads and validates every field, and [`rules/builtin`](https://github.com/airlock-sec/airlock/blob/main/rules/builtin) is the data.
+- Shape to copy for the staleness check: the `--check` mode of [`scripts/roadmap_progress.py`](https://github.com/airlock-sec/airlock/blob/main/scripts/roadmap_progress.py), which regenerates a derived block and fails when the committed one disagrees.
+- Output target: a generated document that [`README.md`](https://github.com/airlock-sec/airlock/blob/main/README.md) links, so the README stops carrying a hand-copied table that can drift.
+- Run before pushing: `python -m pytest tests/unit/test_rule_data.py` and `python -m airlock scan --mode full .`, since a generated file in the tree is a file the self-scan reads.
+
 ### **Contact & Support**
 - [`SUPPORT.md`](https://github.com/airlock-sec/airlock/blob/main/SUPPORT.md) — where to ask, the commands CI runs, and the rules that most often get a pull request rejected
 - [`SECURITY.md`](https://github.com/airlock-sec/airlock/blob/main/SECURITY.md) — private disclosure only; never open an issue about a bypass

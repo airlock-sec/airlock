@@ -67,6 +67,14 @@ design), and changing what the `checks` job runs.
 - [ ] `.github/` is a protected path, so the pull request needs owner review; do not merge it yourself.
 - [ ] PR description includes `Closes #{{issue:self}}`.
 
+## Tech stack
+
+- Runtime: Python 3.11, standard library only. [`AGENTS.md`](https://github.com/airlock-sec/airlock/blob/main/AGENTS.md) section 4 forbids adding a runtime dependency, and a scan never touches the network, so a helper library is not an option here.
+- Files: `.github/dependabot.yml` (new), [`scripts/check_roadmap_touched.sh`](https://github.com/airlock-sec/airlock/blob/main/scripts/check_roadmap_touched.sh), [`tests/unit/test_roadmap_gate.py`](https://github.com/airlock-sec/airlock/blob/main/tests/unit/test_roadmap_gate.py) and the D-07 row in [`ROADMAP.md`](https://github.com/airlock-sec/airlock/blob/main/ROADMAP.md) section 7.
+- The gate is a shell script with no exemptions today, and [`.github/workflows`](https://github.com/airlock-sec/airlock/blob/main/.github/workflows) workflows are protected paths, so both halves of this need owner review.
+- Real problem to solve first: a Dependabot pull request cannot edit `ROADMAP.md` without defeating the gate's purpose. Decide the exemption shape and write it down before writing the YAML.
+- Run before pushing: `python -m pytest tests/unit/test_roadmap_gate.py` and `sh scripts/check_roadmap_touched.sh origin/main`.
+
 ### **Contact & Support**
 - [`SUPPORT.md`](https://github.com/airlock-sec/airlock/blob/main/SUPPORT.md) — where to ask, the commands CI runs, and the rules that most often get a pull request rejected
 - [`SECURITY.md`](https://github.com/airlock-sec/airlock/blob/main/SECURITY.md) — private disclosure only; never open an issue about a bypass
