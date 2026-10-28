@@ -293,7 +293,7 @@ Rules for suppressions:
 - Match needs `rule`, `path` and `fingerprint`. No globs, no inline markers.
 - `reason` is required. There is no `owner` field (git history records who added it).
 - `expires` is optional. 30 days before expiry a `suppression-expiring` WARN appears; after expiry only that finding returns, so builds do not turn red for a reason unrelated to a change (B10).
-- Entries for `suppressible = false` rules never apply and emit `suppression-invalid` (HIGH). The same holds for an entry naming a rule that is not loaded in this build, or a scanner-state rule id. Validity is decided before matching, so a mistaken entry cannot hide a finding while the report complains about it.
+- Entries for `suppressible = false` rules never apply and emit `suppression-invalid` (HIGH). The same holds for an entry naming a rule that is not loaded in this build, or a scanner-state rule id. State membership is checked before the rule lookup, including when a loaded rule disagrees. State findings always report `suppressible = false`; both the shipped `cfg-long-line` rule and its engine fallback agree. Validity is decided before matching, so a mistaken entry cannot hide a finding while the report complains about it.
 - An entry is checked against the rule data rather than against the scan's findings, so a rule that was renamed or made non-suppressible is reported even on a scan where the entry matched nothing.
 - Unknown top-level keys emit `policy-unknown-key` (WARN); a missing or unsupported `version` exits 2.
 

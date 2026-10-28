@@ -13,6 +13,7 @@ import pytest
 
 from airlock.fingerprint import PendingFinding, number_occurrences
 from airlock.model import (
+    STATE_RULE_IDS,
     SUPPRESSION_EXPIRY_DAYS,
     Policy,
     Rule,
@@ -248,6 +249,26 @@ class TestOccurrences:
 
 
 class TestInvalidEntries:
+    @pytest.mark.parametrize("rule_id", sorted(STATE_RULE_IDS))
+    @pytest.mark.parametrize("loaded", [False, True])
+    def test_state_membership_overrides_a_loaded_suppressible_rule(
+        self, rule_id: str, loaded: bool
+    ) -> None:
+        item = pending(rule_id=rule_id)
+        result = run(
+            item,
+            policy=policy_with(entry_for(item)),
+            rules=[rule(rule_id, suppressible=True)] if loaded else [],
+        )
+
+        assert result.suppressed == ()
+        assert item.to_finding(0) in result.findings
+        invalid = next(f for f in result.findings if f.path == POLICY_FILENAME)
+        assert invalid.rule_id == "suppression-invalid"
+        assert invalid.severity is Severity.HIGH
+        assert invalid.suppressible is False
+        assert "scanner-state" in invalid.message
+
     def test_an_entry_on_a_non_suppressible_rule_is_high(self) -> None:
         item = pending()
         result = run(

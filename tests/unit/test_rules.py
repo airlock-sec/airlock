@@ -10,8 +10,9 @@ from pathlib import Path
 
 import pytest
 
-from airlock.model import FileEntry, Severity
+from airlock.model import STATE_RULE_IDS, FileEntry, Severity
 from airlock.rules import (
+    FALLBACK_LONG_LINE,
     LONG_LINE_RULE_ID,
     apply_patterns,
     cap_findings,
@@ -90,6 +91,21 @@ def make_entry(
 @pytest.fixture
 def dynamic_rules(tmp_path: Path) -> Path:
     return rules_dir(tmp_path, rule_body())
+
+
+def test_shipped_state_rules_and_fallback_never_advertise_suppression() -> None:
+    directory = Path(__file__).resolve().parents[2] / "rules" / "builtin"
+    rules = (*load_rules(directory), FALLBACK_LONG_LINE)
+    for rule in rules:
+        if rule.id in STATE_RULE_IDS:
+            assert not rule.suppressible, rule.id
+
+
+def test_cap_finding_ignores_a_rules_suppressible_flag(tmp_path: Path) -> None:
+    rules = load_rules(rules_dir(tmp_path, LONG_LINE_BODY))
+    (finding,) = cap_findings(rules, make_entry(text="x" * 21), 20)
+    assert finding.rule_id == LONG_LINE_RULE_ID
+    assert not finding.suppressible
 
 
 class TestLoading:

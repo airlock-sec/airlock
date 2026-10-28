@@ -120,7 +120,7 @@ model  <-  fingerprint, roles, rules  <-  collector, policy  <-  detectors  <-  
 
 | I want to | Edit | Also do |
 |---|---|---|
-| Add a detection rule | `rules/builtin/*.toml` | Add a fixture builder in `tests/fixtures/` with a positive and a negative case, and name it in the rule's `tests` table; the suite fails without them |
+| Add a detection rule | `rules/builtin/*.toml` | Add a fixture builder in `tests/fixtures/` with a positive and a negative case, and name it in the rule's `tests` table; the suite fails without them. State IDs must declare `suppressible = false`, enforced by `test_rules.py` |
 | Add a detector | `src/airlock/detectors/<name>.py`, register in `detectors/__init__.py` | Rule entries, fixtures, ROADMAP task, `ARCHITECTURE.md` 9, `ARCHITECTURE_ESSENTIALS.md` 7 |
 | Add a file role | `rules/roles.toml` | Fixture for a matching and a non-matching path; false-positive check on `tests/corpus/` |
 | Change policy fields | `model.py`, `policy.py`, `ARCHITECTURE.md` 7.6 | Bump handling of `version` if the change is breaking |

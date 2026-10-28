@@ -57,7 +57,7 @@ title = "Line longer than the configured cap"
 roles = ["tooling-config", "editor-autorun", "source", "doc", "other"]
 detector = "pattern"
 severity = "high"
-suppressible = true
+suppressible = false
 rationale = "Regexes are not run on lines past line_cap, because a minified bundle is a backtracking target. The line still has to be accounted for, so its length is the finding."
 # A never-matching literal: the engine excludes this id from line matching and reports it from the
 # line length instead (`rules.cap_findings`), which the runner does for every file it has text

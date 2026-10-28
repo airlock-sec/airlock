@@ -143,7 +143,7 @@ Priority: **P0** ships in v0.1.0, **P1** in v0.2.0, **Later** is backlog (`ROADM
 | FR-11 | Composite GitHub Action, pinned by SHA, read-only token, no secrets | P0 | Works under `permissions: contents: read` |
 | FR-12 | `manifest add` and `manifest check` | P0 | Adding a fixture is one command |
 | FR-13 | Every rule has a positive and a negative fixture, enforced by the pytest suite (no separate `rules test` command) | P0 | The suite fails when a rule lacks fixtures |
-| FR-14 | ReDoS bound: lines over `line_cap` skip regex rules and raise `cfg-long-line`; every pattern passes an adversarial timing test | P0 | No scan exceeds the runtime target on a 5 MB single-line file |
+| FR-14 | ReDoS bound: lines over `line_cap` skip regex rules and raise non-suppressible `cfg-long-line`; every pattern passes an adversarial timing test | P0 | No scan exceeds the runtime target on a 5 MB single-line file |
 | FR-15 | Roadmap gate: `scripts/check_roadmap_touched.sh`, PR template checkbox and a required CI check | P0 | A PR that changes any file but not `ROADMAP.md` fails |
 | FR-16 | `soroban_profile`, contextual to contract crates | P1 | No false positive on a test-support library crate |
 | FR-17 | `stellar_seed` | P1 | Checksum-valid seeds detected; scope decided after task 0.7 |
