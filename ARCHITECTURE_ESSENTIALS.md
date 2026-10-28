@@ -1,4 +1,4 @@
-# ARCHITECTURE_ESSENTIALS: repo-guard (working name)
+# ARCHITECTURE_ESSENTIALS: Airlock
 
 Status: v0.2 (red-team revision). Outline of decisions an agent must not violate. Full detail: `ARCHITECTURE.md` (section numbers in brackets). Scope: `PRD.md`. Work queue: `ROADMAP.md`. File locations: `project_structure.md`.
 
@@ -61,11 +61,11 @@ Status: v0.2 (red-team revision). Outline of decisions an agent must not violate
 - `Finding`: rule_id, severity, path, line, roles, message, evidence, occurrence, fingerprint, suppressible, suppressed_by.
 - Fingerprint: `sha256(rule_id \0 path \0 normalized_evidence \0 occurrence)`; no line number.
 - `Rule` (TOML): id, title, roles, detector, severity, suppressible, rationale, pattern, tests.
-- Suppression (in `repo-guard.toml`): rule, path, fingerprint, reason, optional expires. No owner, no globs.
+- Suppression (in `airlock.toml`): rule, path, fingerprint, reason, optional expires. No owner, no globs.
 - Policy keys: `version`, `[policy]` (fail_on, max_file_bytes, line_cap, tail_max_len, tail_entropy), `[soroban]`, `[[suppress]]`.
 - Wasm manifest entry: sha256, paths[], origin (built|vendored|generated), source, build, note. Keyed by hash.
 - `ScanReport`: tool_version, mode, repo_head, base, files_scanned, files_skipped, findings, suppressed, exit_code.
-- User-owned files: `repo-guard.toml`, `wasm-manifest.toml`.
+- User-owned files: `airlock.toml`, `wasm-manifest.toml`.
 
 ## 6. Exit codes and fail-closed findings [8]
 
@@ -105,11 +105,11 @@ Key behaviors:
 ## 10. Layout [5, project_structure.md]
 
 ```
-src/repo_guard/{cli,model,collector,roles,rules,policy,fingerprint,runner}.py   (+ strkey.py in P1)
-src/repo_guard/detectors/{config_role,wasm_manifest,builtin_patterns}.py       (+ P1 detectors)
-src/repo_guard/report/{console,github,jsonout,summary}.py                      (+ sarif.py in P1)
+src/airlock/{cli,model,collector,roles,rules,policy,fingerprint,runner}.py    (+ strkey.py in P1)
+src/airlock/detectors/{config_role,wasm_manifest,builtin_patterns}.py         (+ P1 detectors)
+src/airlock/report/{console,github,jsonout,summary}.py                        (+ sarif.py in P1)
 rules/{roles.toml,builtin/*.toml}   scripts/   tests/{unit,fixtures,bypass,corpus,golden}/
-action.yml   pyproject.toml   repo-guard.toml   wasm-manifest.toml
+action.yml   pyproject.toml   airlock.toml   wasm-manifest.toml
 ```
 
 ## 11. Testing must-haves [12]
@@ -147,4 +147,4 @@ action.yml   pyproject.toml   repo-guard.toml   wasm-manifest.toml
 - P0 requirements FR-01 to FR-15 met.
 - All seven bypass tests fail closed; parity test green.
 - Dogfooded on the six repos with zero HIGH false positives; five copy-pasted workflows replaced.
-- Attested release; repo-guard repo passes its own scan; `ROADMAP.md` current.
+- Attested release; Airlock repo passes its own scan; `ROADMAP.md` current.

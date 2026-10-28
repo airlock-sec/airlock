@@ -1,4 +1,4 @@
-# ARCHITECTURE: repo-guard (working name)
+# ARCHITECTURE: Airlock
 
 | | |
 |---|---|
@@ -13,7 +13,7 @@
 
 ## 1. Context and constraints
 
-repo-guard scans a git repository and reports supply-chain risk. It runs in two places: a developer's machine and a GitHub Actions runner. The scanned repository is untrusted input, because the scan exists to catch a repo (or a PR to it) that has been tampered with.
+Airlock scans a git repository and reports supply-chain risk. It runs in two places: a developer's machine and a GitHub Actions runner. The scanned repository is untrusted input, because the scan exists to catch a repo (or a PR to it) that has been tampered with.
 
 Hard constraints that shape everything below:
 
@@ -49,7 +49,7 @@ Versions are pinned at implementation time and are deliberately not stated here.
 ```
               (trusted: pinned action SHA)               (untrusted: scanned repo)
  +-------------------------------+                +--------------------------------+
- | repo-guard code + builtin     |                | working tree / PR head         |
+ | Airlock code + builtin        |                | working tree / PR head         |
  | rules (rules/builtin/*.toml)  |                | policy + suppressions + manifest|
  +---------------+---------------+                +----------------+---------------+
                  |                                                 |
@@ -67,19 +67,19 @@ Pipeline stages are pure functions over immutable data where practical. A stage 
 
 ## 4. Trust model
 
-| Adversary | Capability | What repo-guard does | Limit |
+| Adversary | Capability | What Airlock does | Limit |
 |---|---|---|---|
 | Outside contributor | Opens a PR | Scans PR head with scanner from the pinned action; policy from base ref | Cannot be fooled by edits to the scanner or allowlist |
-| Compromised dependency or Action | Runs code in CI | Read-only token, no secrets, pinned SHA | A compromised repo-guard release is the residual risk; mitigated by attestation and SHA pinning |
-| Maintainer credential theft (PolinRider entry) | Pushes to repo, may force-push, may edit workflows | Structural detectors flag the injected loader; `policy-changed` makes policy edits visible; `history-rewritten` finding on non-fast-forward pushes | If the attacker also controls repo settings, workflows and CODEOWNERS, repo-guard can be disabled. No in-repo tool prevents that. Hardware-key 2FA and recovery-account protection are the real controls |
+| Compromised dependency or Action | Runs code in CI | Read-only token, no secrets, pinned SHA | A compromised Airlock release is the residual risk; mitigated by attestation and SHA pinning |
+| Maintainer credential theft (PolinRider entry) | Pushes to repo, may force-push, may edit workflows | Structural detectors flag the injected loader; `policy-changed` makes policy edits visible; `history-rewritten` finding on non-fast-forward pushes | If the attacker also controls repo settings, workflows and CODEOWNERS, Airlock can be disabled. No in-repo tool prevents that. Hardware-key 2FA and recovery-account protection are the real controls |
 | Malicious fixture or vendored Wasm | Hides a payload in an asset | Manifest hash check; unlisted Wasm is HIGH | Does not analyze Wasm contents |
-| Anyone who can push workflow files | Removes or edits the step that runs repo-guard | Required status check blocks PRs whose check never reports; push-mode base check yields `history-rewritten` | A stolen credential can still disable the check. Only a scanner outside the repo (watch mode, decision D-04) is out of the attacker's reach |
+| Anyone who can push workflow files | Removes or edits the step that runs Airlock | Required status check blocks PRs whose check never reports; push-mode base check yields `history-rewritten` | A stolen credential can still disable the check. Only a scanner outside the repo (watch mode, decision D-04) is out of the attacker's reach |
 | Credentialed push that edits policy | Pushes policy change and payload together | Push mode reads policy from `github.event.before` | New-branch pushes have no trusted base (WARN) |
 | Determined evader | Crafts code that dodges regex rules | Capability tiers, entropy and tail checks | Regex heuristics can be beaten; parser analysis is Later |
 
 Trust anchors:
 
-1. The commit SHA of the repo-guard Action in the consumer's workflow.
+1. The commit SHA of the Airlock Action in the consumer's workflow.
 2. The trusted base: the PR base in PR mode, the pre-push SHA in push mode.
 
 ## 5. Repository layout
@@ -87,12 +87,12 @@ Trust anchors:
 Full annotated tree, ownership and import rules: `project_structure.md`. Summary:
 
 ```
-repo-guard/
+airlock/
   action.yml                      # composite action
   pyproject.toml
-  repo-guard.toml                 # dogfood policy and suppressions
+  airlock.toml                    # dogfood policy and suppressions
   wasm-manifest.toml              # dogfood Wasm manifest
-  src/repo_guard/
+  src/airlock/
     cli.py  model.py  collector.py  roles.py  rules.py  policy.py  fingerprint.py  runner.py
     strkey.py                     # P1
     detectors/{config_role,wasm_manifest,builtin_patterns}.py     # P0
@@ -152,7 +152,7 @@ Rule files are validated in code at load time (no JSON schema files in v0.1). An
 
 ### 6.5 Trusted base and policy resolution
 
-Policy (`repo-guard.toml`, including suppressions) and `wasm-manifest.toml` must come from a source the change under scan cannot edit.
+Policy (`airlock.toml`, including suppressions) and `wasm-manifest.toml` must come from a source the change under scan cannot edit.
 
 ```
 mode pr:
@@ -260,7 +260,7 @@ Wasm and native binaries are resolved by content magic, not globs. The `tooling-
 ### 7.6 Policy file with suppressions
 
 ```toml
-# repo-guard.toml
+# airlock.toml
 version = 1
 
 [policy]
@@ -446,26 +446,27 @@ Line rules ported from `malware_scan.py`: invisible Unicode, exfiltration endpoi
 
 ```yaml
 # action.yml (sketch)
-name: repo-guard
+name: airlock
 description: Supply-chain scan for Stellar and Soroban repositories
 inputs:
   fail-on: { default: "high" }
-  config:  { default: "repo-guard.toml" }
+  config:  { default: "airlock.toml" }
 runs:
   using: composite
   steps:
     - shell: bash
       env:
-        RG_EVENT:   ${{ github.event_name }}
-        RG_BASE:    ${{ github.event.pull_request.base.sha }}
-        RG_BEFORE:  ${{ github.event.before }}
-        RG_FAIL_ON: ${{ inputs.fail-on }}
-        RG_CONFIG:  ${{ inputs.config }}
+        AIRLOCK_EVENT:   ${{ github.event_name }}
+        AIRLOCK_BASE:    ${{ github.event.pull_request.base.sha }}
+        AIRLOCK_BEFORE:  ${{ github.event.before }}
+        AIRLOCK_FAIL_ON: ${{ inputs.fail-on }}
+        AIRLOCK_CONFIG:  ${{ inputs.config }}
       run: |
         python3 -I -c 'import sys; sys.path.insert(0, sys.argv.pop(1)); \
-          from repo_guard.cli import main; raise SystemExit(main())' \
-          "$GITHUB_ACTION_PATH/src" scan --event "$RG_EVENT" --base "$RG_BASE" \
-          --before "$RG_BEFORE" --fail-on "$RG_FAIL_ON" --config "$RG_CONFIG" --format github
+          from airlock.cli import main; raise SystemExit(main())' \
+          "$GITHUB_ACTION_PATH/src" scan --event "$AIRLOCK_EVENT" --base "$AIRLOCK_BASE" \
+          --before "$AIRLOCK_BEFORE" --fail-on "$AIRLOCK_FAIL_ON" \
+          --config "$AIRLOCK_CONFIG" --format github
 ```
 
 Notes:
@@ -478,7 +479,7 @@ Notes:
 - Review Action SHA bumps by hand and do not auto-merge them (B12).
 - An installed copy carries its own rule data. `pyproject.toml` force-includes `rules/` at `airlock/rules` in the wheel and `cli.rules_root` prefers that copy, falling back to `rules/` two levels above the package directory, which is the checkout layout `$GITHUB_ACTION_PATH` uses. Without the bundled data an installed `airlock scan` cannot scan: it exits 2 on a missing `roles.toml` rather than reporting nothing, and 5.7 measured that shape before fixing it.
 
-## 11. Self-protection of the repo-guard repo
+## 11. Self-protection of the Airlock repo
 
 - Every Action pinned by hash; top-level `permissions: contents: read`; write only on the release job.
 - Rulesets: no force pushes, no deletion, required status checks; `CODEOWNERS` on `src/`, `rules/`, `action.yml`, `scripts/` and `.github/`.
@@ -499,7 +500,7 @@ Notes:
 - **Parity test:** old `malware_scan.py` versus the ported rules on a shared corpus; no lost findings.
 - **Golden outputs:** JSON (and SARIF once it exists).
 - **Corpus gate:** a clean-state snapshot of the six repos (`tests/corpus/`) must yield zero HIGH findings.
-- **Self-scan test:** the repo-guard repo passes its own scan in CI.
+- **Self-scan test:** the Airlock repo passes its own scan in CI.
 - **Roadmap gate test:** the script fails a diff that omits `ROADMAP.md` and passes one that includes it.
 
 ## 13. Architecture decision records
@@ -551,8 +552,8 @@ Likelihood and impact are rough judgments (H, M, L).
 
 | ID | Scenario | Why it breaks | L / I | Resolution | Task |
 |---|---|---|---|---|---|
-| B1 | A credentialed push edits `repo-guard.toml` and adds a payload in one commit | `push` and `full` modes read policy from HEAD, so the push approves itself. This is the PolinRider scenario | H / H | Push mode reads policy from `github.event.before`; non-ancestor `before` yields `history-rewritten` | 2.7, 4.5 |
-| B2 | The attacker deletes or edits the workflow step that runs repo-guard | A push-triggered run uses the workflow from the pushed commit, so it is attacker-controlled. A scheduled run uses the default branch file, also editable | H / H | Required status check for PRs; maintainer-account hardening; an external watcher that clones from outside and checks ancestry is the only detector the attacker cannot edit. Decision D-04 | 0.13, 4.5, 9.1 |
+| B1 | A credentialed push edits `airlock.toml` and adds a payload in one commit | `push` and `full` modes read policy from HEAD, so the push approves itself. This is the PolinRider scenario | H / H | Push mode reads policy from `github.event.before`; non-ancestor `before` yields `history-rewritten` | 2.7, 4.5 |
+| B2 | The attacker deletes or edits the workflow step that runs Airlock | A push-triggered run uses the workflow from the pushed commit, so it is attacker-controlled. A scheduled run uses the default branch file, also editable | H / H | Required status check for PRs; maintainer-account hardening; an external watcher that clones from outside and checks ancestry is the only detector the attacker cannot edit. Decision D-04 | 0.13, 4.5, 9.1 |
 | B3 | A minified 5 MB single-line file | Regex rules can take quadratic time or worse and hang CI | M / M | `line_cap`, `cfg-long-line`, adversarial timing test per pattern | 2.5, 2.12 |
 | B4 | The `testutils` rule fires on a test-support library | `soroban-budget-assert` plausibly needs `testutils` as a normal dependency, so dogfooding would fail on your own repo [Unverified: Cargo.toml not inspected] | H / M | Apply only to contract crates; profile rule only at the workspace root | 6.1, 6.5 |
 | B5 | A suppressed line is duplicated elsewhere in the same file | Line-free fingerprints suppress the copy too | M / H | Occurrence-aware fingerprints | 2.6 |
@@ -562,7 +563,7 @@ Likelihood and impact are rough judgments (H, M, L).
 | B9 | New Wasm fixture fails its own PR | Base-ref manifest does not yet list it | H / M | Documented two-step flow; revisit if adoption suffers | risk register |
 | B10 | Suppression expiry turns CI red on a date | Users learn to bulk-extend | M / L | Optional `expires`, 30-day warning, only that finding returns | 2.8, 7.11 |
 | B11 | Evidence text injects markdown or annotation syntax | Evidence is a line of attacker-controlled code | M / M | Fenced evidence with safe fence length; escaped annotations | 2.9 |
-| B12 | Consumers auto-merge bot bumps of the Action SHA | A compromised repo-guard release would propagate | L / H | Attested releases; document manual review of SHA bumps | 5.3 |
+| B12 | Consumers auto-merge bot bumps of the Action SHA | A compromised Airlock release would propagate | L / H | Attested releases; document manual review of SHA bumps | 5.3 |
 | B13 | UTF-16 config files trip `nul-in-text` | NULs appear in every other byte | L / L | BOM detection and decoding | 2.2, 7.3 |
 | B14 | Policy schema changes between Action versions | Old policy files fail on new releases | M / L | `version` field; unknown keys WARN | 2.1, 2.7 |
 | B15 | The force-push workflow template | It runs from the attacker's workflow, so it protects nothing against a credentialed push | M / L | Removed; `history-rewritten` covers the detectable case | 2.7 |

@@ -1,4 +1,4 @@
-# AGENTS.md: working inside repo-guard
+# AGENTS.md: working inside Airlock
 
 Instructions for any coding agent (Claude Code, Codex, Cursor, Copilot and others) working in this repository. Humans can read it too. Keep it short; deep detail lives in the linked docs.
 
@@ -6,7 +6,7 @@ Instructions for any coding agent (Claude Code, Codex, Cursor, Copilot and other
 
 ## 1. What this project is
 
-repo-guard (working name) is a CLI and composite GitHub Action that scans Stellar and Soroban open-source repositories for supply-chain compromise (the PolinRider class of attack) and release-integrity gaps. Python 3.11+, standard library only. The repository being scanned is untrusted input.
+Airlock is a CLI and composite GitHub Action that scans Stellar and Soroban open-source repositories for supply-chain compromise (the PolinRider class of attack) and release-integrity gaps. Python 3.11+, standard library only. The repository being scanned is untrusted input.
 
 ## 2. Read order
 
@@ -60,7 +60,7 @@ python -m pytest
 ruff check .
 ruff format --check .
 mypy src
-python -m repo_guard scan --mode full          # self-scan; must report no HIGH findings
+python -m airlock scan --mode full             # self-scan; must report no HIGH findings
 scripts/check_roadmap_touched.sh               # the PR must change ROADMAP.md and its timestamp
 python scripts/roadmap_progress.py --check     # the progress table must match the task lines
 ```
@@ -82,8 +82,8 @@ If a command does not exist yet, say so in the PR instead of silently skipping i
 
 - **Rule:** edit `rules/builtin/*.toml`, add positive and negative fixture builders, run the suite (it fails without both).
 - **Detector:** new module under `detectors/`, register it in `detectors/__init__.py`, add rules and fixtures, update `ARCHITECTURE.md` section 9 and `ARCHITECTURE_ESSENTIALS.md` section 7.
-- **Suppression:** only the owner adds suppressions to `repo-guard.toml`, with a reason.
-- **Wasm fixture:** `repo-guard manifest add <path>`, and land the manifest change in its own PR first (two-step flow).
+- **Suppression:** only the owner adds suppressions to `airlock.toml`, with a reason.
+- **Wasm fixture:** `airlock manifest add <path>`, and land the manifest change in its own PR first (two-step flow).
 - **New requirement or decision:** update `PRD.md` and the ADR table, and add a row to the `ROADMAP.md` decision log.
 
 ## 8. Testing expectations
@@ -119,7 +119,7 @@ If a command does not exist yet, say so in the PR instead of silently skipping i
 
 ## 12. Protected paths
 
-Take extra care in `src/repo_guard/policy.py`, `collector.py`, `runner.py`, `rules/`, `action.yml`, `.github/`, `scripts/`, `repo-guard.toml` and `wasm-manifest.toml`. Changes there need owner review and must not loosen any check.
+Take extra care in `src/airlock/policy.py`, `collector.py`, `runner.py`, `rules/`, `action.yml`, `.github/`, `scripts/`, `airlock.toml` and `wasm-manifest.toml`. Changes there need owner review and must not loosen any check.
 
 ## 13. Definition of done
 
