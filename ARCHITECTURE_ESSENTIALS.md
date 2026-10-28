@@ -127,6 +127,7 @@ action.yml   pyproject.toml   airlock.toml   wasm-manifest.toml
 - 010 Wasm by magic. 011 Soroban expectations from policy. 012 capabilities over signatures.
 - 013 no masking. 014 no directory skips. 015 occurrence-aware fingerprints. 016 contract crates only.
 - 017 roadmap gate in CI. 018 line cap instead of regex timeouts.
+- 019 SARIF key `partialFingerprints["airlock/v1"]` settled before shipping (D-09); no migration needed. Reporter still deferred to 7.6.
 
 ## 13. Cut or deferred (do not build without a roadmap decision) [16.4]
 
