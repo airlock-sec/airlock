@@ -62,6 +62,7 @@ airlock/
     builtin/*.toml                 # data rules, one file per detector family (protected)
 
   scripts/
+    bypass_probe.py                # roadmap 0.4: runs Appendix B against the external script it is given
     check_roadmap_touched.sh       # CI gate: PR must change ROADMAP.md                                      (1.9)
     roadmap_progress.py            # computes and checks the progress table                                  (1.9)
 
@@ -102,7 +103,7 @@ model  <-  fingerprint, roles, rules  <-  collector, policy  <-  detectors  <-  
 - `model.py` imports nothing from the package.
 - `detectors/*` import only from `model`, `roles`, `rules` and `fingerprint`. A detector never imports `report`, `cli` or another detector.
 - `report/*` import only from `model`.
-- Only `collector.py` and `policy.py` may call `subprocess`, always with a fixed argument list and never with a shell. `scripts/` may call `git`.
+- Only `collector.py` and `policy.py` may call `subprocess`, always with a fixed argument list and never with a shell. `scripts/` may call `git`, and `bypass_probe.py` additionally runs the external script it is handed from the scratch repository it built; neither is under scan, since scanned content is never executed (README, "What it does not do").
 - No module opens a network connection. No module imports third-party packages at runtime in v0.1.
 - No import cycles. No module-level mutable state.
 
