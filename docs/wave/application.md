@@ -43,7 +43,7 @@ Say this plainly rather than letting a reviewer find it.
 
 | Claim | Status |
 |---|---|
-| The scanner runs: 12 rules, 2 detectors, 4 report formats, 475 tests, CI green on every pull request, and it scans this repository on every build | Built, and the CI runs are public |
+| The scanner runs: 12 rules, 2 detectors, three output formats plus a step summary, 475 tests, CI green on every pull request, and it scans this repository on every build | Built, and the CI runs are public |
 | The seven bypasses are confirmed against the real script, with a reproducible harness | Done 2026-10-27; `scripts/bypass_probe.py` reproduces it |
 | Five of the seven fail closed under Airlock today, measured | True; two (Cargo runner, `vendor/` payload) need rules that are not written yet, which are issues 11 and 13 in this batch |
 | A repository can install it as a GitHub Action | Not built. `action.yml` is task 4.1, issue 15 |

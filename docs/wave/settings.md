@@ -9,7 +9,7 @@ Verified against the live repository on 2026-10-28 with read-only calls:
 | Checked | Result |
 |---|---|
 | Topics | none (`"topics": []`) |
-| Labels | the nine stock GitHub labels only; no `Stellar Wave`, no `complexity: *`, no `area: *` |
+| Labels | the ten stock GitHub labels only; no `Stellar Wave`, no `complexity: *`, no `area: *` |
 | Rulesets | `[]`, and the endpoint answers, so repository rulesets are available on this plan |
 | Branch protection on `main` | `Branch not protected` (404) |
 | Releases | none |
@@ -113,7 +113,7 @@ no required check, because it blocks every pull request forever, and because the
       "parameters": {
         "required_approver_count": 1,
         "dismiss_stale_reviews_on_push": true,
-        "require_code_owner_review": false,
+        "require_code_owner_review": true,
         "authorized_actor_names": ["Gabbydunkk"],
         "required_review_teams": [],
         "dismissal_restrictions": []
@@ -151,10 +151,14 @@ Three notes on choices in that document:
   list is a security boundary and belongs in the same pull request as the change, not in a settings
   edit nobody reviewed. Task 1.2 (account hardening) is the precondition for trusting it.
 
-This closes the file-editable half of task 1.3. `CODEOWNERS` for the protected paths is the other
-half and is a normal pull request; `.github/CODEOWNERS` does not exist yet. Task 1.2 (account
-hardening) and 0.16 (what the org plan actually allows) stay open, and 0.16 is the reason to check
-whether `authorized_actor_names` and the bypass list are the right shape before trusting this file.
+This closes the file-editable half of task 1.3. `.github/CODEOWNERS` already exists and lists the
+protected paths, which is why `require_code_owner_review` is `true` above: the file has no effect
+until a ruleset asks for it, so turning it on is what makes the twelve entries mean something. With
+one owner it changes nothing in practice today, and it changes everything the moment a second
+account joins, which is the point of configuring it now rather than remembering later. Task 1.2
+(account hardening) and 0.16 (what the org plan actually allows) stay open, and 0.16 is the reason
+to check whether `authorized_actor_names` and the bypass list are the right shape before trusting
+this file.
 
 ## 5. A release tag
 
@@ -183,8 +187,9 @@ Draft notes:
 > python -m airlock scan --mode full .
 > ```
 >
-> Twelve rules across two rule files, two detectors, four report formats (`console`, `github`,
-> `json`, and the step summary), fingerprint-keyed suppressions with expiry, a Wasm manifest with
+> Twelve rules across two rule files, two detectors, three report formats (`console`, `github`,
+> `json`) plus a step summary written when `GITHUB_STEP_SUMMARY` is set, fingerprint-keyed
+> suppressions with expiry, a Wasm manifest with
 > `airlock manifest add` and `check`, and fail-closed skips. Exit 0 only when nothing reached the
 > threshold.
 >

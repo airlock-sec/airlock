@@ -11,10 +11,11 @@ roadmap: 4.1
 
 ## Problem
 
-There is no `action.yml`. The repository has a working scanner, four report formats, a trusted-base
-policy model and a suite of 475 tests behind one console script, and no way for any of the five
-Stellar repos to adopt it. Each of them today runs a copy-pasted `.github/scripts/malware_scan.py`,
-which is the exact artifact this project exists to replace: `PRD.md` 2.3 records that all seven of
+There is no `action.yml`. The repository has a working scanner, three output formats and a step
+summary, a trusted-base policy model and a suite of 475 tests behind one console script, and no way
+for any of the five Stellar repos to adopt it. Each of them today runs a copy-pasted
+`.github/scripts/malware_scan.py`, which is the exact artifact this project exists to replace:
+`PRD.md` 2.3 records that all seven of
 that script's bypasses were run on 2026-10-27 and every one exits 0. The replacement cannot be
 adopted, only described, until a consumer can write `uses: airlock-sec/airlock@<full sha>` and get a
 check.
