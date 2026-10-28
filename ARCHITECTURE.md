@@ -177,13 +177,13 @@ Cost: a PR that adds a legitimate Wasm fixture fails until the manifest change m
 
 | Reporter | Notes |
 |---|---|
-| console | Severity, rule, `path:line`, message; summary line |
-| github | `::error` and `::warning` commands; escapes `%`, `\r`, `\n`, `:` and `,` in properties; HIGH first; WARN annotations capped |
-| json | Full `ScanReport` model |
-| summary | Markdown to `$GITHUB_STEP_SUMMARY`: counts, skipped-file counts, every HIGH; evidence rendered only inside fenced code blocks with the fence length chosen to exceed any backtick run in the evidence, truncated to a fixed length |
+| console | Severity, rule, `path:line`, message; summary line with counts, suppressed count and skip accounting |
+| github | `::error`, `::warning` and `::notice` commands; escapes `%`, `\r`, `\n`, `:` and `,` in properties; HIGH first; each severity capped, and a capped list ends with one annotation naming how many went unlisted |
+| json | Full `ScanReport` model, including every suppressed finding and its reason |
+| summary | Markdown to `$GITHUB_STEP_SUMMARY`: counts, skipped-file counts, every HIGH; evidence rendered only inside fenced code blocks with the fence length chosen to exceed any backtick run in the evidence, truncated to a fixed length. Rule ids and paths outside a fence are escaped, so no `-` or `#` is substituted where a heading or list marker could form |
 | sarif (P1) | SARIF 2.1.0 with `partialFingerprints["repoGuard/v1"]`; result count capped |
 
-Evidence is attacker-controlled text. It is never rendered as raw markdown (B11). GitHub limits annotations per step and the size of step summaries; the design assumes truncation and so orders output by severity (B8). [Unverified: exact limits, task 0.9]
+Evidence is attacker-controlled text. It is never rendered as raw markdown (B11). GitHub limits annotations per step and the size of step summaries; the design assumes truncation and so orders output by severity (B8). [Unverified: exact limits, task 0.9] Because the limits are unverified, the caps are reporter constants rather than policy settings: a repository cannot raise them, and 0.9 replaces the guesswork with measured numbers.
 
 ## 7. Data models
 
