@@ -26,7 +26,7 @@ airlock/
   SECURITY.md                      # how to report a vulnerability in airlock itself                         (1.8)
   LICENSE                          # per decision D-02                                                       (1.1)
   action.yml                       # composite GitHub Action (protected)                                     (4.1)
-  pyproject.toml                   # package metadata, ruff, mypy, pytest config                             (1.4)
+  pyproject.toml                   # package metadata, wheel contents, ruff, mypy, pytest config           (1.4, 5.7)
   airlock.toml                     # dogfood policy and suppressions (protected)                             (4.3)
   wasm-manifest.toml               # dogfood Wasm manifest, keyed by hash (protected)                        (4.3)
 
@@ -57,7 +57,7 @@ airlock/
       summary.py                   # step summary with fenced, sanitized evidence                            (2.9)
       sarif.py                     # P1                                                                      (7.6)
 
-  rules/
+  rules/                           # also force-included at `airlock/rules` in the built wheel (5.7)
     roles.toml                     # role globs (protected)
     builtin/*.toml                 # data rules, one file per detector family (protected)
 

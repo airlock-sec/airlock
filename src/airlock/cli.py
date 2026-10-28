@@ -61,12 +61,29 @@ from .report import console, github, jsonout, summary
 from .roles import known_roles
 from .rules import load_role_globs, load_rules
 
-#: The rule data that came with this copy of the tool. `parents[2]` is the repository root in a
-#: source checkout, which is also what `$GITHUB_ACTION_PATH` holds when the Action runs
-#: (`ARCHITECTURE.md` 10), so the default needs no flag in either case.
-PACKAGE_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_RULES_DIR = PACKAGE_ROOT / "rules" / "builtin"
-DEFAULT_ROLES_FILE = PACKAGE_ROOT / "rules" / "roles.toml"
+#: The repository root in a source checkout, which is also what `$GITHUB_ACTION_PATH` holds
+#: when the Action runs (`ARCHITECTURE.md` 10).
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def rules_root(package_dir: Path) -> Path:
+    """Where the rule data for the copy of the tool at `package_dir` lives.
+
+    Two install layouts have to resolve without a flag (5.7). A source checkout and the pinned
+    Action keep `rules/` at the repository root, two levels above `src/airlock`; an installed
+    wheel carries the data inside the package, because nothing outside the package directory is
+    installed at all. The packaged copy wins when it is there, so a wheel never reads a checkout
+    that happens to sit in the same filesystem.
+    """
+    packaged = package_dir / "rules"
+    if (packaged / "roles.toml").is_file():
+        return packaged
+    return package_dir.parents[1] / "rules"
+
+
+RULES_ROOT = rules_root(Path(__file__).resolve().parent)
+DEFAULT_RULES_DIR = RULES_ROOT / "builtin"
+DEFAULT_ROLES_FILE = RULES_ROOT / "roles.toml"
 
 #: Every event this build knows how to judge. An unmapped event is a usage error, because
 #: defaulting it would pick a trust model the caller never asked for.
