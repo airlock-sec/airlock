@@ -55,6 +55,19 @@ def run(program: str, *args: str, cwd: Path | None = None) -> subprocess.Complet
     return subprocess.run([program, *args], capture_output=True, text=True, check=False, cwd=cwd)
 
 
+def base_ref(root: Path) -> str:
+    """The first name that resolves to a commit in this checkout, or an empty string.
+
+    The remote-tracking name is the one a workflow run has after fetching the history; the bare
+    one covers a clone whose remote is not called `origin`. Returning "" instead of raising lets
+    the caller state which assumption about the checkout was not met.
+    """
+    for ref in ("origin/main", "main"):
+        if run("git", "rev-parse", "--verify", "--quiet", ref, cwd=root).returncode == 0:
+            return ref
+    return ""
+
+
 def git(root: Path, *args: str) -> str:
     result = subprocess.run(
         [
@@ -162,5 +175,10 @@ class TestRoadmapTouched:
 
     def test_this_branch_passes_the_gate_it_is_adding(self) -> None:
         """If the gate cannot be satisfied by the work that adds it, it is the wrong gate."""
-        result = run("sh", str(TOUCHED), "origin/main", cwd=REPO_ROOT)
+        ref = base_ref(REPO_ROOT)
+        assert ref, (
+            "neither origin/main nor main resolves in this checkout, so the gate has no base to "
+            "compare against; ci.yml asks for fetch-depth: 0 for exactly this test"
+        )
+        result = run("sh", str(TOUCHED), ref, cwd=REPO_ROOT)
         assert result.returncode == 0, result.stdout + result.stderr
