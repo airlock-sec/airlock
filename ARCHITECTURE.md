@@ -444,6 +444,9 @@ Line rules ported from `malware_scan.py`: invisible Unicode, exfiltration endpoi
 
 ## 10. Distribution: the composite Action
 
+Design sketch for task 4.1, not a shipped `action.yml`. Task 0.8 verified the launch prefix
+and the scan cases below, not the composite Action's environment setup or full input matrix.
+
 ```yaml
 # action.yml (sketch)
 name: airlock
@@ -462,22 +465,66 @@ runs:
         AIRLOCK_FAIL_ON: ${{ inputs.fail-on }}
         AIRLOCK_CONFIG:  ${{ inputs.config }}
       run: |
-        python3 -I -c 'import sys; sys.path.insert(0, sys.argv.pop(1)); \
-          from airlock.cli import main; raise SystemExit(main())' \
-          "$GITHUB_ACTION_PATH/src" scan --event "$AIRLOCK_EVENT" --base "$AIRLOCK_BASE" \
+        python3 -I -c 'import sys; sys.path.insert(0, sys.argv.pop(1)); from airlock.cli import main; raise SystemExit(main())' "$GITHUB_ACTION_PATH/src" scan \
+          --event "$AIRLOCK_EVENT" --base "$AIRLOCK_BASE" \
           --before "$AIRLOCK_BEFORE" --fail-on "$AIRLOCK_FAIL_ON" \
           --config "$AIRLOCK_CONFIG" --format github
 ```
 
 Notes:
 
-- `python3 -I` ignores `PYTHONPATH` and the script directory, so the module path is passed through `argv`. The scanner code comes from `GITHUB_ACTION_PATH` (the pinned Action), never from the checkout. [Unverified: confirm with a scratch workflow, task 0.8]
+- `python3 -I -c` excludes the current directory and user site directory from its import path and ignores `PYTHONPATH`, so the trusted module path is passed through `argv`. The scanner code comes from `GITHUB_ACTION_PATH`, never from the scanned checkout. [Verified 2026-10-28: task 0.8 evidence below]
 - The tool never fetches. The consumer's `actions/checkout` needs `fetch-depth: 0`, or enough depth to include the base; otherwise exit 2.
 - User-influenced values reach the script through `env:`, never by interpolation into the shell.
 - Consumers use `permissions: contents: read` and the full commit SHA.
 - Consumers should make the check a **required status check**. Without it, a PR that deletes the workflow step simply never runs the scan. [Unverified: how GitHub treats a required check whose job no longer exists; task 4.5 tests it]
 - Review Action SHA bumps by hand and do not auto-merge them (B12).
 - An installed copy carries its own rule data. `pyproject.toml` force-includes `rules/` at `airlock/rules` in the wheel and `cli.rules_root` prefers that copy, falling back to `rules/` two levels above the package directory, which is the checkout layout `$GITHUB_ACTION_PATH` uses. Without the bundled data an installed `airlock scan` cannot scan: it exits 2 on a missing `roles.toml` rather than reporting nothing, and 5.7 measured that shape before fixing it.
+
+### Task 0.8: observed isolation evidence
+
+[Verified 2026-10-28 UTC] The [immutable scratch workflow](https://github.com/wagmiiii/airlock-isolation-probe/blob/3c569b5948ead2552993771949c1da75170567dd/.github/workflows/isolation.yml)
+passed in [real PR run 40706458871](https://github.com/wagmiiii/airlock-isolation-probe/actions/runs/40706458871)
+(14:29:36 to 14:29:48 UTC) and [dispatch run 40706400064](https://github.com/wagmiiii/airlock-isolation-probe/actions/runs/40706400064)
+(14:29:14 to 14:29:26 UTC), both attempt 1. [Probe PR #1](https://github.com/wagmiiii/airlock-isolation-probe/pull/1)
+retains the full reproduction and captured output. Trusted Airlock was pinned to
+`17079ac7ad830deb2b31e991a84f849ee3074959` in a separate `trusted-airlock` checkout.
+`GITHUB_ACTION_PATH` was **manually set** to that checkout; automatic composite Action setup
+remains unverified until 4.1.
+
+The runner was `ubuntu-latest`, Ubuntu 24.04.5 LTS, image `ubuntu-24.04`, agent `2.338.0`,
+with CPython `3.11.17` at `/opt/hostedtoolcache/Python/3.11.17/x64/bin/python3`.
+The setup header reported image version `20261012.334.1`; runtime reported
+`ImageVersion=20261023.334.3` and `ImageOS=ubuntu24`. These differ in the logs; neither is
+silently substituted for the other.
+
+Every scanner invocation used the exact `python3 -I -c 'import sys; sys.path.insert(0, sys.argv.pop(1)); from airlock.cli import main; raise SystemExit(main())' "$GITHUB_ACTION_PATH/src" scan`
+prefix shown in the sketch. Full scans appended `--mode full --format console .`;
+PR scans appended `--event "$PROBE_EVENT" --base "$PROBE_BASE" --format console .`, with
+inputs supplied through environment variables. The workflow asserted that `PROBE_BASE` equalled
+the real event's `pull_request.base.sha`, `3c569b5948ead2552993771949c1da75170567dd`.
+
+Benign shadow packages were staged under both `airlock/` and `src/airlock/` in the scanned
+checkout, with `src/sitecustomize.py` and `src/usercustomize.py` marker/sentinel probes.
+`PYTHONPATH` pointed at that checkout and its `src` directory. A separate isolated diagnostic
+resolved `airlock.__file__` and `airlock.cli.__file__` to `trusted-airlock/src/airlock/__init__.py`
+and `trusted-airlock/src/airlock/cli.py`, respectively. It asserted `isolated=1`,
+`ignore_environment=1`, `safe_path=True`, `no_user_site=1`, `ENABLE_USER_SITE=False`, no cwd or
+`PYTHONPATH` entries in `sys.path`, and no loaded file-backed module under the scanned cwd.
+All captured stdout/stderr lacked the shadow marker, and the sentinel was absent. No shadow
+module was executed and no non-isolated control was run.
+
+| Observed case | Exit | Meaning (section 8) |
+|---|---|---|
+| Full scan in PR / dispatch | 0 / 0 | Completed below threshold: 0 HIGH, 0 WARN, 2 INFO; 8 / 7 files scanned, nothing skipped |
+| Real PR base, full history | 0 | Completed below threshold: 0 HIGH, 0 WARN, 0 INFO; 8 files scanned, nothing skipped |
+| Same PR base, deliberately shallow checkout | 2 | Configuration/usage error, not a passing scan; stdout empty |
+
+The shallow target had exactly one reachable commit and lacked the base before and after the
+scan. Its stderr was `airlock: base 3c569b5948ea is not reachable in this checkout. The workflow needs actions/checkout with fetch-depth: 0, or a depth that reaches the base commit.`
+The scanner did not fetch. Codes 1 (findings at threshold) and 3 (internal error) were not
+exercised by these benign cases. Task 4.1 remains open, including the composite Action and its
+`push` event coverage.
 
 ## 11. Self-protection of the Airlock repo
 
@@ -533,7 +580,7 @@ All remaining work, with task IDs, dependencies and exit criteria: `ROADMAP.md`.
 
 ## 15. Open technical questions
 
-1. Does `python3 -I -c` with an explicit `sys.path` insert behave as designed on `ubuntu-latest`? (0.8)
+1. Resolved (0.8): `python3 -I -c` with the explicit trusted `sys.path` insert worked on `ubuntu-latest`, CPython 3.11.17, on 2026-10-28. Section 10 records the workflow, trusted origins and exits 0/0/2 for full/PR/shallow scans. Composite Action integration remains task 4.1, not part of this verification.
 2. What are the real `tail_max_len` and `tail_entropy` values on the six-repo corpus? (3.3)
 3. Can GitHub pin a required status check to a trusted source, and what happens when the job is deleted? (0.13, 4.5)
 4. What are GitHub's limits on annotations, step summaries and SARIF? (0.9)
