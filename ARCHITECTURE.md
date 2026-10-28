@@ -313,6 +313,19 @@ note   = "fixture for conformance tests"
 
 Keyed by hash so the same Wasm at several paths needs one entry and a rename produces a WARN instead of a HIGH.
 
+**The writer is canonical, not an editor** (task 3.5, `policy.py`). `manifest_to_toml` emits the header verbatim, then entries sorted by `sha256` with each entry's `paths` sorted, so `parse(render(x)) == x` holds and two runs on the same tree produce the same bytes. Idempotence is what makes `manifest add` safe to run in a pipeline: a second call reports "already lists every target" and writes nothing.
+
+Two refusals exist because a writer that silently drops what the model cannot carry is a lie:
+
+- **Comments inside an entry block** are refused ("the writer emits them from data only"). A free-text comment attached to `[[wasm]]` has no field to live in, so keeping it would mean hand-editing the parse, and dropping it would delete a reviewer's note. `note =` is the field for that.
+- **Unknown keys in the entry region** are refused before anything is written, naming them, because the rewrite emits from parsed data and would erase them. (A header outside the recognised shape is preserved as-is; only the entry region is rewritten.)
+
+`manifest add` also checks the artifact itself: `\0asm` magic is required (a `*.wasm` LFS pointer is refused, not recorded), the file must sit inside the repo and be at most `max_file_bytes`, `--source` is always required, and `--build` is required when `origin = "built"`. Provenance is stated once per entry; joining a second path to a known hash keeps the reviewed `source`/`build` rather than overwriting it.
+
+**Nothing is staged or committed.** `wasm-manifest.toml` is a protected path, so the command writes the file and tells the operator to land that diff on its own branch first (FR-06). A tool that auto-commits the trusted base would be the bypass it is meant to prevent.
+
+`manifest check` is one scan with `run_scan(..., keep=wasm-* findings)`, not a second implementation of artifact accounting. Numbering and suppression still run over every finding, so fingerprints and occurrence indices match a full scan; only the exit code is decided over the kept set, against the same `fail_on` threshold. Consequently an unlisted or swapped artifact exits 1 while manifest rot (`wasm-manifest-stale`, `wasm-path-moved`) is named at WARN and exits 0 — the deleted artifact is not shipping, so there is nothing to stop.
+
 ### 7.8 ScanReport
 
 ```python

@@ -202,13 +202,18 @@ airlock scan     [path] [--mode pr|push|full] [--event <name>] [--base <sha>] [-
                     [--config <path>] [--wasm-manifest <path>]
                     [--fail-on info|warn|high] [--format console|json|github] [--output <path>]
                     [--rules-dir <path>] [--roles <path>]
-airlock manifest add <path> --origin built|vendored|generated [--source <path>]
-airlock manifest check
+airlock manifest add <path>… --origin built|vendored|generated --source <text>
+                    [--build <text>] [--note <text>] [--repo <path>]
+                    [--wasm-manifest <path>]
+airlock manifest check [path] [--wasm-manifest <path>] [--config <path>]
+                    [--rules-dir <path>] [--roles <path>] [--format …] [--output <path>]
 ```
 
 `--event` is how the Action passes `github.event_name`, and it implies a mode: `pull_request` to `pr`, `push` to `push`, `workflow_dispatch` and `schedule` to `full`. An event that is not one of those four is a usage error rather than a default, because picking a trust model silently is the bypass B1 is about. Giving both `--event` and a contradicting `--mode` is also a usage error.
 
-`--rules-dir` and `--roles` point at the rule data that shipped with the tool, which is what the Action does with `$GITHUB_ACTION_PATH`. They exist so a source checkout and a test can name a copy explicitly; a scanned repository's own `rules/` is never a valid argument, and `fail_on`, `--format` and the step summary are all this command writes. `manifest add` and `manifest check` are parsed and refused with exit 2 until task 3.5 writes them, so a documented two-step Wasm flow cannot look like it succeeded while doing nothing.
+`--rules-dir` and `--roles` point at the rule data that shipped with the tool, which is what the Action does with `$GITHUB_ACTION_PATH`. They exist so a source checkout and a test can name a copy explicitly; a scanned repository's own `rules/` is never a valid argument, and `fail_on`, `--format` and the step summary are all this command writes.
+
+`manifest add` (task 3.5) records artifacts by hash and writes the manifest with a hand-written canonical writer, because the standard library reads TOML and does not write it. It refuses with exit 2 rather than degrade: a file without Wasm magic (so a git LFS pointer is not recorded as an artifact), a target or manifest path outside the repository, an artifact over `max_file_bytes`, missing provenance (`--source` always, `--build` when `origin = "built"`), and a manifest whose entry region holds comments or unknown keys that a writer emitting from parsed data would lose. It stages and commits nothing: `wasm-manifest.toml` is a protected path, so the operator lands that diff in its own pull request before the one that adds the files (FR-06). `manifest check` is the scan pipeline with the report narrowed to the `wasm-` rules, so its exit code follows `fail_on` instead of a threshold of its own, and one set of artifact accounting answers the question in both commands.
 
 No `init` command: the README carries a copy-paste workflow snippet. No `rules test` command: the pytest suite does that job.
 

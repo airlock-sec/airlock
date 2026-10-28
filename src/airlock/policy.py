@@ -21,6 +21,7 @@ Like `collector.py`, this is one of the two modules allowed to run `subprocess`,
 
 from __future__ import annotations
 
+import hashlib
 import tomllib
 from collections import Counter
 from collections.abc import Iterable, Mapping
@@ -733,3 +734,220 @@ def _entry_problem(entry: Suppression, by_rule: Mapping[str, Rule]) -> str | Non
     if not rule.suppressible:
         return f"rule {entry.rule} is not suppressible"
     return None
+
+
+# ---------------------------------------------------------------------------------------------
+# Manifest maintenance: `airlock manifest add` and `manifest check` (task 3.5).
+#
+# There is no TOML writer in the standard library, so the writer here is hand-written. It is
+# deliberately total: the file it emits is fully determined by the parsed `Manifest`, which is
+# what makes `add` idempotent and `parse(render(x)) == parse(x)` testable. Anything the loader
+# could not express as data (a comment inside an entry block, an unknown key) is refused rather
+# than silently dropped, because a tool that rewrites a protected file must not lose a line of it.
+# ---------------------------------------------------------------------------------------------
+
+#: Content magic a manifest entry vouches for. `ARCHITECTURE.md` 6.2 identifies Wasm by these four
+#: bytes, so an entry for any other content would claim a provenance the file cannot have.
+WASM_MAGIC = b"\x00asm"
+
+#: `add` cannot hash a file the scanner would not read. The ceiling is the collector's own shipped
+#: default, so anything `add` accepts is something `collect` will account for later.
+MAX_ARTIFACT_BYTES = BOOTSTRAP_POLICY.max_file_bytes
+
+#: Written when the repository has no manifest yet. It states the two-step flow, because the
+#: trusted base is the reason a PR cannot add its own artifact and its own entry at once.
+NEW_MANIFEST_HEADER = f"""\
+# Airlock's Wasm manifest, keyed by SHA-256 (ARCHITECTURE.md 7.7). Protected path.
+#
+# Adding an artifact is a two-step flow: land the manifest change in its own pull request first,
+# then the pull request that adds the file. Policy is read from the trusted base, so a pull
+# request carrying both fails until the manifest merge is the base.
+
+version = {SUPPORTED_POLICY_VERSION}
+"""
+
+_TOML_ESCAPES = {"\\": "\\\\", '"': '\\"', "\n": "\\n", "\r": "\\r", "\t": "\\t"}
+
+
+def _toml_string(value: str) -> str:
+    """Quote one string as a TOML basic string, escaping everything a path can contain."""
+    chars: list[str] = []
+    for char in value:
+        escaped = _TOML_ESCAPES.get(char)
+        if escaped is not None:
+            chars.append(escaped)
+        elif ord(char) < 0x20:
+            chars.append(f"\\u{ord(char):04x}")
+        else:
+            chars.append(char)
+    return '"' + "".join(chars) + '"'
+
+
+def _split_entries(text: str) -> tuple[str, list[str]]:
+    """Header lines and entry-block lines, cut at the first `[[wasm]]` table header."""
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        if line.lstrip().startswith("[[wasm"):
+            return "\n".join(lines[:index]), lines[index:]
+    return text, []
+
+
+def _refuse_losing(text: str, path: str) -> None:
+    """Refuse to rewrite a manifest whose entry region holds anything the model cannot carry.
+
+    `tomllib` discards comments, so a rewrite that kept them would have to reproduce them from
+    the parsed data, which it cannot. The fix belongs to the operator: a comment that matters is
+    a `note` field, and a misspelled key is a bug that must be fixed before the file is rewritten.
+    """
+    _, entries = _split_entries(text)
+    commented = [line for line in entries if line.lstrip().startswith("#") or "#" in line]
+    if commented:
+        raise ValueError(
+            f"{path}: the entry blocks carry comments, and the writer emits them from data only. "
+            f"Move what matters into a note field, or edit the file by hand. First such line: "
+            f"{commented[0].strip()!r}"
+        )
+
+
+def manifest_to_toml(manifest: Manifest, header: str) -> str:
+    """Render a `Manifest` as TOML, keeping the repository's own header text untouched.
+
+    The header carries the `version` line: TOML requires a top-level key before any table, so a
+    file the loader accepted has one, and `NEW_MANIFEST_HEADER` supplies it for a file that does
+    not exist yet. Entries are emitted in hash order with sorted paths, which is what makes two
+    runs on the same set produce the same bytes.
+    """
+    blocks: list[str] = [header.rstrip("\n")]
+    for entry in sorted(manifest.entries, key=lambda item: item.sha256):
+        blocks.append(
+            "[[wasm]]\n"
+            f"sha256 = {_toml_string(entry.sha256)}\n"
+            f"paths = [{', '.join(_toml_string(path) for path in sorted(entry.paths))}]\n"
+            f"origin = {_toml_string(entry.origin)}\n"
+            f"source = {_toml_string(entry.source)}\n"
+            f"build = {_toml_string(entry.build)}" + _note_line(entry.note)
+        )
+    return "\n\n".join(block for block in blocks if block.strip()) + "\n"
+
+
+def _note_line(note: str) -> str:
+    return f"\nnote = {_toml_string(note)}" if note else ""
+
+
+def artifact_entry(
+    path: str,
+    data: bytes,
+    *,
+    origin: str,
+    source: str,
+    build: str = "",
+    note: str = "",
+) -> WasmEntry:
+    """One artifact file to one manifest entry, keyed by the hash of the bytes in hand."""
+    require_repo_path(path, "artifact path")
+    if not data.startswith(WASM_MAGIC):
+        raise ValueError(
+            f"{path} does not start with the Wasm magic bytes, so no entry can vouch for it as a "
+            "Wasm artifact. A git LFS pointer is not the artifact (FR-20 covers those)"
+        )
+    if len(data) > MAX_ARTIFACT_BYTES:
+        raise ValueError(
+            f"{path} is {len(data)} bytes, over the {MAX_ARTIFACT_BYTES} byte ceiling an entry "
+            "can be written for: the scanner would skip the file it is listed against"
+        )
+    if origin == "built" and not build:
+        raise ValueError(
+            f"{path}: origin built states how the artifact is produced, so --build is required"
+        )
+    return WasmEntry(
+        sha256=hashlib.sha256(data).hexdigest(),
+        paths=(path,),
+        origin=origin,
+        source=source,
+        build=build,
+        note=note,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ManifestAdd:
+    """What `manifest add` produced: the text to write, and the two kinds of change it made."""
+
+    text: str
+    added: tuple[WasmEntry, ...]
+    extended: tuple[WasmEntry, ...]
+
+    @property
+    def unchanged(self) -> bool:
+        """True when every target was already listed at exactly this path.
+
+        Stated rather than inferred from a diff, because `add` is idempotent and a CI step that
+        runs it must be able to tell "already recorded" from "I wrote something".
+        """
+        return not self.added and not self.extended
+
+
+def manifest_add(
+    repo_root: Path,
+    targets: Iterable[str],
+    *,
+    manifest_path: str = MANIFEST_FILENAME,
+    origin: str,
+    source: str,
+    build: str = "",
+    note: str = "",
+) -> ManifestAdd:
+    """Add each target to the manifest in the working tree and return the new text.
+
+    The file is parsed with the same loader the scan uses, so `add` cannot write a manifest the
+    scan would refuse to read. Provenance is stated once: when a hash is already listed, the new
+    path joins that entry and the recorded `origin`, `source` and `build` stay as they were
+    reviewed. Nothing here stages or commits anything; the operator reviews the diff, because
+    this is a protected path.
+    """
+    require_repo_path(manifest_path, "manifest path")
+    existing = _working_text(repo_root, manifest_path)
+    if existing is None:
+        header, manifest = NEW_MANIFEST_HEADER, Manifest()
+    else:
+        _refuse_losing(existing, manifest_path)
+        loaded, findings = manifest_from_toml(existing, path=manifest_path, source="working tree")
+        if findings:
+            raise ValueError(
+                f"{manifest_path}: "
+                + "; ".join(finding.message for finding in findings)
+                + " - fix those keys first, because the rewrite emits from parsed data only"
+            )
+        header, _ = _split_entries(existing)
+        manifest = loaded
+
+    entries: dict[str, WasmEntry] = {entry.sha256: entry for entry in manifest.entries}
+    added: list[WasmEntry] = []
+    extended: list[WasmEntry] = []
+    for target in targets:
+        data = _artifact_bytes(repo_root, target)
+        entry = artifact_entry(target, data, origin=origin, source=source, build=build, note=note)
+        known = entries.get(entry.sha256)
+        if known is None:
+            entries[entry.sha256] = entry
+            added.append(entry)
+        elif target not in known.paths:
+            entries[entry.sha256] = replace(known, paths=(*known.paths, target))
+            extended.append(entries[entry.sha256])
+
+    written = Manifest(version=manifest.version, entries=tuple(entries.values()))
+    if not added and not extended and existing is not None:
+        # Nothing changed, so nothing is rewritten: an idempotent add must not touch the file's
+        # mtime or produce an empty diff for the operator to review.
+        return ManifestAdd(text=existing, added=(), extended=())
+    return ManifestAdd(
+        text=manifest_to_toml(written, header), added=tuple(added), extended=tuple(extended)
+    )
+
+
+def _artifact_bytes(repo_root: Path, target: str) -> bytes:
+    require_repo_path(target, "artifact path")
+    try:
+        return (repo_root / target).read_bytes()
+    except OSError as exc:
+        raise ValueError(f"{target} could not be read: {type(exc).__name__}") from exc

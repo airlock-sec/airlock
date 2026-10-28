@@ -46,6 +46,20 @@ The trust models a scan really depends on are `--event pull_request --base <sha>
 `--event push --before <sha>`, which read policy from the commit the change started at; both need
 a checkout with history, so `actions/checkout` has to run with `fetch-depth: 0`.
 
+If the repository commits Wasm artifacts, record each one and then verify the tree:
+
+```bash
+PYTHONPATH=src python3 -m airlock manifest add target/*/*.wasm \
+  --origin built --source contracts/counter \
+  --build "cargo build --release --target wasm32-unknown-unknown"
+PYTHONPATH=src python3 -m airlock manifest check
+```
+
+`add` writes `wasm-manifest.toml` and stages nothing: land that diff on its own before the pull
+request that adds the files, which is the flow the trusted base assumes (FR-06). `check` reports
+only the artifact findings, so an unlisted or swapped artifact fails the gate and a stale entry
+does not.
+
 The Action shape below is planned (tasks 4.1 and 4.2) and is not usable yet:
 
 ```yaml
