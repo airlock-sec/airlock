@@ -77,7 +77,7 @@ airlock/
     CODEOWNERS                     # protected paths
     ISSUE_TEMPLATE/                # false positive, and missed detection or coverage gap
     pull_request_template.md       # includes the ROADMAP checkbox
-    workflows/                     # tests, lint, scorecard, scan (dogfood), roadmap-check, release
+    workflows/                     # ci.yml and roadmap-check.yml exist (1.5, 1.9); scorecard, scan, release do not
 ```
 
 Removed on purpose (do not recreate without a roadmap decision): `jsmask.py`, `wasmparse.py`, `detectors/deploy_gate.py`, `schema/`, `templates/`, an `init` command, a `rules test` command. See `ARCHITECTURE.md` 16.4.

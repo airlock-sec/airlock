@@ -1,0 +1,47 @@
+# Tests, lint, types and the self-scan (task 1.5).
+#
+# Both actions are pinned by commit SHA, with the tag that SHA was resolved from in the comment.
+# A SHA pin is only honest if somebody reads the diff before moving it, and the SHA in a comment
+# is the only way to know what was reviewed (AGENTS.md 9). Dev requirements float until Dependabot
+# lands (1.6); nothing here installs a runtime dependency, because the tool has none.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+
+      - name: Install the package and the dev tools
+        run: |
+          python -m pip install --quiet . pytest ruff mypy
+
+      - name: Tests
+        run: python -m pytest
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Format
+        run: ruff format --check .
+
+      - name: Types
+        run: mypy src
+
+      # The installed console script is the same one a consumer gets, so this step is also the
+      # check that the wheel carries its rule data (5.7). It must exit 0: a HIGH finding in this
+      # repository's own tree fails the build rather than the scan.
+      - name: Self-scan
+        run: airlock scan --mode full .
