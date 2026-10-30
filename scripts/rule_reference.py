@@ -5,9 +5,9 @@ Every rule in `rules/builtin/*.toml` already carries its own `id`, `title`, `sev
 `suppressible`, `roles`, `detector`, optional `pattern`, `rationale`, and `tests` fixture pair.
 Hand-maintaining a second copy in `README.md` drifts the moment a rule lands or changes.
 
-This script loads the rule files through `airlock.rules.load_rules` and `load_rule_file`
-so any rule the scanner refuses to load cannot appear in the generated reference, and renders
-`RULES.md` grouped by rule family (`rules/builtin/<family>.toml`).
+This script loads the rule files through `airlock.rules.load_rules` so any rule the scanner
+refuses to load cannot appear in the generated reference, and renders `RULES.md` grouped by rule
+family (`rules/builtin/<family>.toml`).
 
 Usage:
     scripts/rule_reference.py [--check] [--rules-dir DIR] [--roles FILE] [output-path]
@@ -19,7 +19,9 @@ rule data, and prints the reference that would be right.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
+import tomllib
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,7 +34,7 @@ if str(SRC_DIR) not in sys.path:
 from airlock import roles  # noqa: E402
 from airlock.detectors import DETECTOR_NAMES  # noqa: E402
 from airlock.model import Rule, Severity  # noqa: E402
-from airlock.rules import load_role_globs, load_rule_file, load_rules  # noqa: E402
+from airlock.rules import load_role_globs, load_rules  # noqa: E402
 
 DEFAULT_RULES_DIR = REPO_ROOT / "rules" / "builtin"
 DEFAULT_ROLES_FILE = REPO_ROOT / "rules" / "roles.toml"
@@ -48,15 +50,21 @@ class FamilyRules:
     rules: tuple[Rule, ...]
 
 
+def heading_slug(heading_line: str) -> str:
+    """Compute the GitHub Markdown anchor slug for a heading line (`# ...`)."""
+    text = heading_line.lstrip("#").strip().replace("`", "").lower()
+    text = re.sub(r"[^\w\s-]", "", text)
+    return text.replace(" ", "-")
+
+
 def load_families(
     rules_dir: Path = DEFAULT_RULES_DIR,
     roles_file: Path = DEFAULT_ROLES_FILE,
 ) -> tuple[FamilyRules, ...]:
-    """Validate the full rule directory through `airlock.rules.load_rules` and group by file."""
+    """Validate the rule directory once through `airlock.rules.load_rules` and group by family."""
     role_globs = load_role_globs(roles_file)
     known_role_names = sorted(roles.known_roles(role_globs))
-    # Cross-check duplicate IDs, unknown detectors, and unknown roles with the scanner's own loader.
-    load_rules(
+    validated = load_rules(
         rules_dir,
         known_detectors=DETECTOR_NAMES,
         known_roles=known_role_names,
@@ -64,7 +72,15 @@ def load_families(
 
     families: list[FamilyRules] = []
     for path in sorted(rules_dir.glob("*.toml")):
-        file_rules = tuple(sorted(load_rule_file(path), key=lambda item: item.id))
+        raw = tomllib.loads(path.read_text(encoding="utf-8"))
+        entries = raw.get("rule", [])
+        file_ids = {
+            entry["id"]
+            for entry in entries
+            if isinstance(entry, dict) and isinstance(entry.get("id"), str)
+        }
+        # Preserve the exact rule ordering produced by `airlock.rules.load_rules`.
+        file_rules = tuple(rule for rule in validated if rule.id in file_ids)
         families.append(
             FamilyRules(
                 name=path.stem,
@@ -75,12 +91,20 @@ def load_families(
     return tuple(families)
 
 
+def _format_fixtures_summary(rule: Rule) -> str:
+    if rule.tests.positive == rule.tests.negative:
+        return f"`{rule.tests.positive}` (+/-)"
+    return f"`{rule.tests.positive}` / `{rule.tests.negative}`"
+
+
 def render_rule(rule: Rule) -> str:
     """Render one `Rule` entry, distinguishing pattern rules from code-only detector rules."""
     suppressible = "yes" if rule.suppressible else "no"
     role_list = ", ".join(f"`{role}`" for role in rule.roles)
     lines = [
-        f"### `{rule.id}` — {rule.title}",
+        f"### `{rule.id}`",
+        "",
+        f"**{rule.title}**",
         "",
         f"- **Severity:** `{rule.severity.name}`",
         f"- **Suppressible:** `{suppressible}`",
@@ -132,9 +156,10 @@ def render_reference(families: tuple[FamilyRules, ...]) -> str:
         for rule in family.rules:
             supp = "yes" if rule.suppressible else "no"
             roles_cell = ", ".join(f"`{role}`" for role in rule.roles)
-            fixtures_cell = f"`{rule.tests.positive}` / `{rule.tests.negative}`"
+            fixtures_cell = _format_fixtures_summary(rule)
+            slug = heading_slug(f"### `{rule.id}`")
             lines.append(
-                f"| [`{rule.id}`](#{rule.id}) | `{family.name}` | {rule.severity.name} | "
+                f"| [`{rule.id}`](#{slug}) | `{family.name}` | {rule.severity.name} | "
                 f"{supp} | `{rule.detector}` | {roles_cell} | {fixtures_cell} |"
             )
 

@@ -175,6 +175,7 @@ model  <-  fingerprint, roles, rules  <-  collector, policy  <-  detectors  <-  
 | `AGENTS.md`, `CLAUDE.md` | Agent instructions | Workflow, commands or boundaries change |
 | `project_structure.md` | This map | A file or directory is added, moved or removed |
 | `README.md`, `CONTRIBUTING.md` | Users and contributors | User-visible behavior or process changes |
+| `RULES.md` | Generated Markdown rule reference: summary table and per-family entries | A rule in `rules/builtin/*.toml` changes; regenerate with `python scripts/rule_reference.py` |
 | `SUPPORT.md` | What a contributor runs before opening a PR | A CI command, a protected path or a rejection rule changes |
 | `site/` | Published documentation: overview, usage, generated rule reference, trust model | A rule, command, severity or trust statement changes; regenerate the derived blocks |
 | `docs/wave/` | Program readiness: issue batch, repo settings, application draft | An issue's scope changes, or a setting in this batch is applied |
@@ -183,6 +184,6 @@ If a code change contradicts a doc, fix the doc in the same PR. If a doc stateme
 
 ## 8. Generated and derived files
 
-- `RULES.md` is generated from `rules/builtin/*.toml` by `scripts/rule_reference.py` through `airlock.rules.load_rules` (task 5.2). Do not edit generated output by hand; `python scripts/rule_reference.py --check` runs in CI and fails a stale copy.
+- `RULES.md` is generated from `rules/builtin/*.toml` by `scripts/rule_reference.py` through `airlock.rules.load_rules` (task 5.2, decision D-10). Do not edit generated output by hand; `python scripts/rule_reference.py --check` runs inside the unit suite (`tests/unit/test_rule_reference.py`) in the `checks` CI job and fails a stale copy.
 - The site's rule reference and hero counts are generated from `rules/builtin/*.toml` by `scripts/build_site.py`, between the `RULES` and `TELEMETRY` markers; `site/data/rules.json` is written at the same time. Run the script after a rule change and commit the result. `--check` fails a stale page, and the Pages workflow and the unit suite both run it (8.6).
 - Three regions of `ROADMAP.md` are generated: the progress table from the task lines, the changelog in section 9 from `docs/changes/`, and the `Last updated` line from the newest record. Run `python scripts/roadmap_progress.py` after ticking a task or adding a record, and `--check` fails any region that disagrees with its source. Do not edit those regions by hand; the task lines and the records are what you edit.

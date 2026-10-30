@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import inspect
+import json
+import re
 import shutil
 import subprocess
 import sys
@@ -21,6 +24,7 @@ README_MD = REPO_ROOT / "README.md"
 CI_YML = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 RULES_DIR = REPO_ROOT / "rules" / "builtin"
 ROLES_FILE = REPO_ROOT / "rules" / "roles.toml"
+SITE_RULES_JSON = REPO_ROOT / "site" / "data" / "rules.json"
 
 
 def shipped_rules() -> tuple[Rule, ...]:
@@ -64,7 +68,7 @@ class TestRuleReferenceGenerator:
 
         for item in rules:
             suppressible = "yes" if item.suppressible else "no"
-            assert f"### `{item.id}` — {item.title}" in rendered
+            assert f"### `{item.id}`\n\n**{item.title}**" in rendered
             assert f"- **Severity:** `{item.severity.name}`" in rendered
             assert f"- **Suppressible:** `{suppressible}`" in rendered
             assert f"- **Detector:** `{item.detector}`" in rendered
@@ -75,6 +79,49 @@ class TestRuleReferenceGenerator:
                 f"negative `{item.tests.negative}`"
             ) in rendered
             assert item.rationale in rendered
+
+    def test_every_internal_anchor_in_generated_reference_resolves_to_a_heading_slug(
+        self,
+    ) -> None:
+        rendered = RULES_MD.read_text(encoding="utf-8")
+        heading_slugs = {
+            rule_reference.heading_slug(line)
+            for line in rendered.splitlines()
+            if line.startswith("#")
+        }
+        anchors = re.findall(r"\]\(#([^)]+)\)", rendered)
+        assert len(anchors) == len(shipped_rules())
+        missing = [anchor for anchor in anchors if anchor not in heading_slugs]
+        assert not missing, f"dead anchor(s) in RULES.md: {missing}"
+
+    def test_rule_reference_and_site_rules_json_agree_on_every_rule(self) -> None:
+        families = rule_reference.load_families()
+        ref_by_id = {
+            rule.id: (
+                family.name,
+                rule.title,
+                rule.severity.name,
+                rule.suppressible,
+                rule.detector,
+                list(rule.roles),
+            )
+            for family in families
+            for rule in family.rules
+        }
+        site_payload = json.loads(SITE_RULES_JSON.read_text(encoding="utf-8"))
+        site_rules = site_payload["rules"]
+        site_by_id = {
+            entry["id"]: (
+                entry["family"],
+                entry["title"],
+                entry["severity"].upper(),
+                entry["suppressible"],
+                entry["detector"],
+                entry["roles"],
+            )
+            for entry in site_rules
+        }
+        assert ref_by_id == site_by_id
 
     def test_render_rule_distinguishes_pattern_rule_from_code_detector_rule(self) -> None:
         with_pattern = shipped_rule("pat-decode-eval")
@@ -148,8 +195,12 @@ class TestRuleReferenceGenerator:
         assert "[`RULES.md`](RULES.md)" in readme
         assert "| Rule | Severity | Shape |" not in readme
 
-    def test_ci_workflow_runs_the_rule_reference_check(self) -> None:
+    def test_ci_checks_job_runs_pytest_and_this_suite_gates_the_reference(self) -> None:
         workflow = CI_YML.read_text(encoding="utf-8")
         assert "checks:" in workflow
         assert "run: python -m pytest" in workflow
-        assert SCRIPT.is_file()
+        gate_source = inspect.getsource(
+            TestRuleReferenceGenerator.test_the_committed_rule_reference_is_current
+        )
+        assert 'run_cli("--check")' in gate_source
+        assert "result.returncode == 0" in gate_source
