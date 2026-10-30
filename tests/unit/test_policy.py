@@ -12,6 +12,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+from tests.fixtures import assemble
 
 from airlock import policy
 from airlock.fingerprint import PendingFinding, number_occurrences
@@ -59,7 +60,7 @@ fingerprint = "{ZERO_FINGERPRINT}"
 reason      = "trust me"
 """
 
-PAYLOAD = "eval(Buffer.from(process.env.P, 'base64'))\n"
+PAYLOAD = f"{assemble('ev', 'al')}({assemble('Buf', 'fer.from')}(process.env.P, 'base64'))\n"
 
 
 def git(root: Path, *args: str) -> str:

@@ -26,13 +26,13 @@ installer does not exist yet.
 
 | | |
 |---|---|
-| Works today | `airlock scan` in console, GitHub-annotation and JSON output, plus a step summary; `airlock manifest add` and `manifest check`; 12 rules across two detectors; 475 tests in CI |
-| Not built yet | the composite GitHub Action (`action.yml`), the Soroban-side detectors, the rules ported from the script this replaces, SARIF output |
+| Works today | `airlock scan` in console, GitHub-annotation and JSON output, plus a step summary; `airlock manifest add` and `manifest check`; 16 rules across two code detectors and the pattern engine; 555 tests in CI |
+| Not built yet | the composite GitHub Action (`action.yml`), the Soroban-side detectors, the workflow and editor-auto-run half of the rules ported from the script this replaces, SARIF output |
 | Usable now | as a CLI, from a checkout or an installed wheel, on any git repository |
 
 There is no `uses: airlock-sec/airlock@…` line to copy into a workflow, and no package index
 release. Do not treat a scan from this build as complete coverage: a clean report means nothing
-matched the twelve rules that ship, which is a narrower claim than "no compromise found". Track
+matched the sixteen rules that ship, which is a narrower claim than "no compromise found". Track
 what exists in [ROADMAP.md](ROADMAP.md) and read the design in
 [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -50,7 +50,8 @@ at, judge a change by the policy that existed before the change, and treat rules
 
 ## What it checks
 
-Two detectors are registered, and the rule data lives in [`rules/builtin/`](rules/builtin).
+Two code detectors are registered, and the rule data lives in [`rules/builtin/`](rules/builtin):
+one file per family, plus the engine's own line-matching path for `detector = "pattern"` rules.
 
 **`config_role`** targets the tooling configs a Soroban frontend ships (`postcss.config.*`,
 `tailwind.config.*`, `next.config.*`, `eslint.config.*`, `babel.config.*`) and editor auto-run
@@ -78,13 +79,27 @@ that was not built from the reviewed source is named.
 | `wasm-manifest-stale` | WARN | an entry whose file is gone |
 | `wasm-archive-skipped` | WARN | an artifact inside an archive, which the scanner does not open |
 
+**`builtin_patterns`** is rule data rather than a code detector: the text-side shapes the old
+script matched, run line by line over every role that is code, so a payload in a `.py` file, in an
+extensionless file or under `vendor/` is read instead of waved past. Prose is out of scope by the
+`roles` lists, not by a skip.
+
+| Rule | Severity | Shape |
+|---|---|---|
+| `pat-decode-eval` | HIGH | a decoder feeding `eval`, `Function`, `setTimeout` or a similar evaluator |
+| `pat-invisible-unicode` | HIGH | a zero-width or direction-flipping character inside code |
+| `pat-exfil-endpoint` | WARN | a paste site, webhook, tunnel or out-of-band callback host in code |
+| `pat-obfuscator-id` | WARN | the `_0x` plus hex identifier grammar an obfuscator emits |
+
 The collector adds the state findings on top: `nul-in-text`, `non-utf8-text`, `skipped-oversize`,
 `skipped-unreadable`, `skipped-symlink`, `skipped-unmerged`, `submodule-present`. Every one of them
 is a finding, because a file that was not read must not look the same as a file that was clean.
 
-The Stellar-side detectors (`soroban_profile`, `stellar_seed`, `cargo_vectors`) and the rules
-ported from the old script are designed in [ARCHITECTURE.md](ARCHITECTURE.md) 9 and not
-implemented: those modules carry docstrings and no code.
+The Stellar-side detectors (`soroban_profile`, `stellar_seed`, `cargo_vectors`) are designed in
+[ARCHITECTURE.md](ARCHITECTURE.md) 9 and not implemented: those modules carry docstrings and no
+code. Of the rules ported from the old script, the four text-side shapes above ship now; the CI
+surface ones (workflow secret dump, `pull_request_target` checkout, install-hook droppers, editor
+auto-run payloads) need a `workflow` role first and are task 3.6's remaining slice.
 
 ## What it does not do
 

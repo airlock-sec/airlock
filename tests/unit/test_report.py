@@ -12,6 +12,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from tests.fixtures import assemble
 
 from airlock.model import (
     EXIT_FINDINGS,
@@ -51,6 +52,9 @@ def _fence_states(text: str) -> list[bool]:
 
 
 DIGEST = "sha256:" + "a" * 64
+# Built from fragments at call time (`AGENTS.md` 4): the `pat-` rules read every `.py` file in this
+# repository as role `source`, so a committed literal of this line would be a finding on itself.
+EVIDENCE = f"{assemble('ev', 'al')}({assemble('Buf', 'fer.from')}(a, 'base64'))"
 
 
 def finding(
@@ -59,7 +63,7 @@ def finding(
     path: str = "postcss.config.mjs",
     line: int = 7,
     message: str = "remote code execution capability in a tooling config",
-    evidence: str | None = "eval(Buffer.from(a, 'base64'))",
+    evidence: str | None = EVIDENCE,
     **kwargs: object,
 ) -> Finding:
     return Finding(
