@@ -16,7 +16,7 @@ Every rule in `rules/builtin/config_role.toml` that judges what a build file can
 A `package.json` resolves to `package-manifest` plus the `source` fallback, so none of those six rules read it. What reads it instead is the pair in `ci_surface.toml`: `pat-lifecycle-fetch` (WARN, line 66) and `pat-lifecycle-exec` (HIGH, line 82), and that pair requires the *same line* to both fetch and hand over (`detectors/ci_surface.py:170-190`). So this line produces no HIGH anywhere:
 
 ```json
-{ "scripts": { "postinstall": "node -e \"require('child_process').execFileSync(process.env.HOST)\"" } }
+{ "scripts": { "postinstall": "node -e \"require('child_process').execFileSync('__HOST__')\"" } }
 ```
 
 There is no downloader verb, so `pat-lifecycle-fetch` misses. There is no tooling config role, so `cfg-process-spawn` and `cfg-dynamic-code` never see the line. The manifest is the file npm executes on every install of the package, and the attack the config family was written to catch arrives in it instead.
