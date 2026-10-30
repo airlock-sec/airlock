@@ -1,0 +1,100 @@
+# `ci_surface` rules: the shapes the CI layer hands an attacker (task 3.6, ARCHITECTURE.md 9.6).
+#
+# These rules run on the three roles added for them, `workflow`, `package-manifest` and
+# `install-hook`, plus `editor-autorun` for the editor settings case. The role is what makes the
+# slice possible: a workflow file used to resolve only to `source`, so a rule that read workflow
+# grammar would have read every `.js` and `.py` file in the repository instead, and an unreadable
+# workflow was a WARN rather than a HIGH.
+#
+# Patterns use TOML multi-line literal strings, because a regex needs both quote characters and
+# backslashes and a literal string is the only form that keeps them as written.
+#
+# Three rules are decided in code (`detector = "builtin:ci_surface"`) and carry no pattern, because
+# each one has to hold two conditions at once: a privileged trigger plus a head checkout, a secret
+# interpolation plus a display verb, a fetch plus what the fetch is handed to. None of them is a
+# line-length hazard, and each would be a backtracking hazard as one regex: `curl.*\|\s*bash` is
+# quadratic on a 20,000 character line, because `.*` restarts at every column. In code the two
+# halves are separate linear searches, which is also how `config_role` handles its spawn tiers.
+#
+# No comment or string masking here either (ADR-013). A YAML comment that spells out
+# `pull_request_target` with a head `ref` is a match by design, and the negative fixtures are near
+# misses rather than unrelated files.
+#
+# Every rule here is suppressible, unlike `cfg-dynamic-code` and `cfg-network-exec`. The reasoning
+# is the precedent set by `cfg-process-spawn`: its dropper tier is also HIGH and also suppressible,
+# because a maintainer may want to accept a known fetch-and-run with a written reason instead of
+# being locked out of their own repository. Non-suppressibility stays with the shapes that have no
+# legitimate reading at all.
+#
+# `cfg-long-line` does not name these roles and is out of this slice's scope. It still accounts for
+# every over-cap line in them, because `rules.cap_findings` runs on any entry that has text, and the
+# extension fallback (`source` for a workflow, `other` for a hook) keeps the text-side family
+# reading these files too.
+
+[[rule]]
+id = "pat-privileged-trigger"
+title = "Workflow trigger that runs base-context code with a write token"
+roles = ["workflow"]
+detector = "pattern"
+severity = "warn"
+suppressible = true
+rationale = "`pull_request_target` runs in the base repository with a writable token while the code it runs came from an outside fork. The trigger is not an attack on its own, so it is a WARN that tells a reviewer which files to read; what makes it fatal is the checkout of the head, which is the rule below. `workflow_run` and `issue_comment` are deliberately not in this pattern: both are real vectors and neither is the reported shape, so naming them here would cost coverage in false positives instead of buying it."
+pattern = { kind = "regex", value = '''\bpull_request_target\b''' }
+tests = { positive = "ci_privileged_trigger", negative = "ci_privileged_trigger" }
+
+[[rule]]
+id = "pat-secret-dump"
+title = "Secret interpolated into something that displays or writes it"
+roles = ["workflow"]
+detector = "builtin:ci_surface"
+severity = "high"
+suppressible = true
+rationale = "`${{ secrets.X }}` in a `run:` line reaches the job log, where it stays readable to anyone who can see the artifact, and into `GITHUB_ENV`, where every later step inherits it. Passing a secret to a step through `env:` or `with:` is not this rule: that is how a workflow uses a secret, and it is the negative case. A line that masks the value first (`::add-mask::`) is the one echo that is deliberate hygiene."
+tests = { positive = "ci_secret_dump", negative = "ci_secret_dump" }
+
+[[rule]]
+id = "pat-ptr-head-checkout"
+title = "Privileged trigger combined with a checkout of the pull request head"
+roles = ["workflow"]
+detector = "builtin:ci_surface"
+severity = "high"
+suppressible = true
+rationale = "This is the combination that turns a fork pull request into code execution with a write token: the trigger gives the base context and permissions, and the head ref gives the attacker's tree to run. A `pull_request` trigger with the same checkout is reviewed code, and a `pull_request_target` that leaves the default base ref is the safe form, so the rule needs the trigger, a head ref and a checkout step in one file. `ARCHITECTURE.md` 11 worries about exactly this class of weakness in the design document itself."
+tests = { positive = "ci_ptr_head_checkout", negative = "ci_ptr_head_checkout" }
+
+[[rule]]
+id = "pat-lifecycle-fetch"
+title = "Install hook or lifecycle script reaches the network"
+roles = ["package-manifest", "install-hook"]
+detector = "pattern"
+severity = "warn"
+suppressible = true
+rationale = "A `postinstall` script and a commit hook both run without a developer choosing them, so a downloader named in one is a payload server the reviewer cannot see in a lockfile. The bare host name stays out of this: a `repository.url` in the same manifest is not a fetch, which is why the pattern asks for a client verb or an install-from-URL argument rather than any `https://` text."
+pattern = { kind = "regex", value = '''(?x)
+  \b(?:curl|wget)\b
+  | \bInvoke-(?:WebRequest|RestMethod)\b
+  | \bgit\s+(?:clone|fetch|pull|submodule\s+update)\b
+  | \b(?:npm|pnpm|yarn)\s+(?:install|i|add)\s+["'`]?(?:git\+)?(?:https?://|git://|ssh://)
+''' }
+tests = { positive = "ci_lifecycle_fetch", negative = "ci_lifecycle_fetch" }
+
+[[rule]]
+id = "pat-lifecycle-exec"
+title = "Lifecycle script or hook runs what it fetched"
+roles = ["package-manifest", "install-hook"]
+detector = "builtin:ci_surface"
+severity = "high"
+suppressible = true
+rationale = "The fetch rule becomes this one when the same line also hands the result to an interpreter or a shell, which is the PolinRider dropper shape: the server chooses the payload after install, so nothing in the repository or the lockfile describes what runs. An interpreter named without a fetch is a build step, and a fetch without an interpreter is the WARN above."
+tests = { positive = "ci_lifecycle_exec", negative = "ci_lifecycle_exec" }
+
+[[rule]]
+id = "pat-editor-command-path"
+title = "Editor setting that names an interpreter or executable"
+roles = ["editor-autorun"]
+detector = "pattern"
+severity = "warn"
+suppressible = true
+rationale = "`.vscode/settings.json` is the second half of the editor auto-run surface: `tasks.json` says what can run, and these keys say what the editor runs by itself when a folder opens. A path to an interpreter or a compiler directory is loaded by the extension host, so a planted one needs no user action. Preferences with nothing executable behind them are not reported, which is what keeps this a WARN about a handful of key names rather than about the file."
+pattern = { kind = "regex", value = '''"(?:[\w.-]+\.)?(?:defaultInterpreterPath|executablePath|execPath|binPath|interpreterPath|pythonPath|nodeExecutable|alternateTools|defaultProfile|shellArgs|tsdk)"\s*:''' }
+tests = { positive = "ci_editor_command_path", negative = "ci_editor_command_path" }

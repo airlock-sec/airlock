@@ -94,10 +94,11 @@ def assemble(*fragments: str) -> str:
 
 def builders() -> Mapping[str, Builder]:
     """Every builder the suite knows, by the name a rule file uses."""
-    from . import builtin_patterns, config_role, wasm_manifest
+    from . import builtin_patterns, ci_surface, config_role, wasm_manifest
 
     return {
         **builtin_patterns.BUILDERS,
+        **ci_surface.BUILDERS,
         **config_role.BUILDERS,
         **wasm_manifest.BUILDERS,
     }

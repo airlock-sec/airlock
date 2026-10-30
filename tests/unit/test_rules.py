@@ -203,7 +203,13 @@ class TestRolesFile:
 
     def test_the_shipped_roles_file_loads(self) -> None:
         globs = load_role_globs(Path(__file__).resolve().parents[2] / "rules" / "roles.toml")
-        assert set(globs) == {"tooling-config", "editor-autorun"}
+        assert set(globs) == {
+            "tooling-config",
+            "editor-autorun",
+            "workflow",
+            "package-manifest",
+            "install-hook",
+        }
 
     def test_a_role_with_no_globs_is_a_config_error(self, tmp_path: Path) -> None:
         path = tmp_path / "roles.toml"

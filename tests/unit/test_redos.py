@@ -30,7 +30,7 @@ from queue import Empty
 import pytest
 
 from airlock import fingerprint, runner
-from airlock.detectors import DETECTOR_NAMES, config_role
+from airlock.detectors import DETECTOR_NAMES, ci_surface, config_role
 from airlock.model import EMPTY_MANIFEST, FileEntry, Policy, Rule, ScanContext
 from airlock.roles import known_roles
 from airlock.rules import load_role_globs, load_rules
@@ -60,8 +60,15 @@ CANARY_PATTERN = r"(a+)+b"
 CANARY_BAIT = "a" * 22
 
 #: Regexes that reach attacker text and are not rule data: the spawn tiers, the computed
-#: `require()`, and evidence normalization before hashing.
+#: `require()`, the CI-surface pairings, and evidence normalization before hashing. A code rule's
+#: matcher is exactly as much a ReDoS surface as a pattern rule's, and it is not in the rule data,
+#: so nothing but this list would ever time it.
 CODE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("ci_surface._SECRETS_INTERP", ci_surface._SECRETS_INTERP),
+    ("ci_surface._DISPLAY_VERB", ci_surface._DISPLAY_VERB),
+    ("ci_surface._HEAD_REF", ci_surface._HEAD_REF),
+    ("ci_surface._CHECKOUT_STEP", ci_surface._CHECKOUT_STEP),
+    ("ci_surface._EXEC_TARGET", ci_surface._EXEC_TARGET),
     ("config_role._DANGEROUS_COMMAND", config_role._DANGEROUS_COMMAND),
     ("config_role._NON_LITERAL_REQUIRE", config_role._NON_LITERAL_REQUIRE),
     ("fingerprint._WS_RE", fingerprint._WS_RE),

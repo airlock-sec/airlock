@@ -48,6 +48,7 @@ airlock/
       config_role.py               # P0                                                                      (3.1)
       wasm_manifest.py             # P0                                                                      (3.4)
       builtin_patterns.py          # stub; its rules are data run by the engine, not a code detector          (3.6, 3.7)
+      ci_surface.py                # workflow, manifest and hook pairings that need two conditions              (3.6)
       soroban_profile.py           # P1                                                                      (6.1)
       stellar_seed.py              # planned offline plaintext tracked-file seeds, D-06 KEEP (P1)            (6.3)
       cargo_vectors.py             # P1                                                                      (6.4)

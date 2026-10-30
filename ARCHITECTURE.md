@@ -115,7 +115,7 @@ Removed since v0.1 of this document: `jsmask.py`, `wasmparse.py`, `detectors/dep
 - Reads each file once: size, first 4096 bytes and (lazily) the full bytes and SHA-256.
 - Decoding: honor a UTF-8 or UTF-16 BOM; otherwise decode UTF-8 strictly. Undecodable text yields `non-utf8-text` (HIGH in sensitive roles, WARN elsewhere). A NUL byte after BOM handling yields `nul-in-text`.
 - Never follows symlinks; a symlink is recorded as `skipped-symlink` (INFO) and its target path is not read.
-- Enforces `max_file_bytes` (default 5,000,000). Oversized files yield `skipped-oversize`: WARN generally, HIGH for roles `tooling-config` and `editor-autorun`.
+- Enforces `max_file_bytes` (default 5,000,000). Oversized files yield `skipped-oversize`: WARN generally, HIGH for the roles in `SENSITIVE_ROLES` (`tooling-config`, `editor-autorun`, `workflow`, `package-manifest`, `install-hook`).
 - Enforces `line_cap` (default 20,000 characters). Lines over the cap are not passed to regex rules and yield `cfg-long-line`.
 - Startup checks: Python 3.11 or newer, `git` on PATH, repository readable (including the git `safe.directory` case). Failure exits 2 with a plain message.
 
@@ -286,10 +286,26 @@ globs = ["**/postcss.config.*", "**/tailwind.config.*", "**/next.config.*",
          "**/eslint.config.*", "**/babel.config.*"]
 
 [roles.editor-autorun]
-globs = ["**/.vscode/tasks.json"]
+globs = ["**/.vscode/tasks.json", "**/.vscode/settings.json"]
+
+[roles.workflow]
+globs = ["**/.github/workflows/*.yml", "**/.github/workflows/*.yaml"]
+
+[roles.package-manifest]
+globs = ["**/package.json"]
+
+[roles.install-hook]
+globs = ["**/.husky/**", "**/.githooks/**"]
 ```
 
 Wasm and native binaries are resolved by content magic, not globs. The `tooling-config` defaults mirror the files named in the OpenSourceMalware reports. [Verified] Extra configs (`vite`, `webpack`, `jest`, and others) are P1 and need false-positive review. [Unverified]
+
+The three added here, together with `editor-autorun`'s new settings file, are the CI surface (9.7).
+Each names a path something executes with credentials attached, which is the bar for joining
+`SENSITIVE_ROLES` and therefore for an incomplete read of it being a HIGH rather than a WARN. The
+workflow glob spans the tree so a nested copy is still read, though only the root
+`.github/workflows` is the path GitHub executes; the role's bar is the root path and the nested copy
+is a file worth reporting, not a claim that it runs.
 
 ### 7.6 Policy file with suppressions
 
@@ -411,7 +427,7 @@ The invariant this enforces is that detector code cannot see less than it needs 
 | File unreadable | `skipped-unreadable` (HIGH) |
 | NUL byte in text after BOM handling | `nul-in-text` (HIGH) |
 | Undecodable text | `non-utf8-text` (HIGH sensitive roles, else WARN) |
-| Line over `line_cap` | `cfg-long-line` (HIGH in `tooling-config`, else WARN); regex skipped for that line |
+| Line over `line_cap` | `cfg-long-line` (HIGH in a `SENSITIVE_ROLES` file, else WARN); regex skipped for that line |
 | Symlink | `skipped-symlink` (INFO) |
 | Unmerged index entry (merge conflict) | `skipped-unmerged` (HIGH for sensitive roles, else WARN); no version of the file is read |
 | Submodule | `submodule-present` (INFO) |
@@ -561,13 +577,84 @@ interpreter per pattern; the suite's own gate is `tests/unit/test_redos.py` agai
 `pat-invisible-unicode` 1.0 ms, all on the harness's repeated `[a-z]` line. CI runs 3.11 and asserts
 the same bound.
 
-Not yet ported from the list above: the CI surface (workflow secret dump, `pull_request_target`
-checkout with an untrusted head, install-hook droppers, VS Code auto-run payloads) plus
-`build.rs` network, native-binary and blockchain C2 shapes. The workflow rules need a `workflow`
-role that `rules/roles.toml` does not define yet, so a pattern naming one would be rejected by the
-loader's role cross-check (`ARCHITECTURE.md` 6.4). That is task 3.6's second slice.
+Ported since, as task 3.6's second slice, in its own rule file and its own detector, because three of
+the shapes need two conditions at once: see 9.7.
 
-### 9.7 Deferred designs
+Not yet ported from the list above: credential harvesting, blockchain C2 shapes, `build.rs` network
+and the native-binary rules. The last two belong with the Cargo work in 6.4; credential harvesting
+and blockchain C2 have no rule, fixture or decision behind them yet, and are not guessed at here.
+
+### 9.7 `ci_surface`
+
+Applies to the three roles added for it (`workflow`, `package-manifest`, `install-hook`) plus
+`editor-autorun`, which since this slice also resolves `.vscode/settings.json`. Raw text, no masking
+(ADR-013), and no line past `line_cap` reaches any matcher in the family, including this detector's
+own. There is still no YAML parser (ADR-007), so every rule here is line- or file-scoped over text.
+
+Three rules are engine patterns in `rules/builtin/ci_surface.toml`: `pat-privileged-trigger` (WARN,
+which names `pull_request_target` as a fact, because that trigger is how a comment bot is built and
+only the pairing is the attack), `pat-lifecycle-fetch` (WARN, a client verb or an install-from-URL
+argument in a lifecycle script or a hook) and `pat-editor-command-path` (WARN, a settings key that
+points the editor at an interpreter or a compiler directory). Three are decided in
+`src/airlock/detectors/ci_surface.py`, because each holds two conditions and one of them is not a
+word on the line:
+
+1. `pat-secret-dump` (HIGH): `${{ secrets.* }}` on a line that also names a command able to display
+   it (`echo`, `printf`, `print`, `cat`, `tee`, `xxd`, `base64`, `Write-Output`, `Add-Content`,
+   `Out-File`), with `::add-mask::` carved out because that one echo is hygiene. A secret handed to a
+   step through `env:` or `with:` is the negative fixture rather than a finding; that is how a
+   workflow uses a credential, and reporting it would bury the shape under noise.
+2. `pat-ptr-head-checkout` (HIGH): the privileged trigger, a head ref
+   (`github.event.pull_request.head`, `refs/pull/N/head`, `refs/pull/N/merge`) and an
+   `actions/checkout` step in one file. Three conditions, because every pair of them has an innocent
+   reading: `pull_request` with a head checkout is reviewed code in a read-only context, and
+   `pull_request_target` that leaves the default base ref is the safe form. The trigger half is read
+   out of `pat-privileged-trigger`'s own pattern, so the WARN and the HIGH cannot drift apart on what
+   a privileged trigger is.
+3. `pat-lifecycle-exec` (HIGH): a line that both fetches and hands the result to a shell or
+   interpreter, which covers `curl ... | bash`, `... && python`, `| Invoke-Expression`,
+   `bash <(curl ...)` and an `eval` of a fetched string. The fetch half comes from
+   `pat-lifecycle-fetch`'s pattern for the same reason as above.
+
+Each pairing is two linear searches rather than one regex, because the obvious single pattern for the
+dropper, a downloader then `.*` then a shell, restarts its `.*` at every column. That is quadratic in
+the line length, and a 20,000 character line is the input an attacker chooses.
+
+`cfg-network` and `cfg-network-exec` already catch the fetch-decode-evaluate shape inside a build
+config. These rules are the same shape in the three files that family does not claim, plus the two
+CI-only shapes it cannot express: the trigger pairing and the secret dump.
+
+Everything here is `suppressible = true`, following `cfg-process-spawn`, whose dropper tier is also
+HIGH and also suppressible. The reasoning is that a maintainer may need to accept a known
+fetch-and-run with a written reason instead of being locked out of their own repository. The
+non-suppressible set stays what the owner named it, which is the shapes with no legitimate reading.
+
+Residuals, stated rather than hidden:
+
+- A secret passed in through `env:` and printed by a script the workflow does not name is invisible
+  here, and so is an `env:` block on one line with `echo $TOKEN` on the next. A padding line past
+  `line_cap` trades these matchers for `cfg-long-line`, which is HIGH in these roles, so padding buys
+  no silence in the report even when it buys it in a rule.
+- `workflow_run`, `issue_comment` and a fork's reusable-workflow `on:` are not in the trigger
+  pattern. All three are real vectors; none is the reported shape, and `pat-privileged-trigger` is a
+  WARN whose value is that a reviewer reads the handful of files it names. Widening it is a corpus
+  question for 3.7 and 0.10.
+- A lifecycle script that fetches through a helper file (`"postinstall": "node scripts/install.js"`,
+  which then downloads) is only caught if that helper file trips the text-side family.
+- `cfg-long-line` names none of the three new roles in its own `roles` list, and this slice does not
+  edit a shipped rule. The cap account does not need it: `rules.cap_findings` runs on every entry that
+  has text whatever its roles, and the extension fallback keeps the text-side family reading these
+  files as `source` or `other`. `tests/unit/test_ci_surface.py` pins both behaviors instead of leaving
+  them to the reading of a comment.
+
+Measured worst case per cap-length line on the harness's bait set (CPython 3.14 locally, a fresh
+interpreter per pattern, against the same 60 ms bound `tests/unit/test_redos.py` asserts):
+`pat-lifecycle-fetch` 4.3 ms, `pat-editor-command-path` 1.6 ms, `pat-privileged-trigger` 1.2 ms, and
+for the detector's own matchers, which that harness now times next to the rule data because a code
+rule's regex is the same ReDoS surface as a pattern rule's: `_DISPLAY_VERB` 4.8 ms, `_EXEC_TARGET`
+1.5 ms, `_HEAD_REF` 0.7 ms, `_CHECKOUT_STEP` 0.06 ms, `_SECRETS_INTERP` 0.05 ms.
+
+### 9.8 Deferred designs
 
 - `deploy_gate`: text heuristics over workflow files cannot see deploys hidden in scripts, reusable workflows or `make` targets, so it would give false assurance. Reconsider only if a real repo deploys to mainnet from CI.
 - SEP-58 metadata presence check and `wasmparse`: the SEP is not final and Colibri already verifies builds. [Verified: Colibri exists; Unverified: SEP final status]
