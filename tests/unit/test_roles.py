@@ -91,6 +91,19 @@ class TestGlob:
         assert match_glob("**/[id].tsx", "app/[id]/page.tsx") is False
         assert match_glob("**/page.tsx", "app/[id]/page.tsx")
 
+    def test_glob_matching_is_case_insensitive_like_the_extension_fallback(self) -> None:
+        assert match_glob("**/postcss.config.*", "postcss.config.MJS")
+        assert match_glob("**/postcss.config.*", "Postcss.Config.MJS")
+        assert match_glob("**/.vscode/tasks.json", ".VSCODE/TASKS.JSON")
+        assert resolve_roles("postcss.config.MJS", b"export default {}", ROLE_GLOBS) == (
+            "tooling-config",
+            "source",
+        )
+        assert resolve_roles("Postcss.Config.MJS", b"export default {}", ROLE_GLOBS) == (
+            "tooling-config",
+            "source",
+        )
+
 
 class TestFallback:
     @pytest.mark.parametrize(

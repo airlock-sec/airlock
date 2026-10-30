@@ -91,6 +91,7 @@
             <tr><td class="mono">skipped-unreadable</td><td>HIGH</td><td>The file could not be read, or changed size while it was being read.</td></tr>
             <tr><td class="mono">skipped-symlink</td><td>INFO</td><td>A tracked symlink is recorded; its target is never read.</td></tr>
             <tr><td class="mono">skipped-unmerged</td><td>HIGH in a sensitive role, WARN otherwise</td><td>The path is unmerged in the index, so there is no agreed content to scan.</td></tr>
+            <tr><td class="mono">skipped-nonportable-path</td><td>HIGH</td><td>The path uses a Windows reserved device name, carries a backslash in its filename, or collides case-insensitively on the working tree.</td></tr>
             <tr><td class="mono">submodule-present</td><td>HIGH unless URL is in policy.submodules, WARN otherwise</td><td>A gitlink mapped in <b>.gitmodules</b>. Its subtree is not scanned here, and an unlisted URL fails the gate.</td></tr>
             <tr><td class="mono">submodule-unmapped</td><td>HIGH</td><td>A mode 160000 gitlink in the index has no unambiguous path and URL in <b>.gitmodules</b>.</td></tr>
             <tr><td class="mono">submodule-orphan</td><td>WARN</td><td>A <b>.gitmodules</b> section has no mode 160000 gitlink at its path in the index.</td></tr>
