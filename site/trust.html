@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:; base-uri 'self'; form-action 'none'">
+  <title>Trust model // Airlock</title>
+  <meta name="description" content="How Airlock decides what to trust: the trusted base, every fail-closed state finding, the seven measured bypasses, and the limits it does not claim to cover.">
+  <meta name="color-scheme" content="dark">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Airlock trust model">
+  <meta property="og:description" content="The trusted base, the fail-closed table, the seven measured bypasses and the residual risk.">
+  <meta property="og:url" content="https://airlock-sec.github.io/airlock/trust.html">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/site.css">
+  <script src="assets/site.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="bar">
+  <div class="bar-in">
+    <a class="brand" href="index.html" aria-label="Airlock home">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">AIRLOCK</span>
+      <span class="brand-sec" aria-hidden="true">SEC</span>
+    </a>
+    <nav class="nav" aria-label="Primary">
+      <a href="index.html">01 / Overview</a>
+      <a href="usage.html">02 / Usage</a>
+      <a href="rules.html">03 / Rules</a>
+      <a href="trust.html" aria-current="page">04 / Trust</a>
+      <a class="nav-ext" href="https://github.com/airlock-sec/airlock">GitHub &nearr;</a>
+    </nav>
+    <div class="bar-meta" aria-hidden="true">DOC / 04 <span class="dot"></span> TRUST</div>
+  </div>
+</header>
+
+<main id="main">
+
+  <section class="page-head">
+    <div class="wrap">
+      <p class="crumb"><a href="index.html">Overview</a> / Trust</p>
+      <h1 class="mega">TRUST<span class="cursor" aria-hidden="true"></span></h1>
+      <p class="lede">Airlock makes a claim about a repository, so the model behind that claim has to be readable. This page states what it trusts, what it refuses to guess, and what it does not cover.</p>
+    </div>
+  </section>
+
+  <section class="sec" id="rules">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="num">[ 01 ]</span>
+        <h2 class="sec-title">Hard rules</h2>
+        <span class="tag">Never broken</span>
+      </div>
+      <div class="split">
+        <div class="prose">
+          <p><strong>Never execute, import or evaluate scanned content.</strong> The tree under scan is untrusted input, and nothing in it is run to find out what it does.</p>
+          <p><strong>Never run scanner code from the scanned checkout.</strong> The tool comes from a pinned path or the installed package, not from the repository it is judging.</p>
+          <p><strong>Read policy from the trusted base.</strong> In <code>pr</code> and <code>push</code> modes, policy, suppressions and the Wasm manifest come from the base commit, never from HEAD.</p>
+          <p><strong>No network and no telemetry during a scan.</strong> A scan that needs to fetch is a scan that can be told what to see.</p>
+          <p><strong>No runtime dependencies.</strong> Python 3.11 and the standard library. A wheel with no rules cannot scan, so the rules travel inside the package.</p>
+        </div>
+        <div class="prose">
+          <p><strong>Never skip a file silently.</strong> Every skip is a finding with a rule id, a severity and a path.</p>
+          <p><strong>No default directory skips.</strong> Vendored directories are read like any other path.</p>
+          <p><strong>No inline suppression markers.</strong> Suppressions are fingerprint-keyed, occurrence-aware and carry a reason.</p>
+          <p><strong>Never return 0 after an error.</strong> A detector exception, an invalid configuration or an unresolvable base is a failure, not a clean run.</p>
+          <p><strong>Match raw text.</strong> There is no comment or string masking, because the line a reviewer reads and the line the matcher sees have to be the same line.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="fail-closed">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="num">[ 02 ]</span>
+        <h2 class="sec-title">Fail closed</h2>
+        <span class="tag">State findings</span>
+      </div>
+      <p class="prose">These ids are decisions about the scan itself rather than matches inside a file. A skip is reported, and a setting that changed inside the change is judged by the base copy.</p>
+      <div class="table-scroll mt">
+        <table>
+          <caption>Scanner-state findings</caption>
+          <thead>
+            <tr><th scope="col">Rule id</th><th scope="col">Severity</th><th scope="col">What it means</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="mono">skipped-oversize</td><td>HIGH in a sensitive role, WARN otherwise</td><td>The file is over <b>max_file_bytes</b> and was not read in full.</td></tr>
+            <tr><td class="mono">skipped-unreadable</td><td>HIGH</td><td>The file could not be read, or changed size while it was being read.</td></tr>
+            <tr><td class="mono">skipped-symlink</td><td>INFO</td><td>A tracked symlink is recorded; its target is never read.</td></tr>
+            <tr><td class="mono">skipped-unmerged</td><td>HIGH in a sensitive role, WARN otherwise</td><td>The path is unmerged in the index, so there is no agreed content to scan.</td></tr>
+            <tr><td class="mono">submodule-present</td><td>INFO</td><td>An embedded repository; its contents belong to its own pipeline. Task 7.2 decides whether this rises.</td></tr>
+            <tr><td class="mono">nul-in-text</td><td>HIGH</td><td>A NUL byte after BOM handling: the file is not the text its extension claims.</td></tr>
+            <tr><td class="mono">non-utf8-text</td><td>HIGH in a sensitive role, WARN otherwise</td><td>The bytes are not valid UTF-8 even after BOM handling.</td></tr>
+            <tr><td class="mono">cfg-long-line</td><td>HIGH in a sensitive role, WARN otherwise</td><td>A line over <b>line_cap</b>. The regexes deliberately do not run on it, so its length is the finding.</td></tr>
+            <tr><td class="mono">detector-error</td><td>HIGH</td><td>A detector raised. Findings it produced before raising are kept.</td></tr>
+            <tr><td class="mono">history-rewritten</td><td>HIGH</td><td>The pushed <b>before</b> is not an ancestor of HEAD, so the base policy cannot be trusted.</td></tr>
+            <tr><td class="mono">no-trusted-base</td><td>WARN</td><td>A push created the branch. The shipped defaults apply, and the scan still runs at full strength.</td></tr>
+            <tr><td class="mono">policy-changed</td><td>WARN</td><td>The policy changed inside this change. The base copy is what ran.</td></tr>
+            <tr><td class="mono">policy-unknown-key</td><td>WARN</td><td>A key this build does not read. The setting stays at its default.</td></tr>
+            <tr><td class="mono">untrusted-policy-source</td><td>INFO</td><td><b>full</b> mode read policy from the working tree, which the change can edit.</td></tr>
+            <tr><td class="mono">suppression-invalid</td><td>HIGH</td><td>A suppression entry matches no applicable finding, so it is hiding nothing and claiming otherwise.</td></tr>
+            <tr><td class="mono">suppression-expiring</td><td>WARN</td><td>An entry expires within 30 days. Renew it with a reason, or let the finding return.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="bypasses">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="num">[ 03 ]</span>
+        <h2 class="sec-title">The seven bypasses</h2>
+        <span class="tag">Appendix B / Measured</span>
+      </div>
+      <div class="split">
+        <div class="prose">
+          <p>Five public Soroban repositories shipped the same scan step. On 2026-10-27 each shape below was committed to a scratch repository and the real script was run the way the workflow runs it. All seven exited 0.</p>
+          <p>Six are now regressions under <code>tests/bypass</code>, and they assert rule ids and severities rather than a bare exit code so an unrelated HIGH cannot make them pass. The seventh waits on the Cargo detector, and its test is skipped with that reason in the fixture rather than deleted.</p>
+        </div>
+        <div class="prose">
+          <p>The probe that measured the old script and the tests that judge this package import the same case table, so the harness and the regression cannot drift. The payloads are assembled from fragments at run time, which is why no live-looking string is committed here.</p>
+          <p><a href="https://github.com/airlock-sec/airlock/blob/main/PRD.md">Appendix B in PRD.md &nearr;</a></p>
+        </div>
+      </div>
+      <div class="table-scroll mt">
+        <table>
+          <caption>Each case, the old gate, and Airlock</caption>
+          <thead>
+            <tr><th scope="col">Case</th><th scope="col">Shape</th><th scope="col">Old gate</th><th scope="col">Airlock</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="mono">B-01</td><td>A <b>.wasm</b> file of any content</td><td><span class="b b--bad">EXIT 0</span></td><td><span class="b b--ok">CAUGHT</span> wasm-unlisted, HIGH</td></tr>
+            <tr><td class="mono">B-02</td><td>A NUL byte in the first 4 KB of a text file</td><td><span class="b b--bad">EXIT 0</span></td><td><span class="b b--ok">CAUGHT</span> nul-in-text, HIGH</td></tr>
+            <tr><td class="mono">B-03</td><td>A payload line ending in the old inline allow marker</td><td><span class="b b--bad">EXIT 0</span></td><td><span class="b b--ok">CAUGHT</span> the marker changes nothing</td></tr>
+            <tr><td class="mono">B-04</td><td>An allowlist file containing a single wildcard</td><td><span class="b b--bad">EXIT 0</span></td><td><span class="b b--ok">CAUGHT</span> no allowlist exists, the payload is read</td></tr>
+            <tr><td class="mono">B-05</td><td>A decode-then-evaluate line in a tooling config</td><td><span class="b b--bad">EXIT 0</span></td><td><span class="b b--ok">CAUGHT</span> cfg-dynamic-code, HIGH</td></tr>
+            <tr><td class="mono">B-06</td><td>A <b>.cargo/config.toml</b> runner invoking a shell</td><td><span class="b b--bad">EXIT 0</span></td><td><span class="b b--pend">PENDING</span> Cargo vectors, task 6.4</td></tr>
+            <tr><td class="mono">B-07</td><td>A payload under a directory the old script skipped</td><td><span class="b b--bad">EXIT 0</span></td><td><span class="b b--ok">CAUGHT</span> pat-decode-eval, HIGH</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="limits">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="num">[ 04 ]</span>
+        <h2 class="sec-title">What it does not do</h2>
+        <span class="tag">Limits</span>
+      </div>
+      <div class="split">
+        <div class="prose">
+          <p>It is not an antivirus and not a dependency-advisory tool. It does not resolve lockfiles, compare package versions or read a vulnerability database. It does not unpack archives, and it does not parse JavaScript with a lexer.</p>
+          <p>It does not fetch wasm from a chain, validate SEP-58 metadata, or check a contract size limit. Those are Phase 6 work and they stay unclaimed until the detectors exist.</p>
+        </div>
+        <div class="prose">
+          <p>A clean report means nothing matched the rules that ship. It is a narrower and more honest claim than "no compromise found", and it is the only claim a rule set of this size can support.</p>
+          <p>SARIF output and the composite Action are not shipped. There is no signed release, so no commit before the first attested tag carries a release guarantee.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="residual">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="num">[ 05 ]</span>
+        <h2 class="sec-title">Residual risk</h2>
+        <span class="tag">Stated, not hidden</span>
+      </div>
+      <div class="split">
+        <div class="prose">
+          <p>Whoever can push a workflow file can remove the scan. A required status check covers pull requests, because a pull request that deletes the step never reports the check. It does not cover a direct push by a stolen credential.</p>
+          <p>The control for that is an external watcher that clones a repository and compares its last seen commit (backlog D-04), plus hardware-key two-factor authentication on the accounts that can push.</p>
+        </div>
+        <div class="prose">
+          <p>A required check also does not help if the check is not required, and branch rules are repository settings rather than files. The roadmap tracks those tasks separately from the code, because neither can be verified by a test in this tree.</p>
+          <p><a href="https://github.com/airlock-sec/airlock/blob/main/SECURITY.md">Report a vulnerability in Airlock itself &nearr;</a></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-grid">
+    <div>
+      <p class="foot-brand">AIRLOCK</p>
+      <p>Supply-chain scanning for Stellar and Soroban repositories. Apache-2.0, standard library only, no telemetry.</p>
+    </div>
+    <nav aria-label="Site">
+      <h2>Site</h2>
+      <a href="index.html">Overview</a>
+      <a href="usage.html">Usage</a>
+      <a href="rules.html">Rule reference</a>
+      <a href="sitemap.xml">Sitemap</a>
+    </nav>
+    <nav aria-label="Project">
+      <h2>Project</h2>
+      <a href="https://github.com/airlock-sec/airlock">Repository &nearr;</a>
+      <a href="https://github.com/airlock-sec/airlock/blob/main/LICENSE">License &nearr;</a>
+      <a href="https://github.com/airlock-sec/airlock/blob/main/SECURITY.md">Security &nearr;</a>
+      <a href="https://github.com/airlock-sec/airlock/issues">Issues &nearr;</a>
+    </nav>
+    <p class="foot-legal">&copy; 2026 AIRLOCK-SEC<br>NO RUNTIME DEPENDENCIES / NO NETWORK DURING SCAN</p>
+  </div>
+</footer>
+</body>
+</html>
