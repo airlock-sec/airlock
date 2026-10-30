@@ -5,10 +5,17 @@
 # (`rules/roles.toml`), so a payload in a `.py` file, in a file with no extension, or under
 # `vendor/` was read by no pattern rule in the tree and reported clean (`PRD.md` Appendix B case 7).
 # The `roles` list on each rule is the coverage claim, stated here rather than in detector code, so
-# a reviewer and the rule reference generator can both read it. All four rules name the same four
+# a reviewer and the rule reference generator can both read it. All six rules name the same four
 # roles: every role whose files the collector hands over as text and that is code rather than prose.
 # The `wasm`, `native-binary` and `archive` roles are absent because a file that resolves to one of
 # them carries no text for a line rule to read.
+#
+# The three CI-surface roles (`workflow`, `package-manifest`, `install-hook`) name no rule here
+# either, and that is not a gap: a workflow resolves to `workflow` plus the `source` fallback, a
+# `package.json` to `package-manifest` plus `source`, and an extensionless hook under `.husky/` to
+# `install-hook` plus `other`, so the four roles below already reach every one of those files.
+# `ci_surface.toml` names the narrow roles for rules about workflow and lifecycle *grammar*, which
+# an extension fallback would not resolve at all.
 #
 # `doc` appears on no rule in this file. Prose describes payloads: this repository's own `PRD.md`
 # quotes the exact string in Appendix B case 7, and a rule that read `doc` would report it as a
@@ -19,9 +26,11 @@
 #
 # Severity is a false-positive budget (risk R-2), so the two HIGHs are the shapes with no innocent
 # reading in a file that is code: a decoder feeding an evaluator, and a character that cannot be seen
-# in a diff. A tool fingerprint and a single endpoint mention are WARN, because each has a common
-# legitimate form (a committed obfuscated bundle, a webhook URL in a test) and each only becomes the
-# attack in combination with something that runs it. Combination rules over these roles are 3.7; the
+# in a diff. The four WARNs are a tool fingerprint, a single endpoint mention, a named credential
+# store and a chain RPC host, because each has a common legitimate form (a committed obfuscated
+# bundle, a webhook URL in a test, an infrastructure script or a container mount that names the AWS
+# credentials file, a dApp that calls a public node) and each only becomes the attack in combination
+# with something that reads it or sends it somewhere. Combination rules over these roles are 3.7; the
 # source-role half of `cfg-network-exec` is not claimed here.
 #
 # Patterns use TOML multi-line literal strings ('''), so backslashes reach `re` as written. The
@@ -30,10 +39,17 @@
 #
 # The endpoint list writes each dot as `\.`. That is also what keeps this file from matching itself:
 # the text of a rule holds an escaped dot where the pattern looks for a real one, and every file under
-# `rules/` is role `source`, which all four rules here read. `pat-obfuscator-id` is saved the same way
+# `rules/` is role `source`, which all six rules here read. `pat-obfuscator-id` is saved the same way
 # by writing its hex run as a class rather than as an example. A host name in the comments below is
 # always written with its escape in it, because prose about a list of hosts is still a line the list
 # is matched against.
+#
+# The path-shaped rule needs one more trick, because a branch that opens with an escaped dot and then
+# names a directory does match its own text: the backslash sits before the dot rather than between the
+# dot and the name. So every separator inside a path is written as a class (`[/\\]`, which also catches
+# a Windows path), and no branch opens with the dot it looks for. The consequence is that the
+# characters which would have to sit together for a match never do inside this file, which is what
+# `tests/unit/test_builtin_patterns.py` asserts per rule rather than leaving to be remembered.
 
 # The endpoint list is matched case-sensitively, and that is a measured trade rather than an
 # oversight. A `(?i)` flag costs about ten times what the same alternation costs without it on the
@@ -105,3 +121,45 @@ suppressible = true
 rationale = "The `_0x` plus hex identifier is the naming scheme the JavaScript obfuscators emit, and it survives a rename of the tool because it is a property of the output rather than of a banner. ARCHITECTURE.md 9.6 is explicit that obfuscator fingerprints rotate weekly while the mechanism stays, so this keys on the identifier grammar and not on a list of tool names. It is a WARN because the shape has one ordinary owner: a minified or packed bundle committed to the repository, which is a release-integrity question for the artifact rules rather than a payload by itself."
 pattern = { kind = "regex", value = '''\b_0x[0-9a-fA-F]{4,}\b''' }
 tests = { positive = "pat_obfuscator_id", negative = "pat_obfuscator_id" }
+
+# The last two rules are the rest of what task 3.6 owed from the old script's HIGH list. The
+# `build.rs` network shape and the native-binary shape are not here, because both belong with the
+# Cargo work in 6.4 rather than being guessed at (`ARCHITECTURE.md` 9.6 records that split).
+#
+# Both are WARN, which is the tier argument in this file's header applied to a list rather than to a
+# grammar: an endpoint host and a credential path each have an ordinary owner in a repository, and
+# what makes them the attack is the line that reads one and the line that sends it. That pairing is
+# task 3.7, and when it lands the HIGH belongs to the pair, not to either list grown longer.
+#
+# `pat-credential-harvest` opens with a one-character class (`[./\\."']`) and every store name is a
+# branch inside it, rather than each branch carrying its own separator. That shape is measured, not
+# stylistic: the flat ten-branch alternation costs 10.3 ms on the harness's worst cap-length line
+# and the anchored one costs 1.2 ms on the same bait, because a leading character class lets `re`
+# skip positions no branch can start at instead of trying all ten at every character. Same recall on
+# the fifteen path spellings `tests/unit/test_builtin_patterns.py` covers, including Windows
+# separators, a bare database file name handed to a path join, and a leading tilde. What the anchor
+# costs is one thing:
+# a store name with no separator, quote or dot in front of it is invisible to this rule, which for a
+# path list is no loss, since a path always arrives with one.
+
+[[rule]]
+id = "pat-credential-harvest"
+title = "A credential, key or wallet store named in code"
+roles = ["source", "tooling-config", "editor-autorun", "other"]
+detector = "pattern"
+severity = "warn"
+suppressible = true
+rationale = "A loader collects before it sends, and what it collects is a short list of files whose only purpose is to be secret: an AWS credentials file, an OpenSSH private key, a GnuPG private-key directory, a Solana CLI keypair, the browser database that holds saved logins, and the wallet files of the chains whose keys are one file in a known place. The old script carried this list at HIGH and matched the directory rather than the file, which is how a rule about paths becomes a rule about false positives. Each branch names the store and not the folder it sits in, and the trailing guard on the key branches is what keeps a provisioned public key out of the report, because a pub file in a setup script is ordinary infrastructure. A chain's own keypair path is listed because a CLI writes a signing key to one fixed location, which is the shape worth naming; a secret handed over as an environment value is not a path, and stays with the workflow rules in `ci_surface.toml`."
+pattern = { kind = "regex", value = '''[./\\."'](?:aws[/\\]credentials|ssh[/\\]id_(?:rsa|ed25519|ecdsa|dsa)(?![\w.])|config[/\\]solana[/\\]id\.json|gnupg[/\\]private-keys-v1\.d|Local Storage[/\\]leveldb|Login Data|key[34]\.db(?![\w.])|wallet\.dat(?![\w.])|Electrum[/\\]wallets|MultiversX[/\\]wallets)''' }
+tests = { positive = "pat_credential_harvest", negative = "pat_credential_harvest" }
+
+[[rule]]
+id = "pat-chain-c2"
+title = "Public chain RPC or explorer host in code"
+roles = ["source", "tooling-config", "editor-autorun", "other"]
+detector = "pattern"
+severity = "warn"
+suppressible = true
+rationale = "The reported campaigns did not host their own endpoints. They pointed the payload at public chain infrastructure it could reach without a key and without a notice, which is why this list holds a Tron node provider and a Binance Smart Chain data seed rather than attacker-owned domains, and why those names are data: a campaign that moves to another public node is a one-line edit here and a rewrite nowhere else. This is the reach half of `cfg-chain-endpoint`, which stays the stricter rule and the only one that can fail a build: that rule reads one of five config filenames and fires on an endpoint being *configured*, which no innocent build step does, while this one reads every file that is code and fires on a host being named, which a dApp integration does every day. The two tiers are the trade, and a line that hits both is one finding each by design. Case-sensitive for the measured reason at the top of this file, with the same residual recorded there: a defanged or shouty host is an evasion of a WARN."
+pattern = { kind = "regex", value = '''trongrid\.io|tronscan\.org|bsc-dataseed\.(?:binance|bnbchain)\.org''' }
+tests = { positive = "pat_chain_c2", negative = "pat_chain_c2" }

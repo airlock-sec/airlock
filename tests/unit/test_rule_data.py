@@ -50,6 +50,8 @@ class TestShippedRuleSet:
             "cfg-network",
             "cfg-network-exec",
             "cfg-process-spawn",
+            "pat-chain-c2",
+            "pat-credential-harvest",
             "pat-decode-eval",
             "pat-editor-command-path",
             "pat-exfil-endpoint",

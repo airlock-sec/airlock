@@ -542,14 +542,19 @@ at scan time. No network access, balance lookup or live-key verification during 
 
 Line rules ported from `malware_scan.py`: invisible Unicode, exfiltration endpoints, decode-and-eval, obfuscator identifiers, credential harvesting, blockchain C2 hosts, workflow secret dump, install-hook droppers, VS Code auto-run, `pull_request_target` checkout, `build.rs` network, native binaries. HIGH rules first, then WARN rules. Intentional changes from the old script: skips become findings, directory skips are gone and the inline `malware-scan: allow` marker is dropped.
 
-Shipped as of task 3.6 (text-side slice) in `rules/builtin/builtin_patterns.toml`, four rules with
+Shipped as of task 3.6 (text-side slice) in `rules/builtin/builtin_patterns.toml`, six rules with
 `detector = "pattern"` and no code detector module: `pat-decode-eval` (HIGH),
-`pat-invisible-unicode` (HIGH), `pat-exfil-endpoint` (WARN), `pat-obfuscator-id` (WARN). Each names
+`pat-invisible-unicode` (HIGH), `pat-exfil-endpoint`, `pat-obfuscator-id`,
+`pat-credential-harvest` and `pat-chain-c2` (WARN). Each names
 `roles = ["source", "tooling-config", "editor-autorun", "other"]`, which is where the coverage claim
 lives: the old script's miss was not a wrong pattern but a wrong scope, since its only in-repo
 consumer was an allowlist of five config filenames (`PRD.md` 2.3 item 7, Appendix B case 7). Naming
 the roles in the rule data means a reviewer reads the claim and the rule reference generator (5.2)
-can publish it, instead of a detector hardcoding a path list.
+can publish it, instead of a detector hardcoding a path list. The three CI-surface roles are
+deliberately absent: `roles.py`'s extension fallback already puts a workflow, a `package.json` and an
+extensionless `.husky/` hook into `source` or `other`, so listing them would restate a fact the
+resolver guarantees and hide the four roles that are the actual claim
+(`tests/unit/test_builtin_patterns.py::TestTheCiSurfaceIsReachedByTheFallback`).
 
 Residuals, stated rather than hidden:
 
@@ -559,10 +564,13 @@ Residuals, stated rather than hidden:
   and its endpoints from these rules; it also keeps an extension nothing executes, and
   `cfg-long-line` and `nul-in-text` still read the role.
 - The severity tiers are a false-positive budget (risk R-2), not a ranking of harm. The two HIGHs are
-  shapes with no innocent reading in a file that is code; a tool fingerprint and a single endpoint
-  mention are WARN because each has a common legitimate form (a committed obfuscated bundle, a
-  webhook URL in a test) and each only becomes the attack in combination with something that runs it.
-  Combination rules over these roles are task 3.7.
+  shapes with no innocent reading in a file that is code; a tool fingerprint, a single endpoint
+  mention, a named credential store and a public chain host are WARN because each has a common
+  legitimate form (a committed obfuscated bundle, a webhook URL in a test, a provisioned SSH key in a
+  setup script, a dApp integration naming its RPC) and each only becomes the attack in combination
+  with something that runs it or sends it. Combination rules over these roles are task 3.7, and the
+  credential and chain pairings are the ones that owe a tier change: a store named in a file that
+  also has a decoder and an endpoint is the loader, and is HIGH the moment 3.7 can say so.
 - Raw-text matching, no comment or string masking (ADR-013), and `line_cap` still applies: an
   attacker who pads a payload line past the cap trades `pat-*` for a `cfg-long-line` finding, which
   is HIGH inside `SENSITIVE_ROLES` and WARN elsewhere (`rules._cap_severity`). Padding therefore
@@ -572,20 +580,46 @@ Residuals, stated rather than hidden:
   repeated to the cap), which is a per-line cost multiplied by every line of every code file. Hosts
   in code are lowercase almost always, and a shouty uppercase host is an evasion of a WARN rule
   rather than a miss worth that multiplier. `pat-decode-eval` keeps `(?i)` because the identifiers it
-  names are camelCase by convention (`decodeURIComponent`, `Buffer.from`).
+  names are camelCase by convention (`decodeURIComponent`, `Buffer.from`). `pat-chain-c2` inherits
+  the same choice and the same residual, because it is the same shape of rule: a list of hosts.
+- `pat-credential-harvest` anchors every branch behind `[./\\."']`, so a store name with no path
+  separator, quote or dot in front of it is invisible to the rule. For a list of file paths that is
+  no loss, since a path always arrives with one, and the anchor is the reason the pattern is cheap
+  (see the measurement below). The trailing guards on the key branches are the other half of the
+  design: they are what keeps a provisioned public key out of the report.
 
 Measured worst case per cap-length line on the shipped bait set (CPython 3.14 locally, fresh
 interpreter per pattern; the suite's own gate is `tests/unit/test_redos.py` against 60 ms):
 `pat-decode-eval` 8.5 ms, `pat-exfil-endpoint` 9.8 ms, `pat-obfuscator-id` 1.3 ms,
-`pat-invisible-unicode` 1.0 ms, all on the harness's repeated `[a-z]` line. CI runs 3.11 and asserts
-the same bound.
+`pat-credential-harvest` 1.2 ms, `pat-invisible-unicode` and `pat-chain-c2` 1.0 ms, all on the
+harness's repeated `[a-z]` line. CI runs 3.11 and asserts the same bound.
+
+`pat-credential-harvest` was written as a flat ten-branch alternation and measured 10.3 ms on that
+same line, which is inside the per-line gate and outside the one that matters. The aggregate budget
+(`ADVERSARIAL_SCAN_BUDGET_MS`, 1 MB of cap-length adversarial lines through `runner.scan`) is what
+moved it: scanning one corpus twice in the same process, once with the two new rules dropped from the
+context, prices the slice at roughly 50 to 65 ms per MB against a 1200 ms gate. The ten-branch form
+was most of that, because a leading literal is retried at every column of a line it can never start a
+match at. Anchoring the alternation behind `[./\\."']` let `re` skip those positions: the same bait
+dropped to 1.2 ms, with the same recall across the fifteen path spellings
+`tests/unit/test_builtin_patterns.py::TestTheCredentialAnchorKeepsItsRecall` pins and no new false
+fire on its negative.
+
+What the headroom is, stated with its noise rather than as a single number: a full pass on this box
+measures about 1040 ms median, the run-to-run drift of one unchanged configuration is about 50 ms, and
+both trees have been observed above the 1200 ms gate when the machine is loaded (`main` 1221 ms and
+this branch 1446 ms worst case inside the same minute) while passing in isolation. Hosted CI, which is
+the measurement that decides, runs the whole suite including this gate in about 25 s and is green on
+`main`. Task 3.11 owns re-deriving the gate on that runner rather than widening it, and no budget in
+`tests/unit/test_redos.py` changed for this slice.
 
 Ported since, as task 3.6's second slice, in its own rule file and its own detector, because three of
 the shapes need two conditions at once: see 9.7.
 
-Not yet ported from the list above: credential harvesting, blockchain C2 shapes, `build.rs` network
-and the native-binary rules. The last two belong with the Cargo work in 6.4; credential harvesting
-and blockchain C2 have no rule, fixture or decision behind them yet, and are not guessed at here.
+Not yet ported from the list above: the `build.rs` network shape and the native-binary rules. Both
+belong with the Cargo work in 6.4, which is the task that gives a detector somewhere to read a Rust
+target, a cargo config and an artifact from; porting them as line patterns now would mean guessing at
+the file roles 6.4 defines, and a rule whose scope is a guess is a rule a reviewer cannot check.
 
 ### 9.7 `ci_surface`
 

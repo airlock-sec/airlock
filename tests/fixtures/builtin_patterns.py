@@ -43,6 +43,30 @@ WEBHOOK_SITE = assemble("webhook", ".site")
 OBFUSCATED = assemble("_0x", "1a", "2b")
 SHORT_HEX = assemble("_0x", "1f")
 
+#: Credential stores and chain endpoints, same discipline: the assembled form exists only during a
+#: test run, so neither this file nor its positive case is a finding against this repository.
+AWS_CRED = assemble("~", "/", ".aws", "/", "credentials")
+SSH_PRIVATE = assemble("~", "/", ".ssh", "/", "id_ed25519")
+SOLANA_KEYPAIR = assemble("~", "/", ".config", "/solana/", "id.json")
+GNUPG_PRIVATE = assemble("~", "/", ".gnupg", "/", "private-keys-v1.d")
+CHROME_LOGIN = assemble("User Data", "/", "Default", "/", "Login", " Data")
+FIREFOX_KEYS = assemble("profile", "/", "key4", ".", "db")
+BITCOIN_WALLET = assemble("Bitcoin", "/", "wallet", ".", "dat")
+#: The near misses of each: a sibling file in the same directory, and a public key.
+AWS_CONFIG = assemble("~", "/", ".aws", "/", "config")
+SSH_PUBLIC = assemble(SSH_PRIVATE, ".", "pub")
+GNUPG_PUBLIC = assemble("~", "/", ".gnupg", "/", "pubring.kbx")
+ELECTRUM_DB = assemble("Electrum", "/", "blocks.db")
+WALLET_BACKUP = assemble(BITCOIN_WALLET, ".", "bak")
+
+TRONGRID = assemble("nile", ".", "trongrid", ".", "io")
+TRONSCAN = assemble("tronscan", ".", "org")
+BSC_SEED = assemble("bsc-dataseed", ".", "binance", ".", "org")
+#: Near misses: an SDK name, a host that shares a listed prefix, and an explorer elsewhere.
+TRON_WEB = assemble("tron", "web")
+BSC_MIRROR = assemble("bsc-dataseed", ".", "example", ".", "com")
+EXPLORER_OTHER = assemble("etherscan", ".", "io")
+
 #: Built from code points: the rule is about a character no file in this repository may hold.
 ZWSP = chr(0x200B)
 RLM = chr(0x200F)
@@ -123,9 +147,53 @@ def pat_obfuscator_id() -> Fixture:
     )
 
 
+def pat_credential_harvest() -> Fixture:
+    return Fixture(
+        positive=_source(
+            f'const keys = load("{AWS_CRED}");',
+            f'const signer = load("{SSH_PRIVATE}");',
+            f'const cli = load("{SOLANA_KEYPAIR}");',
+            f'const ring = load("{GNUPG_PRIVATE}");',
+            f'const browser = load("{CHROME_LOGIN}");',
+            f'const nss = load("{FIREFOX_KEYS}");',
+            f'const node = load("{BITCOIN_WALLET}");',
+        ),
+        # Each line keeps the directory the store lives in and loses the store: a config file, a
+        # public key, a public keyring, a chain database, and a backup of a wallet file the rule
+        # does name, one extension further than the pattern asks for.
+        negative=_source(
+            f'const region = load("{AWS_CONFIG}");',
+            f'const authorised = load("{SSH_PUBLIC}");',
+            f'const certs = load("{GNUPG_PUBLIC}");',
+            f'const headers = load("{ELECTRUM_DB}");',
+            f'const archive = load("{WALLET_BACKUP}");',
+        ),
+    )
+
+
+def pat_chain_c2() -> Fixture:
+    return Fixture(
+        positive=_source(
+            f'const rpc = "{URL_HEAD}{TRONGRID}/wallet/fullnode";',
+            f'const broadcast = "{URL_HEAD}api.{TRONSCAN}/solidityapicall";',
+            f'const fork = "{URL_HEAD}{BSC_SEED}";',
+        ),
+        # The SDK name and a host that borrows a listed prefix are what an ordinary integration
+        # looks like, and an explorer on another domain is what a reviewer would call unrelated.
+        # `cfg-chain-endpoint` is the rule that reads the SDK name, inside a build config.
+        negative=_source(
+            f"import {TRON_WEB} from '{TRON_WEB}';",
+            f'const mirror = "{URL_HEAD}{BSC_MIRROR}";',
+            f'const lookup = "{URL_HEAD}{EXPLORER_OTHER}/tx/1";',
+        ),
+    )
+
+
 BUILDERS = {
     "pat_decode_eval": pat_decode_eval,
     "pat_invisible_unicode": pat_invisible_unicode,
     "pat_exfil_endpoint": pat_exfil_endpoint,
     "pat_obfuscator_id": pat_obfuscator_id,
+    "pat_credential_harvest": pat_credential_harvest,
+    "pat_chain_c2": pat_chain_c2,
 }
