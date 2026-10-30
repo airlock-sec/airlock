@@ -64,7 +64,7 @@ on filesystems other than NTFS; and any change to what the Linux job runs.
 - [ ] If confirmed: a tracked path that cannot be read as itself yields a named finding with a counted skip reason, and a positive and negative fixture for it exist so the fixture gate covers the new rule id.
 - [ ] A repository whose index holds two paths differing only in case produces two findings that are not silently merged into one, or the reason it cannot is written into `ARCHITECTURE.md` 6.1.
 - [ ] `ARCHITECTURE.md` 6.1 and the fail-closed table in section 8 match the shipped behaviour, and `ROADMAP.md` 7.8 is ticked with its evidence.
-- [ ] `ROADMAP.md` carries a changelog row with a UTC date, `Last updated` moved, and `python scripts/roadmap_progress.py --check` passing.
+- [ ] A change record with a UTC date exists under `docs/changes/`, `ROADMAP.md` has been regenerated from it, and `python scripts/roadmap_progress.py --check` passing.
 - [ ] `python -m pytest`, `ruff check .`, `ruff format --check .` and `mypy src` all pass on Linux, and `airlock scan --mode full .` reports no HIGH findings.
 - [ ] PR description includes `Closes #{{issue:self}}`.
 

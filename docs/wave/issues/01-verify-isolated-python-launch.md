@@ -48,7 +48,7 @@ Run the sketch, not a paraphrase of it, on a standard GitHub runner and record w
    `github.event.pull_request.base.sha` is present. Record the exit codes you see against the
    documented 0/1/2/3.
 4. **Record the result.** Replace the `[Unverified]` marker in `ARCHITECTURE.md` 10 with the
-   observed outcome and the runner date, tick task 0.8 in `ROADMAP.md`, and add the changelog row.
+   observed outcome and the runner date, tick task 0.8 in `ROADMAP.md`, and add the change record under `docs/changes/`.
    If the answer is "it does not work", write what actually happened and what the alternative
    launch is; a refutation is a complete deliverable for this issue and is the more valuable one if
    it is true.
@@ -63,7 +63,7 @@ it instead of landing the change here.
 - [ ] A link to the scratch workflow run (a public Actions run URL) is in the pull request description, and the run shows a scan executing under `python3 -I`.
 - [ ] The checkout-shadowing test is shown: a `src/airlock/` in the scanned repository that differs from the Action's copy, with the evidence that the Action's copy ran.
 - [ ] Exit codes for a shallow checkout and for a `pull_request` event are recorded against the documented meanings.
-- [ ] `ROADMAP.md` is updated in the same pull request: 0.8 ticked, a changelog row with a UTC date, `Last updated` moved, and `python scripts/roadmap_progress.py --check` passing.
+- [ ] `ROADMAP.md` is updated in the same pull request: 0.8 ticked, a change record under `docs/changes/` with a UTC date, `ROADMAP.md` regenerated from it, and `python scripts/roadmap_progress.py --check` passing.
 - [ ] `python -m pytest`, `ruff check .`, `ruff format --check .` and `mypy src` all pass (they should be unaffected; a change to a doc is still gated by the suite).
 - [ ] PR description includes `Closes #{{issue:self}}`.
 

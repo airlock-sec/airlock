@@ -27,7 +27,7 @@ installer does not exist yet.
 
 | | |
 |---|---|
-| Works today | `airlock scan` in console, GitHub-annotation and JSON output, plus a step summary; `airlock manifest add` and `manifest check`; 24 rules across three code detectors and the pattern engine; 758 tests in CI |
+| Works today | `airlock scan` in console, GitHub-annotation and JSON output, plus a step summary; `airlock manifest add` and `manifest check`; 24 rules across three code detectors and the pattern engine; 796 tests in CI |
 | Not built yet | the composite GitHub Action (`action.yml`), the Soroban-side detectors, the build-script and native-binary rules, SARIF output |
 | Usable now | as a CLI, from a checkout or an installed wheel, on any git repository |
 
@@ -193,6 +193,7 @@ check: without that, a pull request that deletes the scan step simply never runs
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | components, data models, the fail-closed table, ADRs, red-team review |
 | [`ARCHITECTURE_ESSENTIALS.md`](ARCHITECTURE_ESSENTIALS.md) | the hard rules, in one screen |
 | [`ROADMAP.md`](ROADMAP.md) | every remaining task, the gates, the changelog |
+| [`docs/changes/`](docs/changes/) | one record per change: the date, the task IDs, what was verified |
 | [`project_structure.md`](project_structure.md) | where files go and which way imports point |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | how a change lands here |
 | [`SECURITY.md`](SECURITY.md) | how to report a vulnerability in Airlock itself |
@@ -202,8 +203,9 @@ check: without that, a pull request that deletes the scan step simply never runs
 
 Read [`AGENTS.md`](AGENTS.md) if you are working with a coding agent; humans are held to the same
 bar. The short version: find your task in [`ROADMAP.md`](ROADMAP.md), write the failing test first,
-make the smallest change that passes, and update `ROADMAP.md` in the same pull request. CI enforces
-that last rule with a check named `roadmap`.
+make the smallest change that passes, add one change record under
+[`docs/changes/`](docs/changes/) and regenerate `ROADMAP.md` with
+`python scripts/roadmap_progress.py`. CI enforces that last rule with a check named `roadmap`.
 
 One rule earns more care than the rest. Airlock's job is to make a claim about a repository, so a
 contribution that weakens a check, a test or a skip is not a smaller change than one that adds a

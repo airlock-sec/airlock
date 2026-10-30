@@ -74,7 +74,7 @@ rules.
 - [ ] `ARCHITECTURE.md` 9.6, the section 8 fail-closed table and `ARCHITECTURE_ESSENTIALS.md` match what shipped, and `ROADMAP.md` 3.6 records which families this closes.
 - [ ] `rules/` and `src/airlock/roles.py` are protected paths: owner review required, and no existing rule weakened to make a new one fit.
 - [ ] `python -m pytest`, `ruff check .`, `ruff format --check .` and `mypy src` all pass.
-- [ ] `ROADMAP.md` carries a changelog row with a UTC date, `Last updated` moved, and `python scripts/roadmap_progress.py --check` passing.
+- [ ] A change record with a UTC date exists under `docs/changes/`, `ROADMAP.md` has been regenerated from it, and `python scripts/roadmap_progress.py --check` passing.
 - [ ] PR description includes `Closes #{{issue:self}}`.
 
 ## Tech stack
