@@ -91,7 +91,9 @@
             <tr><td class="mono">skipped-unreadable</td><td>HIGH</td><td>The file could not be read, or changed size while it was being read.</td></tr>
             <tr><td class="mono">skipped-symlink</td><td>INFO</td><td>A tracked symlink is recorded; its target is never read.</td></tr>
             <tr><td class="mono">skipped-unmerged</td><td>HIGH in a sensitive role, WARN otherwise</td><td>The path is unmerged in the index, so there is no agreed content to scan.</td></tr>
-            <tr><td class="mono">submodule-present</td><td>INFO</td><td>An embedded repository; its contents belong to its own pipeline. Task 7.2 decides whether this rises.</td></tr>
+            <tr><td class="mono">submodule-present</td><td>HIGH unless URL is in policy.submodules, WARN otherwise</td><td>A gitlink mapped in <b>.gitmodules</b>. Its subtree is not scanned here, and an unlisted URL fails the gate.</td></tr>
+            <tr><td class="mono">submodule-unmapped</td><td>HIGH</td><td>A mode 160000 gitlink in the index has no unambiguous path and URL in <b>.gitmodules</b>.</td></tr>
+            <tr><td class="mono">submodule-orphan</td><td>WARN</td><td>A <b>.gitmodules</b> section has no mode 160000 gitlink at its path in the index.</td></tr>
             <tr><td class="mono">nul-in-text</td><td>HIGH</td><td>A NUL byte after BOM handling: the file is not the text its extension claims.</td></tr>
             <tr><td class="mono">non-utf8-text</td><td>HIGH in a sensitive role, WARN otherwise</td><td>The bytes are not valid UTF-8 even after BOM handling.</td></tr>
             <tr><td class="mono">cfg-long-line</td><td>HIGH in a sensitive role, WARN otherwise</td><td>A line over <b>line_cap</b>. The regexes deliberately do not run on it, so its length is the finding.</td></tr>

@@ -35,6 +35,7 @@ MIN_PYTHON = (3, 11)
 
 _GITLINK_MODE = "160000"
 _SYMLINK_MODE = "120000"
+GITMODULES_PATH = ".gitmodules"
 
 #: Reason strings recorded on FileEntry, counted in ScanReport.files_skipped.
 SKIP_OVERSIZE = "oversize"
@@ -52,6 +53,7 @@ class IndexEntry:
     mode: str
     path: str
     stage: int = 0
+    sha: str = ""
 
     @property
     def is_unmerged(self) -> bool:
@@ -64,6 +66,28 @@ class IndexEntry:
     @property
     def is_submodule(self) -> bool:
         return self.mode == _GITLINK_MODE
+
+
+@dataclass(frozen=True, slots=True)
+class _GitmoduleSection:
+    """One section from `.gitmodules`, used to cross-check index gitlinks (task 7.2)."""
+
+    header: str
+    line: int
+    valid_header: bool
+    paths: tuple[str, ...]
+    urls: tuple[str, ...]
+
+    @property
+    def is_well_formed(self) -> bool:
+        return (
+            self.valid_header
+            and len(self.paths) == 1
+            and bool(self.paths[0])
+            and len(self.urls) == 1
+            and bool(self.urls[0])
+            and not any(ch.isspace() for ch in self.urls[0])
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,8 +167,13 @@ def list_tracked_files(repo_root: Path) -> tuple[IndexEntry, ...]:
         fields = meta.split(b" ")
         if len(fields) != 3:
             raise ValueError(f"unparsable git index entry: {record[:120]!r}")
-        mode, _, stage = fields
-        entry = IndexEntry(mode=mode.decode(), path=os.fsdecode(path), stage=int(stage))
+        mode, sha, stage = fields
+        entry = IndexEntry(
+            mode=mode.decode(),
+            path=os.fsdecode(path),
+            stage=int(stage),
+            sha=sha.decode("ascii", errors="replace"),
+        )
         seen = by_path.get(entry.path)
         if seen is None or entry.stage < seen.stage:
             by_path[entry.path] = entry
@@ -158,12 +187,13 @@ def _state(
     roles: tuple[str, ...],
     message: str,
     evidence: str | None = None,
+    line: int = 0,
 ) -> PendingFinding:
     return PendingFinding(
         rule_id=rule_id,
         severity=severity,
         path=path,
-        line=0,
+        line=line,
         roles=roles,
         message=message,
         evidence=truncate_evidence(evidence),
@@ -226,18 +256,9 @@ def _collect_one(
         )
 
     if entry.is_submodule:
-        findings.append(
-            _state(
-                "submodule-present",
-                Severity.INFO,
-                entry.path,
-                (),
-                "embedded repository: its contents are scanned by its own pipeline, not here",
-            )
-        )
         return (
             FileEntry(path=entry.path, sha256=None, roles=(), skip_reason=SKIP_SUBMODULE),
-            tuple(findings),
+            (),
         )
 
     if entry.is_symlink:
@@ -399,6 +420,232 @@ def _window(text: str, index: int, width: int = 40) -> str:
     return text[start : index + width].replace("\x00", "<NUL>")
 
 
+def _is_submodule_header(stripped: str) -> bool:
+    """True when `stripped` is `[submodule "<non-empty name>"]` with no regex backtracking."""
+    if not (stripped.startswith("[") and stripped.endswith("]")):
+        return False
+    inner = stripped[1:-1].strip()
+    head, sep, rest = inner.partition('"')
+    return (
+        head.strip().lower() == "submodule" and sep == '"' and rest.endswith('"') and len(rest) >= 2
+    )
+
+
+def _clean_gitconfig_value(raw: str) -> str:
+    """Extract a `.gitmodules` value, honoring quotes and inline `#` / `;` comments."""
+    text = raw.strip()
+    if not text:
+        return ""
+    if text.startswith('"'):
+        chars: list[str] = []
+        escaped = False
+        for index in range(1, len(text)):
+            ch = text[index]
+            if escaped:
+                chars.append({"n": "\n", "t": "\t", '"': '"', "\\": "\\"}.get(ch, ch))
+                escaped = False
+                continue
+            if ch == "\\":
+                escaped = True
+                continue
+            if ch == '"':
+                tail = text[index + 1 :].strip()
+                if tail and not tail.startswith(("#", ";")):
+                    return ""
+                return "".join(chars).strip()
+            chars.append(ch)
+        return ""
+    for index, ch in enumerate(text):
+        if ch in ("#", ";"):
+            return text[:index].strip()
+    return text.strip()
+
+
+def _parse_gitmodules(text: str, line_cap: int) -> tuple[_GitmoduleSection, ...]:
+    """Parse `.gitmodules` into sections without regexes, respecting `line_cap`."""
+    sections: list[_GitmoduleSection] = []
+    header: str | None = None
+    header_line = 0
+    valid_header = False
+    paths: list[str] = []
+    urls: list[str] = []
+
+    def flush() -> None:
+        if header is not None:
+            sections.append(
+                _GitmoduleSection(
+                    header=header,
+                    line=header_line,
+                    valid_header=valid_header,
+                    paths=tuple(paths),
+                    urls=tuple(urls),
+                )
+            )
+
+    for line_no, raw_line in enumerate(text.splitlines(), start=1):
+        if len(raw_line) > line_cap:
+            if header is None:
+                sections.append(
+                    _GitmoduleSection(
+                        header="<over-cap-line>",
+                        line=line_no,
+                        valid_header=False,
+                        paths=(),
+                        urls=(),
+                    )
+                )
+            else:
+                valid_header = False
+            continue
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith(("#", ";")):
+            continue
+        if stripped.startswith("["):
+            flush()
+            header = stripped
+            header_line = line_no
+            valid_header = _is_submodule_header(stripped)
+            paths = []
+            urls = []
+            continue
+        if header is None:
+            header = stripped
+            header_line = line_no
+            valid_header = False
+            paths = []
+            urls = []
+        key, sep, rhs = stripped.partition("=")
+        if not sep:
+            valid_header = False
+            continue
+        key_name = key.strip().lower()
+        value = _clean_gitconfig_value(rhs)
+        if key_name == "path":
+            paths.append(value)
+        elif key_name == "url":
+            urls.append(value)
+
+    flush()
+    return tuple(sections)
+
+
+def _submodule_findings(
+    index_entries: tuple[IndexEntry, ...],
+    gitmodules_entry: FileEntry | None,
+    gitmodules_has_state_finding: bool,
+    policy: Policy,
+    role_globs: Mapping[str, tuple[str, ...]],
+) -> tuple[PendingFinding, ...]:
+    """Cross-check mode `160000` gitlinks against `.gitmodules` and `policy.submodules` (7.2).
+
+    A gitlink in the index carries only a path and a commit SHA; the upstream URL lives in
+    `.gitmodules`. Every disagreement between the two, and every gitlink whose URL is not
+    authorized by the trusted `policy.submodules` list, produces its own scanner-state finding.
+    """
+    gitlinks = tuple(
+        entry for entry in index_entries if entry.is_submodule and not entry.is_unmerged
+    )
+    gitmodules_text = (
+        gitmodules_entry.text
+        if (
+            gitmodules_entry is not None
+            and gitmodules_entry.skip_reason is None
+            and not gitmodules_has_state_finding
+        )
+        else None
+    )
+    if not gitlinks and gitmodules_text is None:
+        return ()
+
+    sections = (
+        _parse_gitmodules(gitmodules_text, policy.line_cap) if gitmodules_text is not None else ()
+    )
+    by_path: dict[str, list[_GitmoduleSection]] = {}
+    for section in sections:
+        if section.is_well_formed:
+            by_path.setdefault(section.paths[0], []).append(section)
+
+    gitlink_paths = {entry.path for entry in gitlinks}
+    allowed_urls = frozenset(policy.submodules)
+    out: list[PendingFinding] = []
+
+    for entry in gitlinks:
+        commit_ref = entry.sha[:12] if entry.sha else "unknown"
+        matches = by_path.get(entry.path, [])
+        if len(matches) != 1:
+            detail = (
+                "matches multiple entries in .gitmodules"
+                if len(matches) > 1
+                else "has no matching path and url in .gitmodules"
+            )
+            out.append(
+                _state(
+                    "submodule-unmapped",
+                    Severity.HIGH,
+                    entry.path,
+                    (),
+                    f"gitlink at {entry.path} (index commit {commit_ref}) {detail}; "
+                    "its subtree is not scanned here",
+                    evidence=f"{entry.path}@{commit_ref}",
+                )
+            )
+            continue
+        url = matches[0].urls[0]
+        allowed = url in allowed_urls
+        status = (
+            "is allowed by policy.submodules" if allowed else "is not listed in policy.submodules"
+        )
+        out.append(
+            _state(
+                "submodule-present",
+                Severity.WARN if allowed else Severity.HIGH,
+                entry.path,
+                (),
+                f"gitlink at {entry.path} (index commit {commit_ref}, .gitmodules url {url!r}) "
+                f"{status}; its subtree is not scanned here",
+                evidence=f"{entry.path}@{commit_ref} {url}",
+            )
+        )
+
+    gm_roles = (
+        gitmodules_entry.roles
+        if gitmodules_entry is not None
+        else resolve_roles(GITMODULES_PATH, b"", role_globs)
+    )
+    for section in sections:
+        if not section.is_well_formed:
+            out.append(
+                _state(
+                    "submodule-orphan",
+                    Severity.WARN,
+                    GITMODULES_PATH,
+                    gm_roles,
+                    f".gitmodules section {section.header!r} at line {section.line} is missing "
+                    "a single path and url",
+                    evidence=section.header,
+                    line=section.line,
+                )
+            )
+            continue
+        sub_path = section.paths[0]
+        sub_url = section.urls[0]
+        if sub_path not in gitlink_paths:
+            out.append(
+                _state(
+                    "submodule-orphan",
+                    Severity.WARN,
+                    GITMODULES_PATH,
+                    gm_roles,
+                    f".gitmodules entry for {sub_path} (url {sub_url!r}) has no mode 160000 "
+                    "gitlink in the index",
+                    evidence=f"{sub_path} {sub_url}",
+                    line=section.line,
+                )
+            )
+
+    return tuple(out)
+
+
 def collect(
     repo_root: Path,
     policy: Policy,
@@ -409,10 +656,25 @@ def collect(
     A file that cannot be read produces a finding and an entry with `text=None`; it never
     disappears from the report.
     """
+    index_entries = list_tracked_files(repo_root)
     entries: list[FileEntry] = []
     findings: list[PendingFinding] = []
-    for index_entry in list_tracked_files(repo_root):
+    gitmodules_entry: FileEntry | None = None
+    gitmodules_has_state_finding = False
+    for index_entry in index_entries:
         entry, entry_findings = _collect_one(repo_root, index_entry, policy, role_globs)
         entries.append(entry)
         findings.extend(entry_findings)
+        if entry.path == GITMODULES_PATH:
+            gitmodules_entry = entry
+            gitmodules_has_state_finding = bool(entry_findings)
+    findings.extend(
+        _submodule_findings(
+            index_entries,
+            gitmodules_entry,
+            gitmodules_has_state_finding,
+            policy,
+            role_globs,
+        )
+    )
     return Collection(entries=tuple(entries), pending=tuple(findings))
