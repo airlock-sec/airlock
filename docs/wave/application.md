@@ -43,7 +43,7 @@ Say this plainly rather than letting a reviewer find it.
 
 | Claim | Status |
 |---|---|
-| The scanner runs: 22 rules, 3 code detectors plus the pattern engine, three output formats plus a step summary, 652 tests, CI green on every pull request, and it scans this repository on every build | Built, and the CI runs are public |
+| The scanner runs: 22 rules, 3 code detectors plus the pattern engine, three output formats plus a step summary, 664 tests, CI green on every pull request, and it scans this repository on every build | Built, and the CI runs are public |
 | The seven bypasses are confirmed against the real script, with a reproducible harness | Done 2026-10-27; `scripts/bypass_probe.py` reproduces it |
 | Five of the seven fail closed under Airlock today, measured | Now six. Cases 1 to 5 were measured on the `cfg-*` and `wasm-*` rules, and case 7 (a decode-and-eval payload under `vendor/`) was measured on 2026-10-30 against `python -m airlock scan --mode full` in a scratch repository: `1 HIGH · exit 1` from `pat-decode-eval`, which task 3.6's text-side slice added. Only case 6, a `.cargo/config.toml` shell `runner`, stays invisible until `cargo_vectors` (6.4). No bypass harness locks these in yet; that is task 3.9, issue 14 |
 | A repository can install it as a GitHub Action | Not built. `action.yml` is task 4.1, issue 15 |

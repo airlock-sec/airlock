@@ -110,15 +110,17 @@ CASES: tuple[Case, ...] = (
 )
 
 
-def build(repo: Path, script: Path, files: dict[str, bytes]) -> None:
-    """Create a committed scratch repository holding the script and one payload."""
+def build(repo: Path, files: dict[str, bytes]) -> None:
+    """Create a committed scratch repository holding one payload.
+
+    The scanner under test is not part of the repository this builds: this is the shared half, and
+    `install_script` is the probe's own step (`tests/bypass/` points the same shapes at this
+    package instead).
+    """
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
     subprocess.run(["git", "config", "user.name", "bypass-probe"], cwd=repo, check=True)
     subprocess.run(["git", "config", "user.email", "bypass-probe@localhost"], cwd=repo, check=True)
 
-    destination = repo / ".github" / "scripts" / "malware_scan.py"
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_bytes(script.read_bytes())
     (repo / "index.js").write_text("module.exports = {};\n", encoding="utf-8")
     commit(repo, "base: clean tree")
 
@@ -127,6 +129,14 @@ def build(repo: Path, script: Path, files: dict[str, bytes]) -> None:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(data)
     commit(repo, "case under test")
+
+
+def install_script(repo: Path, script: Path) -> None:
+    """Copy the external scanner in the way a real repository holds it, then commit it."""
+    destination = repo / ".github" / "scripts" / "malware_scan.py"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(script.read_bytes())
+    commit(repo, "vendor: the scanner under test")
 
 
 def commit(repo: Path, message: str) -> None:
@@ -179,7 +189,8 @@ def main(argv: list[str] | None = None) -> int:
     for case in CASES:
         with tempfile.TemporaryDirectory(prefix="airlock-bypass-") as tmp:
             repo = Path(tmp)
-            build(repo, script, case.files)
+            build(repo, case.files)
+            install_script(repo, script)
             code, output = scan(repo)
             note = ""
             if case.num == 2:

@@ -54,7 +54,7 @@ Scorecard reports were run on five repositories (Tollcraft: `soroban-budget-asse
 
 ### 2.3 What the current in-repo gate leaves open
 
-Each of the five repos runs `.github/workflows/malware-scan.yml` with `.github/scripts/malware_scan.py`. It is good work (about eight detector types Scorecard lacks), but a review found these weaknesses. Verified 2026-10-27: items 1, 2, 3, 5, 6 and 7 were each executed as a commit in a scratch repository with the real script copied in, and all six exit 0, which means the job passes (`run: python3 -I .github/scripts/malware_scan.py`, no `continue-on-error`). Item 4 is a property of where the files live, not of a rule, so it is confirmed by reading the workflow: the scan step is checked out from the PR's own head, and the allowlist and the scanner are in the tree it reads. The harness is `scripts/bypass_probe.py` (`--script` pointing at the external copy), and the detailed observations are in Appendix B. Airlock's fail-closed regressions for the same shapes are `tests/bypass/` (task 3.9).
+Each of the five repos runs `.github/workflows/malware-scan.yml` with `.github/scripts/malware_scan.py`. It is good work (about eight detector types Scorecard lacks), but a review found these weaknesses. Verified 2026-10-27: items 1, 2, 3, 5, 6 and 7 were each executed as a commit in a scratch repository with the real script copied in, and all six exit 0, which means the job passes (`run: python3 -I .github/scripts/malware_scan.py`, no `continue-on-error`). Item 4 is a property of where the files live, not of a rule, so it is confirmed by reading the workflow: the scan step is checked out from the PR's own head, and the allowlist and the scanner are in the tree it reads. The harness is `scripts/bypass_probe.py` (`--script` pointing at the external copy), and the detailed observations are in Appendix B. Airlock's fail-closed regressions for the same shapes live in `tests/bypass/` (task 3.9), where cases 1 to 5 and 7 run and case 6 is a skip naming 6.4.
 
 1. Wasm files are skipped silently because they begin with a NUL byte and `.wasm` is not in the binary extension list. **Confirmed**: `\0asm` puts a NUL in the first 4 KB, which the size/NUL test treats as binary noise and drops the file without a finding, and `.wasm` is absent from the extension list, so nothing else claims it either.
 2. Any text file containing a NUL byte in its first 4 KB, or larger than 5 MB, is skipped silently. **Confirmed**: `// <NUL>` plus a decode-and-eval line yields zero findings, and `node --check` still accepts that file, so the NUL costs the scan and not the payload.
@@ -358,8 +358,8 @@ Enforcement: `scripts/check_roadmap_touched.sh` in CI plus a PR template checkbo
 In a scratch repo with the current script copied in, commit each case and run the script. Exit code 0 where it should fail confirms the bypass.
 
 `scripts/bypass_probe.py` does exactly this and is reproducible: it builds one temporary git
-repository per case, copies in the script passed with `--script`, commits a clean base and then the
-case, and runs the script from the repository root with `-I`, which is how the workflow runs it. All
+repository per case, commits a clean base and then the case, copies in the script passed with
+`--script`, and runs it from the repository root with `-I`, which is how the workflow runs it. All
 seven cases below ran on 2026-10-27 (Python 3.14, `main` at `Tollcraft/soroban-budget-assert`).
 
 1. A `.wasm` file of any content. **Confirmed, 0 findings** — `\0asm` is a NUL within the first 4 KB, so the file is dropped by the binary/NUL test before any rule reads it, and `.wasm` is not in `BINARY_EXT`, so even the native-binary finding cannot reach it.
@@ -371,3 +371,9 @@ seven cases below ran on 2026-10-27 (Python 3.14, `main` at `Tollcraft/soroban-b
 7. A file under `vendor/` (or `dist/`) containing `eval(Buffer.from(a,'base64'))`. **Confirmed, 0 findings** — `SKIP_DIRS` is matched against the path prefix before the file is opened.
 
 Each becomes a permanent regression test in Airlock and must fail closed.
+
+Status, task 3.9: cases 1 to 5 and 7 run as `tests/bypass/test_bypass_<n>_<slug>.py`, each asserting
+the rule ids and severities rather than a bare exit code, and case 3 runs the payload with and
+without the inline marker to prove the marker changes nothing. Case 6 is a skipped test naming task
+6.4, because `.cargo/config.toml` has no role and `cargo_vectors` is not written yet; the skip is
+the honest record and it turns into a normal test when 6.4 lands.
