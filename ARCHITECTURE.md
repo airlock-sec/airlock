@@ -178,12 +178,46 @@ Cost: a PR that adds a legitimate Wasm fixture fails until the manifest change m
 | Reporter | Notes |
 |---|---|
 | console | Severity, rule, `path:line`, message; summary line with counts, suppressed count and skip accounting |
-| github | `::error`, `::warning` and `::notice` commands; escapes `%`, `\r`, `\n`, `:` and `,` in properties; HIGH first; each severity capped, and a capped list ends with one annotation naming how many went unlisted |
+| github | `::error`, `::warning` and `::notice` commands; escapes `%`, `\r`, `\n`, `:` and `,` in properties; HIGH first; each severity capped one slot under the ten annotations a step keeps, and the capped list ends with the annotation naming how many went unlisted, inside the same ten |
 | json | Full `ScanReport` model, including every suppressed finding and its reason |
-| summary | Markdown to `$GITHUB_STEP_SUMMARY`: counts, skipped-file counts, every HIGH; evidence rendered only inside fenced code blocks with the fence length chosen to exceed any backtick run in the evidence, truncated to a fixed length. Rule ids and paths outside a fence are escaped, so no `-` or `#` is substituted where a heading or list marker could form |
-| sarif (P1) | SARIF 2.1.0 with `partialFingerprints["airlock/v1"]` (D-09, ADR-019); result count capped; implementation deferred to task 7.6 |
+| summary | Markdown to `$GITHUB_STEP_SUMMARY`: counts, skipped-file counts, every HIGH; evidence rendered only inside fenced code blocks with the fence length chosen to exceed any backtick run in the evidence, truncated to a fixed length. Rule ids and paths outside a fence are escaped, so no `-` or `#` is substituted where a heading or list marker could form. A step summary is capped at 1 MiB by the runner and losing it does not fail the step, so the total size needs its own budget (7.13) |
+| sarif (P1) | SARIF 2.1.0 with `partialFingerprints["airlock/v1"]` (D-09, ADR-019); result count capped at or under GitHub's 5,000-after-trim figure; implementation deferred to task 7.6 |
 
-Evidence is attacker-controlled text. It is never rendered as raw markdown (B11). GitHub limits annotations per step and the size of step summaries; the design assumes truncation and so orders output by severity (B8). [Unverified: exact limits, task 0.9] Because the limits are unverified, the caps are reporter constants rather than policy settings: a repository cannot raise them, and 0.9 replaces the guesswork with measured numbers.
+Evidence is attacker-controlled text. It is never rendered as raw markdown (B11). Output is cut by GitHub's rendering limits, so the reporters order it by severity (B8). Task 0.9 verified those limits on 2026-10-30: every number below is attributed either to a GitHub page retrieved that day or to a hosted probe run, and the two columns stay separate because a documented number can change with the docs while an observed one records what the runner did.
+
+**Documented limits**
+
+| What | Value | Source (retrieved 2026-10-30 UTC) |
+|---|---|---|
+| Annotations per Checks API request | 50, and an update appends to those already on the check run | [REST: check runs](https://docs.github.com/en/rest/checks/runs) |
+| Annotations per Actions step | 10 warning and 10 error | [REST: check runs](https://docs.github.com/en/rest/checks/runs) |
+| Annotation `message`, `raw_details` | 64 KB each | [REST: check runs](https://docs.github.com/en/rest/checks/runs) |
+| Annotation `title` | 255 characters | [REST: check runs](https://docs.github.com/en/rest/checks/runs) |
+| Check run `output.summary`, `text` | 65,535 characters each | [REST: check runs](https://docs.github.com/en/rest/checks/runs) |
+| Step summary | 1 MiB per step. Above it "the upload for the step will fail and an error annotation will be created", and "upload failures for job summaries do not affect the overall status of a step or a job" | [Workflow commands](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands) |
+| Job summaries displayed per job | 20 | [Workflow commands](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands) |
+| SARIF upload | "For each gzip-compressed SARIF file, SARIF upload supports a maximum size of 10 MB. Any uploads over this limit will be rejected" | [SARIF support for code scanning](https://docs.github.com/en/code-security/reference/code-scanning/sarif-files/sarif-support) |
+| SARIF results per run | 25,000, and "only the top 5,000 results will be included, prioritized by severity" | [REST: code scanning](https://docs.github.com/en/rest/code-scanning/code-scanning#upload-an-analysis-as-sarif-data) |
+| SARIF runs per file, rules per run | 20 and 25,000 | [REST: code scanning](https://docs.github.com/en/rest/code-scanning/code-scanning#upload-an-analysis-as-sarif-data) |
+| SARIF thread flow locations per result, locations per result | 10,000 (top 1,000 kept) and 1,000 (100 kept) | [REST: code scanning](https://docs.github.com/en/rest/code-scanning/code-scanning#upload-an-analysis-as-sarif-data) |
+
+**Observed**
+
+Probe: `wagmiiii/airlock-isolation-probe`, branch `limits-probe`, `ubuntu-latest`, workflow file `Reporter limits probe`. Run 41016320957, `annotations` job 123933359559. One step emitted 60 `::error`, 30 `::warning` and 25 `::notice`; a second step emitted 12 more `::error`. The finished check run reported 41 annotations: `probe-error-1..10`, `second-error-1..10`, `probe-warning-1..10`, `probe-notice-1..10`, and one runner notice that has nothing to do with the probe. So the documented per-step cap holds, it applies per level rather than per step in total, `::notice` is capped at 10 too even though the page names only warning and error, and the survivors are the first ten in emission order. 52 of the 72 errors and 15 of the 25 notices were discarded, and the job still reported success.
+
+Summary probe, same run, job 123933359709: a 65,536-byte summary was accepted; a 1,048,577-byte summary was rejected with `$GITHUB_STEP_SUMMARY upload aborted, supports content up to a size of 1024k, got 1024k`, the job stayed `success` and the following step still ran; a 1,048,000-byte summary hung for over 12 minutes against `timeout-minutes: 10` and had to be cancelled. Just under the ceiling is worse than over it.
+
+Push base, runs 41016540033, 41016922073 and 41017078745 on the same branch: a push to a new branch reports `before=0000000000000000000000000000000000000000`; an ordinary push reports the previous tip, which `actions/checkout` at its default depth does not contain (`depth=1`, base unreachable) but a full fetch recovers (`after_full_fetch_depth=5`, base reachable); a force push reports the rewritten commit (`before=65ab62a6dc…`, `sha=18ea1cf510…`), which is unreachable at both depths. `policy.py` already treats these three cases as it does, and section 10's exit 2 shallow case is the middle row measured under the default checkout.
+
+**What the reporters do with this**
+
+`github.py` cuts each severity one slot below the budget (9 HIGH, 9 WARN, 8 INFO) so the withheld-count note and the suppression note, which is also a `::notice`, are rendered inside the ten lines that survive. The previous values, 50 HIGH and 25 WARN, were above what a step keeps, which meant the annotation saying how many went unlisted was itself never seen: the accounting was right and the delivery was not. Caps stay reporter constants rather than policy settings; a repository must not be able to raise them. All of a scan's annotations come from the one step that runs the CLI, so the per-step cap binds and the composite Action must not spread the annotation stream across steps to buy headroom (4.1).
+
+`summary.py` has no byte budget. Every HIGH is listed by design, so a finding set large enough to pass 1 MiB loses the whole summary without failing anything: an attacker can choose to hide the reviewer's copy of the findings. Task 7.13 carries that, along with the 20-summaries-per-job fact that a chunked summary would have to respect.
+
+7.6 has its numbers: 10 MB compressed, 5,000 results per run after GitHub's severity-ordered cut, 20 runs per file, 100 locations kept per result. A report above 5,000 results is trimmed by GitHub rather than rejected, so the cap belongs in the reporter.
+
+[Unverified: whether `merge_group` events deliver a usable base. GitHub documents the trigger, its `checks_requested` activity type, and that `GITHUB_SHA` and `GITHUB_REF` are the merge group's SHA and ref ([events that trigger workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows)), but it documents no `before` equivalent, and measuring reachability needs a merge queue on the repository. Task 4.1 decides whether Airlock supports the event at all; it is not assumed here.]
 
 ## 7. Data models
 
@@ -636,14 +670,14 @@ All remaining work, with task IDs, dependencies and exit criteria: `ROADMAP.md`.
 1. Resolved (0.8): `python3 -I -c` with the explicit trusted `sys.path` insert worked on `ubuntu-latest`, CPython 3.11.17, on 2026-10-28. Section 10 records the workflow, trusted origins and exits 0/0/2 for full/PR/shallow scans. Composite Action integration remains task 4.1, not part of this verification.
 2. What are the real `tail_max_len` and `tail_entropy` values on the six-repo corpus? (3.3)
 3. Can GitHub pin a required status check to a trusted source, and what happens when the job is deleted? (0.13, 4.5)
-4. What are GitHub's limits on annotations, step summaries and SARIF? (0.9)
+4. Verified (0.9, 2026-10-30): GitHub keeps the first 10 annotations of each level per step, caps a step summary at 1 MiB without failing the step, and takes a gzip-compressed SARIF file up to 10 MB with 5,000 results kept per run. Section 6.6 separates the documented numbers from the observed ones and records the probe runs. `merge_group` base reachability was not measured and stays open under 4.1.
 5. Exact SEP-58 metadata keys and Soroban metadata section names. (0.11)
 6. Resolver-2 feature behavior for `testutils` inherited via the workspace. (0.12)
 7. Should watch mode exist? (decision D-04)
 
 ## 16. Red-team review
 
-This is design-review analysis. Nothing here has been run. Every item is a hypothesis that should become a test or a task. GitHub-specific claims are marked [Unverified] until checked (tasks 0.9 and 0.13).
+This is design-review analysis. Nothing here has been run. Every item is a hypothesis that should become a test or a task. GitHub-specific claims were marked [Unverified] until checked; task 0.9 measured the reporting limits on 2026-10-30 (section 6.6) and 0.13 remains open.
 
 ### 16.1 Ranking
 
@@ -660,7 +694,7 @@ Likelihood and impact are rough judgments (H, M, L).
 | B5 | A suppressed line is duplicated elsewhere in the same file | Line-free fingerprints suppress the copy too | M / H | Occurrence-aware fingerprints | 2.6 |
 | B6 | A payload is committed under `vendor/`, `dist/` or `node_modules/` | The old script and the first draft of this design skip those paths | M / H | No default directory skips; bypass test 7 | 2.2, 3.9 |
 | B7 | Runner has Python older than 3.11, no `git`, or git `safe.directory` errors | Every repo goes red with an opaque exit 3 and users disable the tool | M / M | Startup checks with plain messages, exit 2 | 2.3 |
-| B8 | A flood of WARNs buries a HIGH | GitHub truncates annotations and summaries [Unverified] | M / H | HIGH first, caps, every HIGH in the summary | 2.9, 7.10 |
+| B8 | A flood of WARNs buries a HIGH | GitHub keeps the first 10 annotations of each level per step and drops a step summary above 1 MiB without failing the step (0.9, 6.6) | M / H | HIGH first, caps one slot under the budget, every HIGH in the summary | 2.9, 7.10, 7.13 |
 | B9 | New Wasm fixture fails its own PR | Base-ref manifest does not yet list it | H / M | Documented two-step flow; revisit if adoption suffers | risk register |
 | B10 | Suppression expiry turns CI red on a date | Users learn to bulk-extend | M / L | Optional `expires`, 30-day warning, only that finding returns | 2.8, 7.11 |
 | B11 | Evidence text injects markdown or annotation syntax | Evidence is a line of attacker-controlled code | M / M | Fenced evidence with safe fence length; escaped annotations | 2.9 |

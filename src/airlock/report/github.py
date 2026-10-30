@@ -5,11 +5,12 @@ Emits `::error`, `::warning` and `::notice` workflow commands. Properties (`file
 goes through `escape_data`, which handles `%`, CR and LF. Both orders matter: `%` is escaped
 first, or a later substitution would inject a `%` that itself gets escaped again.
 
-Why HIGH leads and why there are caps at all (B8): GitHub renders only a fraction of the
-annotations attached to a check run, and which fraction is not documented well enough to build
-on [Unverified: exact limits, task 0.9]. So the reporter assumes truncation and chooses the
-survivors rather than leaving it to the runner. Findings already arrive in report order, so the
-first `high_cap` annotations are the first HIGHs.
+Why HIGH leads and why there are caps at all (B8): GitHub keeps only the first ten annotations of
+each level from a single step; the rest are discarded, and the discarded ones never appear in the
+check run at all (`ARCHITECTURE.md` 6.6, task 0.9). So the reporter chooses the survivors rather
+than leaving it to the runner, and it leaves a slot for the note that names what was withheld: a
+cap that spends the whole budget on findings hides the fact that anything was cut. Findings already
+arrive in report order, so the first `high_cap` annotations are the first HIGHs.
 
 Nothing is dropped quietly: when a cap bites, one more annotation of that severity says how many
 went unlisted, so a flood of WARNs cannot make a HIGH look absent and a capped HIGH list cannot
@@ -20,11 +21,15 @@ from __future__ import annotations
 
 from ..model import Finding, ScanReport, Severity
 
-#: Cap values are deliberately conservative and live here, not in policy: a repository cannot
-#: raise them, and task 0.9 replaces the guesswork with measured limits.
-HIGH_ANNOTATIONS = 50
-WARN_ANNOTATIONS = 25
-INFO_ANNOTATIONS = 10
+#: Observed on a hosted runner (task 0.9): the first 10 annotations of each level from one step
+#: survive, and the step's exit status is unaffected by the loss. The scan emits from one step.
+ANNOTATIONS_PER_LEVEL = 10
+
+#: Cap values live here, not in policy: a repository cannot raise them. Each level keeps one slot
+#: for the withheld-count note; INFO keeps two, because the suppression note is also a `::notice`.
+HIGH_ANNOTATIONS = ANNOTATIONS_PER_LEVEL - 1
+WARN_ANNOTATIONS = ANNOTATIONS_PER_LEVEL - 1
+INFO_ANNOTATIONS = ANNOTATIONS_PER_LEVEL - 2
 
 #: The command name GitHub reads each severity level into.
 _COMMANDS = {Severity.HIGH: "error", Severity.WARN: "warning", Severity.INFO: "notice"}

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -218,12 +219,12 @@ class TestGithubAnnotations:
 
     def test_each_severity_is_capped_and_the_withheld_count_is_said(self) -> None:
         highs = tuple(finding(rule_id=f"cfg-h{i}", path=f"h{i}.js") for i in range(60))
-        text = github.render(report(*highs), high_cap=50)
+        text = github.render(report(*highs))
         lines = text.rstrip("\n").split("\n")
 
-        assert len(lines) == 51
+        assert len(lines) == github.ANNOTATIONS_PER_LEVEL
         assert lines[-1].startswith("::error title=airlock::")
-        assert "10 HIGH finding(s) are not annotated" in lines[-1]
+        assert "51 HIGH finding(s) are not annotated" in lines[-1]
 
     def test_a_warn_flood_cannot_push_a_high_out_of_the_output(self) -> None:
         """B8 through the annotation cap: the surviving annotations are the HIGHs."""
@@ -231,11 +232,52 @@ class TestGithubAnnotations:
             finding(severity=Severity.WARN, rule_id=f"cfg-w{i}", path=f"w{i}.js")
             for i in range(200)
         ]
-        text = github.render(report(*flooded), warn_cap=25, high_cap=50)
+        text = github.render(report(*flooded))
 
         assert "::error " in text
         assert text.rstrip("\n").split("\n")[0].startswith("::error ")
         assert text.count("::error ") == 1
+
+    @pytest.mark.parametrize(
+        ("prefix", "rule_prefix"),
+        [
+            ("::error ", "cfg-high"),
+            ("::warning ", "cfg-warn"),
+            ("::notice ", "cfg-info"),
+        ],
+    )
+    def test_no_level_writes_more_lines_than_a_step_can_keep(
+        self, prefix: str, rule_prefix: str
+    ) -> None:
+        """The measured budget (0.9): 10 annotations of each level survive one step.
+
+        Everything past that is discarded by the runner, including the note that names what was
+        withheld, so the cap has to leave a slot for the note rather than spend all of them.
+        """
+        flooded = [
+            finding(severity=severity, rule_id=f"{rule_prefix}-{i}", path=f"f{i}.js")
+            for severity, rule_prefix in zip(
+                Severity, ("cfg-high", "cfg-warn", "cfg-info"), strict=True
+            )
+            for i in range(100)
+        ]
+        text = github.render(report(*flooded, suppressed=(finding(),)))
+
+        assert sum(1 for line in text.split("\n") if line.startswith(prefix)) == (
+            github.ANNOTATIONS_PER_LEVEL
+        )
+
+    def test_the_suppression_note_shares_the_notice_budget_with_the_info_cap(self) -> None:
+        """Two `::notice` lines are metadata, not findings: an INFO flood must not cost them."""
+        infos = [
+            finding(severity=Severity.INFO, rule_id=f"cfg-i{i}", path=f"i{i}.js") for i in range(40)
+        ]
+        text = github.render(report(*infos, suppressed=(finding(),)))
+        notices = [line for line in text.split("\n") if line.startswith("::notice ")]
+
+        assert len(notices) == github.ANNOTATIONS_PER_LEVEL
+        assert any("are not annotated above" in line for line in notices)
+        assert any("hidden by the trusted airlock.toml" in line for line in notices)
 
     def test_an_empty_report_annotates_nothing(self) -> None:
         assert github.render(report(exit_code=EXIT_PASS)) == ""
@@ -248,6 +290,33 @@ class TestGithubAnnotations:
         )
 
         assert text == expected
+
+
+class TestDocumentedLimits:
+    """Task 0.9 replaced the guessed caps with a measured boundary. Guard both halves.
+
+    The check fails if the design text loses the numbers the constants are justified by, and if a
+    cap grows past what a step renders, which is the failure the old 50/25 values had.
+    """
+
+    def test_the_recorded_limits_are_still_cited_where_the_caps_come_from(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        reporters = (
+            (root / "ARCHITECTURE.md")
+            .read_text(encoding="utf-8")
+            .split("### 6.6 Reporters\n", 1)[1]
+            .split("\n## ", 1)[0]
+        )
+
+        assert "[Unverified: exact limits" not in reporters
+        assert "10 warning and 10 error" in reporters
+        assert "1 MiB per step" in reporters
+        assert "41016320957" in reporters
+
+    def test_every_level_leaves_a_slot_for_its_own_accounting_note(self) -> None:
+        assert github.HIGH_ANNOTATIONS + 1 == github.ANNOTATIONS_PER_LEVEL
+        assert github.WARN_ANNOTATIONS + 1 == github.ANNOTATIONS_PER_LEVEL
+        assert github.INFO_ANNOTATIONS + 2 == github.ANNOTATIONS_PER_LEVEL
 
 
 class TestJSON:
