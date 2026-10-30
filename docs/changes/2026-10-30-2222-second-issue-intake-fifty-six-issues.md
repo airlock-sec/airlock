@@ -31,8 +31,7 @@ the curated fifteen.
 `scripts/create_wave_issues.sh` now skips a `README.md` in the target directory. The
 glob picked it up and the title check refused it, so a directory that documents its own
 batch could not be staged at all. `docs/issues/README.md` records the themes and the
-publish commands. A dry run over the directory prints `56 issue(s) staged, nothing
-created`.
-
-Not done here: creating the issues. That is an external action and a maintainer's call,
-so the batch stops at staged.
+publish commands. A dry run over the directory printed `56 issue(s) staged, nothing
+created`, and the apply run then created #52 to #107 in filename order. Each body's
+`{{issue:self}}` was patched immediately after creation; the first and the last were
+checked and read `Closes #52` and `Closes #107`.

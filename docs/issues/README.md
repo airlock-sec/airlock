@@ -26,6 +26,6 @@ sh scripts/create_wave_issues.sh --dir docs/issues           # dry run, prints e
 sh scripts/create_wave_issues.sh --dir docs/issues --apply   # creates them, in filename order
 ```
 
-The dry run is the default and makes no network call. `--apply` still requires the repository to have a `Stellar Wave` label, for the reason `docs/wave/settings.md` gives: on a repository Drips has not approved, that label is stripped and an issue created without it scores nothing. Creating issues is an external, visible action, so it is a maintainer's decision, not a side effect of merging this directory.
+The dry run is the default and makes no network call. `--apply` still requires the repository to have a `Stellar Wave` label, for the reason `docs/wave/settings.md` gives: on a repository Drips has not approved, that label is stripped and an issue created without it scores nothing. This batch was published as #52 to #107. Creating issues is an external, visible action, so it stays a maintainer's decision rather than a side effect of merging this directory.
 
 Files are created in filename order, and `{{issue:self}}` is replaced with each issue's own number immediately after creation so the `Closes #N` line is correct. Keep the numeric prefixes when adding to the batch: they are the publish order, not a ranking.
