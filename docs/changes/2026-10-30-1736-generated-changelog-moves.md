@@ -56,7 +56,15 @@ repository's own commit tie every row to a record and every record to the order 
 generator produces; `ruff check`, `ruff format --check`, `mypy src` and the full
 self-scan run green over the tree with the new directory in it.
 
-Not covered: the hosted runs of `roadmap-check.yml` and CI, which are the evidence that
-the gate still fails a real pull request; the open pull requests, whose hand-written rows
-become records on their own branches before they merge; and the collision argument
-itself, which only a second branch can test.
+Observed while this was open, by the second branch the argument needs: #47 merged into
+`main` and conflicted with this branch in three places. Two of them are derived data this
+change owns, the generated changelog block and the `Last updated` line, and both were
+resolved by keeping this branch's block and re-running the generator. The third is the pair
+of documents that state the rule count and the test count, which are not generated and were
+resolved by hand against a fresh measurement. #47's hand-written row became
+`2026-10-30-1556-close-two-unblocked-indicators-credential.md`, keeping its 5,964 characters
+verbatim in the body, so the directory holds 38 records and section 9 renders 38 rows.
+
+Not covered: the hosted runs of `roadmap-check.yml` and CI, which are the evidence that the
+gate still fails a real pull request, and the remaining open pull requests, whose
+hand-written rows become records the same way.

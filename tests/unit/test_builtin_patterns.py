@@ -32,7 +32,14 @@ RULES = load_rules(
     known_detectors=detectors.DETECTOR_NAMES,
     known_roles=sorted(known_roles(ROLE_GLOBS)),
 )
-FAMILY = ("pat-decode-eval", "pat-invisible-unicode", "pat-exfil-endpoint", "pat-obfuscator-id")
+FAMILY = (
+    "pat-decode-eval",
+    "pat-invisible-unicode",
+    "pat-exfil-endpoint",
+    "pat-obfuscator-id",
+    "pat-credential-harvest",
+    "pat-chain-c2",
+)
 
 #: Every role a `builtin_patterns` rule may claim: text that is code, not prose, not a binary.
 CODE_ROLES = ["editor-autorun", "other", "source", "tooling-config"]
@@ -43,7 +50,57 @@ EVAL = "ev" + "al"
 BUFFER_FROM = "Buf" + "fer" + "." + "from"
 ATOB = "at" + "ob"
 PASTEBIN = "paste" + "bin.com"
+AWS_CRED = ".aws" + "/" + "credentials"
+TRONGRID = "trongrid" + "." + "io"
 CASE_SEVEN = f"{EVAL}({BUFFER_FROM}(process.argv[2], 'base64'))"
+
+#: Separators and leaf names, split the way every other trigger string in this file is split, so
+#: the paths a credential rule matches exist in the committed text only as the parts they join from
+#: (`AGENTS.md` 4). `Login Data`, the wallet file and the browser key databases need it most: a bare
+#: file name inside a double-quoted Python string is exactly the shape the rule looks for, and a
+#: committed path would report the file that names it.
+SLASH = "/"
+BACKSLASH = "\\"
+DOT = "."
+LOGIN_DATA = "Login" + " " + "Data"
+WALLET_DAT = "wallet" + DOT + "dat"
+KEY3_DB = "key" + "3" + DOT + "db"
+KEY4_DB = "key" + "4" + DOT + "db"
+
+
+def join_path(*parts: str, sep: str = SLASH) -> str:
+    """Join path parts at call time, so a spelling lives in the run and not in the file."""
+    return sep.join(parts)
+
+
+def windows_path(*parts: str) -> str:
+    """A Windows-shaped absolute path, because the rule's separator classes carry a backslash."""
+    return "C:" + join_path("", *parts, sep=BACKSLASH)
+
+
+#: The store paths `pat-credential-harvest` has to keep reaching now that every branch sits behind
+#: the `[./\\."']` anchor: what a loader, a setup script, a browser profile or a chain CLI writes.
+CREDENTIAL_SPELLINGS: dict[str, str] = {
+    "posix home aws": join_path("~", ".aws", "credentials"),
+    "root owned ssh key": join_path("", "root", ".ssh", "id_ed25519"),
+    "ssh rsa key": join_path("", "root", ".ssh", "id_rsa"),
+    "windows aws": windows_path("Users", "dev", ".aws", "credentials"),
+    "windows ssh key": windows_path("Users", "dev", ".ssh", "id_ed25519"),
+    "windows chrome login data": windows_path("User Data", "Default", LOGIN_DATA),
+    "windows chrome local storage": windows_path(
+        "User Data", "Default", "Local Storage", "leveldb"
+    ),
+    "macos chrome login data": join_path("", "Library", "Chrome", "Default", LOGIN_DATA),
+    "solana cli keypair": join_path("~", ".config", "solana", "id.json"),
+    "gnupg private dir": join_path("~", ".gnupg", "private-keys-v1" + DOT + "d"),
+    "firefox key database": join_path(
+        "~", ".mozilla", "firefox", "profiles", "abc.default", KEY4_DB
+    ),
+    "bare key database in a join": join_path(KEY3_DB),
+    "bitcoin wallet": join_path("~", ".Bitcoin", WALLET_DAT),
+    "electrum wallets": join_path("~", ".electrum", "Electrum", "wallets", "default_wallet"),
+    "multiversx wallets": join_path("~", ".multiversx", "MultiversX", "wallets", "wallet.json"),
+}
 
 
 def git(root: Path, *args: str) -> str:
@@ -153,6 +210,70 @@ class TestAppendixBCase7:
         assert report.exit_code == EXIT_PASS
         tiers = [item.severity for item in report.findings if item.rule_id == "pat-exfil-endpoint"]
         assert tiers == [Severity.WARN]
+
+    def test_a_named_credential_store_is_a_warn_on_its_own(self, repo: Path) -> None:
+        """3.7 owns the HIGH here: a path becomes the attack when a line reads it and sends it."""
+        commit_files(repo, {"scripts/provision.py": f'KEYS = os.path.expanduser("~/{AWS_CRED}")\n'})
+
+        report = run_scan(repo, Mode.FULL)
+
+        assert report.exit_code == EXIT_PASS
+        found = [item for item in report.findings if item.rule_id == "pat-credential-harvest"]
+        assert [item.severity for item in found] == [Severity.WARN]
+        assert found[0].path == "scripts/provision.py"
+
+    def test_a_public_chain_node_is_named_without_borrowing_the_configs_verdict(
+        self, repo: Path
+    ) -> None:
+        """A host in application code is a WARN; the same host configured in a build config is the
+        HIGH that `cfg-chain-endpoint` already reports, and this rule does not claim that."""
+        line = f'const NODE = "https://nile.{TRONGRID}/wallet/fullnode";\n'
+        commit_files(repo, {"src/rpc.js": line})
+
+        report = run_scan(repo, Mode.FULL)
+
+        assert report.exit_code == EXIT_PASS
+        assert [item.severity for item in report.findings if item.rule_id == "pat-chain-c2"] == [
+            Severity.WARN
+        ]
+        assert "cfg-chain-endpoint" not in {item.rule_id for item in report.findings}
+
+
+class TestTheCiSurfaceIsReachedByTheFallback:
+    def test_a_workflow_is_read_because_its_extension_resolves_to_source(self) -> None:
+        """`pat-*` names no workflow role, and reads a workflow anyway: the claim in the rule file
+        is that the four code roles already cover the CI surface."""
+        path = ".github/workflows/release.yml"
+        roles = resolve_roles(path, b"", ROLE_GLOBS)
+        assert {"workflow", "source"} <= set(roles)
+        assert "pat-credential-harvest" in hits(path, roles, f'run: cat "$HOME/{AWS_CRED}"\n')
+
+    def test_a_package_manifest_is_read_for_the_same_reason(self) -> None:
+        path = "package.json"
+        roles = resolve_roles(path, b"", ROLE_GLOBS)
+        assert {"package-manifest", "source"} <= set(roles)
+        assert "pat-chain-c2" in hits(path, roles, f'"rpc": "https://api.{TRONGRID}/"\n')
+
+
+class TestTheCredentialAnchorKeepsItsRecall:
+    """The path rule is anchored behind a one-character class, which is what makes it cheap.
+
+    That shape is a trade, so the trade is checked rather than claimed. The flat alternation the
+    first draft shipped with matched a store name anywhere on a line; the shipped form matches it
+    only behind a separator, a quote or a dot, which is also why one adversarial cap-length line
+    costs 1.2 ms instead of 10.3 (`ARCHITECTURE.md` 9.6). Each spelling below is a path a real
+    loader, a setup script or a browser profile writes, assembled at import time from the separator
+    constants so this file holds parts rather than payloads, and every one has to fire. An anchor
+    is only free if it costs no reach this list already had.
+    """
+
+    @pytest.mark.parametrize(
+        "spelling", list(CREDENTIAL_SPELLINGS.values()), ids=list(CREDENTIAL_SPELLINGS)
+    )
+    def test_a_store_named_behind_a_separator_still_fires(self, spelling: str) -> None:
+        assert "pat-credential-harvest" in hits(
+            "lib/collect.js", ("source",), f'const blob = load("{spelling}");'
+        )
 
 
 class TestInvisibleCharacters:
