@@ -14,8 +14,9 @@ compromise open-source Stellar projects: payloads appended to JS and TS build to
 editor tasks that run on folder open, and Wasm artifacts that do not match the build they claim.
 It is a scanner for a specific attack class, not a general-purpose antivirus.
 
-[Quick start](#quick-start) · [What it checks](#what-it-checks) · [Trust model](#trust-model) ·
-[Limits](#limits) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+[Documentation site](https://airlock-sec.github.io/airlock/) · [Quick start](#quick-start) ·
+[What it checks](#what-it-checks) · [Trust model](#trust-model) · [Limits](#limits) ·
+[Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 </div>
 
@@ -214,6 +215,7 @@ check: without that, a pull request that deletes the scan step simply never runs
 
 | Document | What it answers |
 |---|---|
+| [Documentation site](https://airlock-sec.github.io/airlock/) | overview, usage, the rule reference and the trust model, rendered from the rules that ship |
 | [`PRD.md`](PRD.md) | requirements, the seven bypass measurements in Appendix B, open questions |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | components, data models, the fail-closed table, ADRs, red-team review |
 | [`ARCHITECTURE_ESSENTIALS.md`](ARCHITECTURE_ESSENTIALS.md) | the hard rules, in one screen |
