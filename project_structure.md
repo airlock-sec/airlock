@@ -2,7 +2,7 @@
 
 Where everything lives, who may change it, and which way imports may point. Read this before creating or moving a file. Decisions behind the layout: `ARCHITECTURE.md` section 5. Work queue: `ROADMAP.md`.
 
-> **Roadmap rule (every contribution):** any change to this repository, by a human or an agent, must update `ROADMAP.md` in the same pull request: tick or add tasks, add a changelog entry, refresh the progress table and the `Last updated` line. If you add, move or remove a file, also update this document.
+> **Roadmap rule (every contribution):** any change to this repository, by a human or an agent, must update `ROADMAP.md` in the same pull request: tick or add your tasks in `ROADMAP.md`, add one change record under `docs/changes/` named `YYYY-MM-DD-HHMM-<slug>.md`, then run `python scripts/roadmap_progress.py`, which regenerates the progress table, the changelog and the `Last updated` line. Never hand-edit a generated region. If you add, move or remove a file, also update this document.
 
 Status: layout for v0.1.0 and v0.2.0. The directories, the package skeleton and `model.py`
 exist; the task reference on each line says which task makes that entry real. A stub module
@@ -66,11 +66,12 @@ airlock/
   scripts/
     bypass_probe.py                # roadmap 0.4: runs Appendix B against the external script it is given
     build_site.py                  # regenerates the site's rule reference, hero counts and rules.json (8.6)
-    check_roadmap_touched.sh       # CI gate: PR must change ROADMAP.md                                      (1.9)
-    roadmap_progress.py            # computes and checks the progress table                                  (1.9)
+    check_roadmap_touched.sh       # CI gate: the PR adds a docs/changes/ record                  (1.9, 1.15)
+    roadmap_progress.py            # generates the table, changelog and timestamp; --check        (1.9, 1.15)
     create_wave_issues.sh          # publishes docs/wave/issues; dry run unless --apply                      (1.14)
 
   docs/
+    changes/                       # one file per change: YYYY-MM-DD-HHMM-<slug>.md, front matter + record    (1.15)
     wave/
       issues/NN-<slug>.md          # one file per Wave issue: front matter (title, labels, roadmap) + body   (1.14)
       settings.md                  # repo settings to apply for program readiness: topics, labels, ruleset   (1.13)
@@ -167,7 +168,8 @@ model  <-  fingerprint, roles, rules  <-  collector, policy  <-  detectors  <-  
 | `PRD.md` | Scope, users, requirements | A requirement, priority or metric changes |
 | `ARCHITECTURE.md` | Design and decisions | Behavior, data models or ADRs change |
 | `ARCHITECTURE_ESSENTIALS.md` | Short outline for agents; keep under about 150 lines | Any hard rule, decision or detector list changes |
-| `ROADMAP.md` | Work queue, progress, changelog | **Every contribution** |
+| `ROADMAP.md` | Work queue, progress, changelog | **Every contribution**; its generated regions only through `scripts/roadmap_progress.py` |
+| `docs/changes/` | One record per change, the source the changelog is rendered from | Every contribution that changes a file; a record is never edited after merge |
 | `AGENTS.md`, `CLAUDE.md` | Agent instructions | Workflow, commands or boundaries change |
 | `project_structure.md` | This map | A file or directory is added, moved or removed |
 | `README.md`, `CONTRIBUTING.md` | Users and contributors | User-visible behavior or process changes |
@@ -181,4 +183,4 @@ If a code change contradicts a doc, fix the doc in the same PR. If a doc stateme
 
 - Rule reference docs are generated from `rules/*.toml` (task 5.2). Do not edit generated output by hand.
 - The site's rule reference and hero counts are generated from `rules/builtin/*.toml` by `scripts/build_site.py`, between the `RULES` and `TELEMETRY` markers; `site/data/rules.json` is written at the same time. Run the script after a rule change and commit the result. `--check` fails a stale page, and the Pages workflow and the unit suite both run it (8.6).
-- The progress table in `ROADMAP.md` is computed by `scripts/roadmap_progress.py`. Do not edit the numbers by hand once the script exists.
+- Three regions of `ROADMAP.md` are generated: the progress table from the task lines, the changelog in section 9 from `docs/changes/`, and the `Last updated` line from the newest record. Run `python scripts/roadmap_progress.py` after ticking a task or adding a record, and `--check` fails any region that disagrees with its source. Do not edit those regions by hand; the task lines and the records are what you edit.

@@ -59,7 +59,7 @@ Do not raise the caps as a side effect of this issue without the measurement to 
 - [ ] Each number is attributed to either a cited GitHub documentation page or an observed run, and the two are not mixed in the same sentence.
 - [ ] `HIGH_ANNOTATIONS`, `WARN_ANNOTATIONS` and `INFO_ANNOTATIONS` are either changed to values the evidence supports, or their comment says why the current values stand.
 - [ ] The SARIF limits 7.6 will need are recorded, so that task no longer has to guess.
-- [ ] `ROADMAP.md` carries a changelog row with a UTC date, `Last updated` moved, and `python scripts/roadmap_progress.py --check` passes.
+- [ ] A change record exists under `docs/changes/` with a UTC date, `ROADMAP.md` has been regenerated from it, and `python scripts/roadmap_progress.py --check` passes.
 - [ ] `python -m pytest`, `ruff check .`, `ruff format --check .` and `mypy src` all pass.
 - [ ] PR description includes `Closes #{{issue:self}}`.
 

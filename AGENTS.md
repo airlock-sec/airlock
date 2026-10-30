@@ -2,7 +2,7 @@
 
 Instructions for any coding agent (Claude Code, Codex, Cursor, Copilot and others) working in this repository. Humans can read it too. Keep it short; deep detail lives in the linked docs.
 
-> **Roadmap rule (every contribution):** any change, however small, must update `ROADMAP.md` in the same pull request: tick or add tasks, add a changelog entry, refresh the progress table and the `Last updated` line. A task is not finished until `ROADMAP.md` is current. CI enforces this once task 1.9 is done; until then, enforce it on yourself.
+> **Roadmap rule (every contribution):** any change, however small, must be recorded in the same pull request: tick or add your tasks in `ROADMAP.md`, add one file under `docs/changes/` named `YYYY-MM-DD-HHMM-<slug>.md` with `date:`, `tasks:` and `summary:` front matter, then run `python scripts/roadmap_progress.py`, which regenerates the progress table, the changelog and the `Last updated` line from those sources. Never hand-edit a generated region. A task is not finished until `ROADMAP.md` is current. The `roadmap` workflow enforces this (task 1.9, broadened by 1.15); until the check is required, enforce it on yourself.
 
 ## 1. What this project is
 
@@ -26,7 +26,7 @@ Do not load every document up front. Start with the essentials.
 4. Implement the smallest change that passes.
 5. Run the checks in section 5.
 6. Update docs that the change touches (`project_structure.md` for file moves, the PRD and architecture docs for behavior changes).
-7. **Update `ROADMAP.md`** (rule above): task boxes, changelog row (UTC date, summary, task IDs), progress table, `Last updated`.
+7. **Record the change** (rule above): one file under `docs/changes/` (UTC minute in the name, `date:`, `tasks:` and `summary:` front matter, the record below), your task boxes in `ROADMAP.md`, then `python scripts/roadmap_progress.py` to regenerate the table, the changelog and `Last updated`.
 8. Open a small PR using the template. One task or one tightly related group per PR.
 
 ## 4. Hard rules
@@ -61,8 +61,8 @@ ruff check .
 ruff format --check .
 mypy src
 python -m airlock scan --mode full             # self-scan; must report no HIGH findings
-scripts/check_roadmap_touched.sh               # the PR must change ROADMAP.md and its timestamp
-python scripts/roadmap_progress.py --check     # the progress table must match the task lines
+scripts/check_roadmap_touched.sh origin/main   # the PR adds a docs/changes/ record and regenerates ROADMAP.md
+python scripts/roadmap_progress.py --check     # the generated regions match the tasks and the records
 ```
 
 If a command does not exist yet, say so in the PR instead of silently skipping it.
@@ -99,7 +99,7 @@ If a command does not exist yet, say so in the PR instead of silently skipping i
 - Conventional Commits, subject under 72 characters.
 - Branch per task: `feat/<task-id>-<slug>`.
 - Never commit to the default branch, never force-push, never rewrite shared history.
-- PR description: task IDs, what changed, how it was tested, which docs were updated, and an explicit line confirming `ROADMAP.md` was updated.
+- PR description: task IDs, what changed, how it was tested, which docs were updated, and an explicit line confirming the change was recorded under `docs/changes/` and `ROADMAP.md` regenerated from it.
 - Do not auto-merge. Do not bump the pinned SHA of a GitHub Action without reading the diff.
 
 ## 10. When to stop and ask the owner
@@ -126,5 +126,5 @@ Take extra care in `src/airlock/policy.py`, `collector.py`, `runner.py`, `rules/
 - [ ] Tests written first and passing; all commands in section 5 green.
 - [ ] No hard rule in section 4 broken.
 - [ ] Docs updated where behavior, files or decisions changed.
-- [ ] `ROADMAP.md` updated: tasks, changelog row, progress table, `Last updated`.
+- [ ] `ROADMAP.md` current: your tasks ticked, one record added under `docs/changes/`, and the progress table, changelog and `Last updated` regenerated rather than hand-edited.
 - [ ] PR description lists task IDs and confirms the roadmap update.

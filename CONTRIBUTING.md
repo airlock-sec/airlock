@@ -12,9 +12,13 @@ same bar. The design lives in [`PRD.md`](PRD.md), [`ARCHITECTURE.md`](ARCHITECTU
 2. Check its dependencies are done. If they are not, stop and say so.
 3. Write the failing test or fixture first, then the smallest change that passes.
 4. Run `python -m pytest`, `ruff check .`, `ruff format --check .` and `mypy src`.
-5. **Update `ROADMAP.md` in the same pull request**: tick or add tasks, add a changelog row
-   with a UTC date, refresh the progress table and the `Last updated` line. A change is not
-   finished until the roadmap is current.
+5. **Record the change in the same pull request.** Add one file under `docs/changes/`, named
+   `YYYY-MM-DD-HHMM-<slug>.md` for the UTC minute it landed, with `date:`, `tasks:` and
+   `summary:` front matter and the record itself below. Tick or add your tasks in `ROADMAP.md`,
+   then run `python scripts/roadmap_progress.py`, which regenerates the progress table, the
+   changelog in section 9 and the `Last updated` line from those two sources. Check with
+   `python scripts/roadmap_progress.py --check`. A change is not finished until the roadmap is
+   current.
 6. Update any document the change touches. If the code contradicts a doc, fix the doc.
 7. If you changed a rule, run `python scripts/build_site.py` and commit the regenerated
    `site/` files. CI fails a stale page, because the published rule reference is generated from
@@ -25,6 +29,10 @@ same bar. The design lives in [`PRD.md`](PRD.md), [`ARCHITECTURE.md`](ARCHITECTU
 Branch per task as `feat/<task-id>-<slug>`. Conventional Commits, subject under 72
 characters. Never commit to the default branch, never force-push, never rewrite shared
 history, and do not bump a pinned Action SHA without reading the diff.
+
+A conflict in `ROADMAP.md` can now only be inside a generated block: take either side, run
+`python scripts/roadmap_progress.py`, and commit what it writes. Your change record is a file
+nobody else edits, so the two records survive the merge untouched.
 
 ## Boundaries
 

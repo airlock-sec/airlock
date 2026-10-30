@@ -4,9 +4,9 @@ Status: v0.2 (red-team revision). Outline of decisions an agent must not violate
 
 ## 0. Roadmap rule (read first)
 
-- `ROADMAP.md` must be updated in the same PR as every change: code, rules, tests, docs, CI, config, dependency bumps, reverts.
-- Update means: tick, untick or add tasks; add a changelog entry; refresh the progress table; refresh `Last updated`.
-- CI check: `scripts/check_roadmap_touched.sh` (task 1.9; until it exists, reviewers enforce by hand).
+- Every change is recorded in the same PR as the change: code, rules, tests, docs, CI, config, dependency bumps, reverts.
+- Recorded means: tick, untick or add tasks in `ROADMAP.md`; add one file under `docs/changes/` named `YYYY-MM-DD-HHMM-<slug>.md` with `date:`, `tasks:` and `summary:` front matter; run `scripts/roadmap_progress.py`, which regenerates the progress table, the changelog and `Last updated`. Never hand-edit a generated region.
+- CI check: `scripts/check_roadmap_touched.sh` and `scripts/roadmap_progress.py --check` (task 1.9, broadened by 1.15; until the check is required, reviewers enforce by hand).
 - If behavior changes, also update `PRD.md`, `ARCHITECTURE.md`, this file and `project_structure.md` in the same PR. [17]
 
 ## 1. What this is

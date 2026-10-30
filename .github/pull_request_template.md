@@ -13,7 +13,8 @@ could not be run and why; do not skip one quietly. -->
 
 ## Docs updated
 
-- [ ] `ROADMAP.md` (tasks, changelog row with UTC date, progress table, `Last updated`)
+- [ ] `docs/changes/` (one record: UTC minute in the name, `date:`, `tasks:`, `summary:`)
+- [ ] `ROADMAP.md` (task boxes, then `python scripts/roadmap_progress.py` to regenerate the progress table, the changelog and `Last updated`)
 - [ ] `project_structure.md` (if a file or directory was added, moved or removed)
 - [ ] `PRD.md` / `ARCHITECTURE.md` / `ARCHITECTURE_ESSENTIALS.md` (if behavior changed)
 
