@@ -20,11 +20,13 @@ With `--check` nothing is written: the script exits 1 when a committed region di
 source and prints what would be right. Without it, the blocks between the PROGRESS and CHANGELOG
 markers are replaced and the `Last updated:` line is set to the newest change entry.
 
-Change files live in `docs/changes/` next to the roadmap and are named
-`YYYY-MM-DD-HHMM-<slug>.md`, where the date and time in the name are the ones in the file. The
-front matter is `date:`, `tasks:` and `summary:`; the summary is the sentence that appears in the
-table and the rest of the file is the record itself. A roadmap with no CHANGELOG markers and no
-change files is a roadmap that has not adopted the changelog yet, and only the table is rendered.
+Change files live in `docs/changes/` and are named `YYYY-MM-DD-HHMM-<slug>.md`, where the date and
+time in the name are the ones in the file. The front matter is `date:`, `tasks:` and `summary:`;
+the summary is the sentence that appears in the table and the rest of the file is the record
+itself. A record is a fact about work that already happened, so a future date is refused, and a
+file nested below `docs/changes/` is refused rather than silently left out of the render. A
+roadmap with no CHANGELOG markers and no change files is a roadmap that has not adopted the
+changelog yet, and only the table is rendered.
 """
 
 from __future__ import annotations
@@ -33,7 +35,7 @@ import difflib
 import re
 import sys
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import NoReturn
 
@@ -58,7 +60,10 @@ CHANGE_NAME_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-(\d{4})-([a-z0-9][a-z0-9-]{1,
 # `key:` with nothing after it parses as an empty value, so the key-specific check says which
 # field is missing rather than blaming the line's shape.
 FRONT_RE = re.compile(r"^([a-z_]+):\s*(.*)$")
-UNESCAPED_PIPE = re.compile(r"(?<!\\)\|")
+# A summary becomes a table cell, so the only backslash it may carry is the one that escapes a
+# pipe. `[^\\|]` plus `\\\|` is the whole alphabet; `\\|` in the file is a stray backslash before
+# an unescaped pipe, which would render a four-cell row, so it fails here rather than in review.
+SUMMARY_CELL = re.compile(r"(?:[^\\|]|\\\|)*")
 
 #: Phase 9 is the backlog and sits outside the readiness sum; `v0.1.0` is phases 0 to 5.
 BACKLOG_PHASE = 9
@@ -68,6 +73,19 @@ SUM_ROW = "| **Phases 0 to 8** | **Readiness total** | **{done}** | **{total}** 
 
 def fail(message: str) -> NoReturn:
     raise SystemExit(f"roadmap_progress: {message}")
+
+
+def read_text(path: Path) -> str:
+    """Read a source of the generated regions.
+
+    CRLF is refused rather than silently normalised: the generator writes `\n`, so a file that
+    arrives with `\r\n` would show a whole-file diff on every regeneration and the derived blocks
+    would never settle.
+    """
+    raw = path.read_bytes()
+    if b"\r" in raw:
+        fail(f"{path.name} has a carriage return; these files are stored with `\\n` line endings")
+    return raw.decode("utf-8")
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,7 +103,8 @@ class Count:
 
 
 def _percent(done: int, total: int) -> str:
-    return f"{round(done / total * 100)}%"
+    """A row that has nothing counted yet reads 0% rather than raising a ZeroDivisionError."""
+    return f"{round(done / total * 100)}%" if total else "0%"
 
 
 def _tally(mark: str) -> int:
@@ -205,7 +224,7 @@ def read_change(path: Path) -> Change:
         )
     if not path.is_file():  # pragma: no cover - the glob only returns real files
         fail(f"{path} does not exist")
-    lines = path.read_text(encoding="utf-8").splitlines()
+    lines = read_text(path).splitlines()
     if not lines or lines[0].strip() != "---":
         fail(f"{path.name}: the file must open with a `---` front matter block")
     try:
@@ -237,11 +256,20 @@ def read_change(path: Path) -> Change:
             f"{path.name}: the name says {named[0]} {named[1][:2]}:{named[1][2:]} but the front "
             f"matter says {stamp.strftime('%Y-%m-%d')} {stamp.strftime('%H:%M')}"
         )
+    now = datetime.now(UTC).replace(tzinfo=None, second=0, microsecond=0)
+    if stamp > now:
+        fail(
+            f"{path.name}: date {fields['date']!r} is in the future; a record is written when the "
+            "work lands"
+        )
     summary = fields["summary"]
     if not summary:
         fail(f"{path.name}: summary is empty")
-    if UNESCAPED_PIPE.search(summary):
-        fail(f"{path.name}: summary has an unescaped `|`; the cell needs it written as `\\|`")
+    if SUMMARY_CELL.fullmatch(summary) is None:
+        fail(
+            f"{path.name}: summary has a bare `|` or a stray `\\`; a pipe in the cell must be "
+            "written `\\|`"
+        )
     if len(summary) > SUMMARY_MAX:
         fail(f"{path.name}: summary is {len(summary)} characters, over the {SUMMARY_MAX} limit")
     tasks = fields["tasks"]
@@ -256,6 +284,18 @@ def load_changes(root: Path) -> list[Change]:
     if not directory.is_dir():
         return []
     paths = sorted(p for p in directory.glob(f"*{CHANGE_SUFFIX}") if p.is_file())
+    # The glob above is deliberately not recursive, so a nested file would satisfy the gate and
+    # then be quietly left out of the changelog. Refuse it where it is visible.
+    nested = sorted(
+        p.relative_to(directory).as_posix()
+        for p in directory.rglob(f"*{CHANGE_SUFFIX}")
+        if p.is_file() and p.parent != directory
+    )
+    if nested:
+        fail(
+            f"change files sit directly in {CHANGE_DIR}/, not in a subdirectory: "
+            + ", ".join(nested[:5])
+        )
     for path in paths:
         if CHANGE_NAME_RE.match(path.name) is None:
             fail(
@@ -283,8 +323,11 @@ def replace_block(text: str, start: str, end: str, body: str) -> str:
 
 def set_timestamp(text: str, stamp: datetime) -> str:
     """Rewrite `Last updated:` from the newest change, so the line cannot be edited by hand."""
-    if TIMESTAMP_RE.search(text) is None:
+    found = TIMESTAMP_RE.findall(text)
+    if not found:
         fail("the document has no `Last updated:` line to set")
+    if len(found) > 1:
+        fail(f"the document has {len(found)} `Last updated:` lines; it has one, which is generated")
     moment = stamp.strftime("%Y-%m-%d %H:%M") if (stamp.hour or stamp.minute) else stamp.date()
     return TIMESTAMP_RE.sub(f"Last updated: {moment} UTC", text, count=1)
 
@@ -347,7 +390,7 @@ def main(argv: list[str]) -> int:
     check = "--check" in argv
     given = [arg for arg in argv if arg != "--check"]
     path = Path(given[0]) if given else Path(__file__).resolve().parents[1] / "ROADMAP.md"
-    text = path.read_text(encoding="utf-8")
+    text = read_text(path)
     expected, changelog = build(text, path.parent)
     if not check:
         if expected != text:

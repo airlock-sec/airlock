@@ -105,12 +105,13 @@ def git(root: Path, *args: str) -> str:
 
 @pytest.fixture
 def branch_repo(tmp_path: Path) -> Path:
-    """A repository with a `main` commit and an empty branch on top of it."""
+    """A repository with a `main` commit, one landed record, and an empty branch on top of it."""
     root = tmp_path / "repo"
     root.mkdir()
     git(root, "init", "-q", "--initial-branch=main")
     (root / "README.md").write_text("base\n", encoding="utf-8")
     (root / "ROADMAP.md").write_text(HEAD, encoding="utf-8")
+    add_record(root, "2026-10-01-0800-a-landed-change.md", date="2026-10-01 08:00")
     git(root, "add", "-A")
     git(root, "commit", "-q", "-m", "base")
     git(root, "checkout", "-q", "-b", "task")
@@ -118,14 +119,14 @@ def branch_repo(tmp_path: Path) -> Path:
 
 
 #: A record's whole front matter, for the cases that need an unusual set of keys.
-VALID_FRONT = "date: 2026-11-01 09:00 UTC\ntasks: 1.15\nsummary: Done."
+VALID_FRONT = "date: 2026-10-29 09:00 UTC\ntasks: 1.15\nsummary: Done."
 
 
 def add_record(
     root: Path,
     name: str,
     *,
-    date: str = "2026-11-01 09:00",
+    date: str = "2026-10-29 09:00",
     tasks: str = "1.15",
     summary: str = "A change worth recording.",
     body: str = "The record says what was verified.",
@@ -212,6 +213,15 @@ class TestProgressTable:
         assert result.returncode == 1
         assert "Phase 1" in result.stderr
 
+    def test_a_roadmap_with_no_gates_yet_renders_a_zero_row(self, tmp_path: Path) -> None:
+        """A row of 0 out of 0 is a real state of a young roadmap, and it must not raise."""
+        roadmap = tmp_path / "ROADMAP.md"
+        no_gates = FIXTURE.replace("- [x] **G1** One gate met.\n- [ ] **G2** One gate open.\n", "")
+        roadmap.write_text(no_gates, encoding="utf-8")
+        result = run("python3", str(PROGRESS), str(roadmap))
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "| Gates | Gates | 0 | 0 | 0% |" in roadmap.read_text(encoding="utf-8")
+
 
 class TestRoadmapTouched:
     def test_a_change_that_records_nothing_fails(self, branch_repo: Path) -> None:
@@ -224,9 +234,9 @@ class TestRoadmapTouched:
 
     def test_code_plus_a_record_and_a_regenerated_roadmap_passes(self, branch_repo: Path) -> None:
         (branch_repo / "src.py").write_text("x = 1\n", encoding="utf-8")
-        add_record(branch_repo, "2026-11-01-0900-one-change.md")
+        add_record(branch_repo, "2026-10-29-0900-one-change.md")
         (branch_repo / "ROADMAP.md").write_text(
-            HEAD.replace("10:00 UTC", "2026-11-01 09:00 UTC"), encoding="utf-8"
+            HEAD.replace("10:00 UTC", "2026-10-29 09:00 UTC"), encoding="utf-8"
         )
         git(branch_repo, "add", "-A")
         git(branch_repo, "commit", "-q", "-m", "code, record and roadmap")
@@ -234,7 +244,7 @@ class TestRoadmapTouched:
 
     def test_a_record_without_a_regenerated_roadmap_fails(self, branch_repo: Path) -> None:
         (branch_repo / "src.py").write_text("x = 1\n", encoding="utf-8")
-        add_record(branch_repo, "2026-11-01-0900-one-change.md")
+        add_record(branch_repo, "2026-10-29-0900-one-change.md")
         git(branch_repo, "add", "-A")
         git(branch_repo, "commit", "-q", "-m", "a record nobody regenerated the file from")
         result = run("sh", str(TOUCHED), "main", cwd=branch_repo)
@@ -245,7 +255,7 @@ class TestRoadmapTouched:
         """The gate is stronger than it was: touching ROADMAP.md no longer counts as recording."""
         (branch_repo / "src.py").write_text("x = 1\n", encoding="utf-8")
         (branch_repo / "ROADMAP.md").write_text(
-            HEAD.replace("10:00 UTC", "2026-11-01 09:00 UTC"), encoding="utf-8"
+            HEAD.replace("10:00 UTC", "2026-10-29 09:00 UTC"), encoding="utf-8"
         )
         git(branch_repo, "add", "-A")
         git(branch_repo, "commit", "-q", "-m", "roadmap edited by hand")
@@ -261,15 +271,38 @@ class TestRoadmapTouched:
         assert result.returncode == 0
         assert "planning edit" in result.stdout
 
-    def test_a_record_that_did_not_move_the_timestamp_fails(self, branch_repo: Path) -> None:
+    def test_a_landed_record_that_disappears_fails(self, branch_repo: Path) -> None:
+        """Records are append-only: this is the only guard against deleting the changelog source."""
+        landed = branch_repo / "docs" / "changes" / "2026-10-01-0800-a-landed-change.md"
+        landed.unlink()
         (branch_repo / "src.py").write_text("x = 1\n", encoding="utf-8")
-        add_record(branch_repo, "2026-10-01-0900-an-old-change.md", date="2026-10-01 09:00")
-        (branch_repo / "ROADMAP.md").write_text(HEAD + "\n| stale |\n", encoding="utf-8")
+        add_record(branch_repo, "2026-10-29-0900-one-change.md")
+        (branch_repo / "ROADMAP.md").write_text(
+            HEAD.replace("10:00 UTC", "2026-10-29 09:00 UTC"), encoding="utf-8"
+        )
         git(branch_repo, "add", "-A")
-        git(branch_repo, "commit", "-q", "-m", "a record dated in the past")
+        git(branch_repo, "commit", "-q", "-m", "code, a new record and a deleted one")
         result = run("sh", str(TOUCHED), "main", cwd=branch_repo)
         assert result.returncode == 1
-        assert "Last updated" in result.stdout
+        assert "append-only" in result.stdout
+        assert "2026-10-01-0800-a-landed-change.md" in result.stdout
+
+    def test_a_record_nested_under_docs_changes_does_not_count(self, branch_repo: Path) -> None:
+        """The generator does not recurse, so a record in a subdirectory records nothing."""
+        (branch_repo / "src.py").write_text("x = 1\n", encoding="utf-8")
+        nested = branch_repo / "docs" / "changes" / "archived"
+        nested.mkdir(parents=True)
+        (nested / "2026-10-29-0900-one-change.md").write_text(
+            f"---\n{VALID_FRONT}\n---\n\nNested.\n", encoding="utf-8"
+        )
+        (branch_repo / "ROADMAP.md").write_text(
+            HEAD.replace("10:00 UTC", "2026-10-29 09:00 UTC"), encoding="utf-8"
+        )
+        git(branch_repo, "add", "-A")
+        git(branch_repo, "commit", "-q", "-m", "a record in a subdirectory")
+        result = run("sh", str(TOUCHED), "main", cwd=branch_repo)
+        assert result.returncode == 1
+        assert "no record directly under docs/changes/" in result.stdout
 
     def test_a_branch_with_no_commits_ahead_is_not_a_failure(self, branch_repo: Path) -> None:
         assert run("sh", str(TOUCHED), "main", cwd=branch_repo).returncode == 0
@@ -293,35 +326,35 @@ class TestChangelogGeneration:
         roadmap.write_text(roadmap_text(), encoding="utf-8")
         add_record(
             tmp_path,
-            "2026-11-01-0900-one-change.md",
+            "2026-10-29-0900-one-change.md",
             summary="One change lands.",
             tasks="1.15, FR-20",
         )
         assert run("python3", str(PROGRESS), str(roadmap)).returncode == 0
         text = roadmap.read_text(encoding="utf-8")
-        link = "[details](docs/changes/2026-11-01-0900-one-change.md)"
-        assert f"| 2026-11-01 09:00 | One change lands. {link} | 1.15, FR-20 |" in text
-        assert "Last updated: 2026-11-01 09:00 UTC" in text
+        link = "[details](docs/changes/2026-10-29-0900-one-change.md)"
+        assert f"| 2026-10-29 09:00 | One change lands. {link} | 1.15, FR-20 |" in text
+        assert "Last updated: 2026-10-29 09:00 UTC" in text
         assert run("python3", str(PROGRESS), "--check", str(roadmap)).returncode == 0
 
     def test_the_newest_record_is_the_first_row(self, tmp_path: Path) -> None:
         roadmap = tmp_path / "ROADMAP.md"
         roadmap.write_text(roadmap_text(), encoding="utf-8")
-        add_record(tmp_path, "2026-11-01-0900-later.md", date="2026-11-01 09:00")
-        add_record(tmp_path, "2026-10-30-1552-earlier.md", date="2026-10-30 15:52")
+        add_record(tmp_path, "2026-10-29-0900-later.md", date="2026-10-29 09:00")
+        add_record(tmp_path, "2026-10-28-1552-earlier.md", date="2026-10-28 15:52")
         add_record(tmp_path, "2026-10-27-0000-oldest.md", date="2026-10-27")
         assert run("python3", str(PROGRESS), str(roadmap)).returncode == 0
         rows = changelog_rows(roadmap.read_text(encoding="utf-8"))
         assert [row.split("|")[1].strip() for row in rows] == [
-            "2026-11-01 09:00",
-            "2026-10-30 15:52",
+            "2026-10-29 09:00",
+            "2026-10-28 15:52",
             "2026-10-27",
         ]
-        assert "Last updated: 2026-11-01 09:00 UTC" in roadmap.read_text(encoding="utf-8")
+        assert "Last updated: 2026-10-29 09:00 UTC" in roadmap.read_text(encoding="utf-8")
 
     def test_a_record_missing_from_the_block_fails_the_check(self, tmp_path: Path) -> None:
         roadmap = tmp_path / "ROADMAP.md"
-        add_record(tmp_path, "2026-11-01-0900-one-change.md")
+        add_record(tmp_path, "2026-10-29-0900-one-change.md")
         roadmap.write_text(roadmap_text(), encoding="utf-8")
         result = run("python3", str(PROGRESS), "--check", str(roadmap))
         assert result.returncode == 1
@@ -330,10 +363,10 @@ class TestChangelogGeneration:
 
     def test_a_hand_edited_row_fails_the_check(self, tmp_path: Path) -> None:
         roadmap = tmp_path / "ROADMAP.md"
-        add_record(tmp_path, "2026-11-01-0900-one-change.md")
+        add_record(tmp_path, "2026-10-29-0900-one-change.md")
         roadmap.write_text(
             roadmap_text(
-                "| 2026-11-01 09:00 | Something nobody wrote down. | 9.9 |\n",
+                "| 2026-10-29 09:00 | Something nobody wrote down. | 9.9 |\n",
             ),
             encoding="utf-8",
         )
@@ -351,7 +384,7 @@ class TestChangelogGeneration:
     def test_records_with_no_block_are_an_error(self, tmp_path: Path) -> None:
         roadmap = tmp_path / "ROADMAP.md"
         roadmap.write_text(FIXTURE, encoding="utf-8")
-        add_record(tmp_path, "2026-11-01-0900-one-change.md")
+        add_record(tmp_path, "2026-10-29-0900-one-change.md")
         result = run("python3", str(PROGRESS), str(roadmap))
         assert result.returncode == 1
         assert "CHANGELOG:START" in result.stderr
@@ -361,7 +394,7 @@ class TestChangelogGeneration:
         roadmap.write_text(
             roadmap_text().replace("<!-- CHANGELOG:END -->", "<!-- wrong -->"), encoding="utf-8"
         )
-        add_record(tmp_path, "2026-11-01-0900-one-change.md")
+        add_record(tmp_path, "2026-10-29-0900-one-change.md")
         result = run("python3", str(PROGRESS), str(roadmap))
         assert result.returncode == 1
         assert "exactly one" in result.stderr
@@ -370,58 +403,68 @@ class TestChangelogGeneration:
         "name,front,expect",
         [
             ("notes.md", VALID_FRONT, "are named"),
-            ("2026-11-01-9am-one-change.md", VALID_FRONT, "are named"),
-            ("2026-11-01-0900-One-Change.md", VALID_FRONT, "are named"),
+            ("2026-10-29-9am-one-change.md", VALID_FRONT, "are named"),
+            ("2026-10-29-0900-One-Change.md", VALID_FRONT, "are named"),
             (
-                "2026-11-01-0900-one-change.md",
-                "date: 2026-11-01 08:00 UTC\ntasks: 1.15\nsummary: Done.",
+                "2026-10-29-0900-one-change.md",
+                "date: 2026-10-29 08:00 UTC\ntasks: 1.15\nsummary: Done.",
                 "the name says",
             ),
             (
-                "2026-11-01-0900-one-change.md",
+                "2026-10-29-0900-one-change.md",
                 "date: 2026-13-45 09:00 UTC\ntasks: 1.15\nsummary: Done.",
                 "is not",
             ),
             (
-                "2026-11-01-0900-one-change.md",
-                "date: 2026-11-01\ntasks: 1.15\nsummary: Done.",
+                "2026-10-29-0900-one-change.md",
+                "date: 2026-10-29\ntasks: 1.15\nsummary: Done.",
                 "the name says",
             ),
-            ("2026-11-01-0900-one-change.md", "tasks: 1.15\nsummary: Done.", "missing date"),
-            ("2026-11-01-0900-one-change.md", "date: 2026-11-01\ntasks: 1.15", "missing summary"),
+            ("2026-10-29-0900-one-change.md", "tasks: 1.15\nsummary: Done.", "missing date"),
+            ("2026-10-29-0900-one-change.md", "date: 2026-10-29\ntasks: 1.15", "missing summary"),
             (
-                "2026-11-01-0900-one-change.md",
-                "date: 2026-11-01 09:00 UTC\ntasks: 1.15\nsummary:",
+                "2026-10-29-0900-one-change.md",
+                "date: 2026-10-29 09:00 UTC\ntasks: 1.15\nsummary:",
                 "summary is empty",
             ),
             (
-                "2026-11-01-0900-one-change.md",
-                "date: 2026-11-01 09:00 UTC\ntasks:\nsummary: Done.",
+                "2026-10-29-0900-one-change.md",
+                "date: 2026-10-29 09:00 UTC\ntasks:\nsummary: Done.",
                 "non-empty list",
             ),
             (
-                "2026-11-01-0900-one-change.md",
+                "2026-10-29-0900-one-change.md",
                 f"{VALID_FRONT}\nowner: nobody",
                 "unknown front matter key",
             ),
             (
-                "2026-11-01-0900-one-change.md",
-                "date: 2026-11-01 09:00 UTC\ntasks: 1.15\ntasks: 1.16\nsummary: Done.",
+                "2026-10-29-0900-one-change.md",
+                "date: 2026-10-29 09:00 UTC\ntasks: 1.15\ntasks: 1.16\nsummary: Done.",
                 "appears twice",
             ),
             (
-                "2026-11-01-0900-one-change.md",
-                "date 2026-11-01\ntasks: 1.15\nsummary: Done.",
+                "2026-10-29-0900-one-change.md",
+                "date 2026-10-29\ntasks: 1.15\nsummary: Done.",
                 "is not `key: value`",
             ),
             (
-                "2026-11-01-0900-one-change.md",
-                "date: 2026-11-01 09:00 UTC\ntasks: 1.15\nsummary: a row | that breaks",
-                "unescaped",
+                "2026-10-29-0900-one-change.md",
+                "date: 2026-10-29 09:00 UTC\ntasks: 1.15\nsummary: a row | that breaks",
+                "bare `|`",
             ),
             (
-                "2026-11-01-0900-one-change.md",
-                f"date: 2026-11-01 09:00 UTC\ntasks: 1.15\nsummary: {'long ' * 60}",
+                "2026-10-29-0900-one-change.md",
+                "date: 2026-10-29 09:00 UTC\ntasks: 1.15\nsummary: escaped \\\\| pipe",
+                "stray `\\`",
+            ),
+            (
+                "2099-01-01-0900-tomorrow.md",
+                "date: 2099-01-01 09:00 UTC\ntasks: 1.15\nsummary: Done.",
+                "in the future",
+            ),
+            (
+                "2026-10-29-0900-one-change.md",
+                f"date: 2026-10-29 09:00 UTC\ntasks: 1.15\nsummary: {'long ' * 60}",
                 "over the 240 limit",
             ),
         ],
@@ -440,9 +483,90 @@ class TestChangelogGeneration:
     def test_an_escaped_pipe_renders_as_the_cell_written(self, tmp_path: Path) -> None:
         roadmap = tmp_path / "ROADMAP.md"
         roadmap.write_text(roadmap_text(), encoding="utf-8")
-        add_record(tmp_path, "2026-11-01-0900-one-change.md", summary="collector \\| rules")
+        add_record(tmp_path, "2026-10-29-0900-one-change.md", summary="collector \\| rules")
         assert run("python3", str(PROGRESS), str(roadmap)).returncode == 0
-        assert "| 2026-11-01 09:00 | collector \\| rules" in roadmap.read_text(encoding="utf-8")
+        assert "| 2026-10-29 09:00 | collector \\| rules" in roadmap.read_text(encoding="utf-8")
+
+    def test_a_nested_change_file_is_refused(self, tmp_path: Path) -> None:
+        """A file the render would skip is an error, not an invisible record."""
+        roadmap = tmp_path / "ROADMAP.md"
+        roadmap.write_text(roadmap_text(), encoding="utf-8")
+        nested = tmp_path / "docs" / "changes" / "archive"
+        nested.mkdir(parents=True)
+        (nested / "2026-10-29-0900-one-change.md").write_text(
+            f"---\n{VALID_FRONT}\n---\n\nNested in a subdirectory.\n", encoding="utf-8"
+        )
+        result = run("python3", str(PROGRESS), str(roadmap))
+        assert result.returncode == 1
+        assert "not in a subdirectory" in result.stderr
+
+    def test_two_records_in_one_minute_both_render_and_order_by_name(self, tmp_path: Path) -> None:
+        roadmap = tmp_path / "ROADMAP.md"
+        roadmap.write_text(roadmap_text(), encoding="utf-8")
+        add_record(tmp_path, "2026-10-29-0900-a-second.md", summary="The second half.")
+        add_record(tmp_path, "2026-10-29-0900-a-first.md", summary="The first half.")
+        assert run("python3", str(PROGRESS), str(roadmap)).returncode == 0
+        rows = changelog_rows(roadmap.read_text(encoding="utf-8"))
+        assert len(rows) == 2
+        assert "The second half." in rows[0] and "a-second.md)" in rows[0]
+        assert "The first half." in rows[1]
+        assert roadmap.read_text(encoding="utf-8").count("Last updated: 2026-10-29 09:00 UTC") == 1
+
+    def test_a_backdated_record_lands_without_moving_the_timestamp(self, tmp_path: Path) -> None:
+        """Older work recorded late is allowed; the newest record still owns the line."""
+        roadmap = tmp_path / "ROADMAP.md"
+        roadmap.write_text(roadmap_text(), encoding="utf-8")
+        add_record(tmp_path, "2026-10-29-0900-newest.md", date="2026-10-29 09:00")
+        assert run("python3", str(PROGRESS), str(roadmap)).returncode == 0
+        add_record(tmp_path, "2026-10-27-0000-backfill.md", date="2026-10-27", summary="Late note.")
+        assert run("python3", str(PROGRESS), str(roadmap)).returncode == 0
+        text = roadmap.read_text(encoding="utf-8")
+        assert "Last updated: 2026-10-29 09:00 UTC" in text
+        rows = changelog_rows(text)
+        assert rows[-1].startswith("| 2026-10-27 | Late note.")
+        assert run("python3", str(PROGRESS), "--check", str(roadmap)).returncode == 0
+
+    def test_a_stale_timestamp_fails_the_check(self, tmp_path: Path) -> None:
+        """The gate no longer compares `Last updated`; this is the check that owns that line."""
+        roadmap = tmp_path / "ROADMAP.md"
+        roadmap.write_text(roadmap_text(), encoding="utf-8")
+        add_record(tmp_path, "2026-10-29-0900-one-change.md")
+        assert run("python3", str(PROGRESS), str(roadmap)).returncode == 0
+        current = roadmap.read_text(encoding="utf-8")
+        stale = current.replace(
+            "Last updated: 2026-10-29 09:00 UTC", "Last updated: 2026-10-28 10:00 UTC"
+        )
+        assert stale != current
+        roadmap.write_text(stale, encoding="utf-8")
+        result = run("python3", str(PROGRESS), "--check", str(roadmap))
+        assert result.returncode == 1
+        assert "roadmap_progress: stale timestamp" in result.stdout
+
+    def test_a_document_with_two_timestamp_lines_is_refused(self, tmp_path: Path) -> None:
+        """The generator sets one line, so a document with two has nowhere honest to put it."""
+        roadmap = tmp_path / "ROADMAP.md"
+        roadmap.write_text(
+            f"{roadmap_text()}\nLast updated: 2026-10-01 00:00 UTC\n", encoding="utf-8"
+        )
+        add_record(tmp_path, "2026-10-29-0900-one-change.md")
+        result = run("python3", str(PROGRESS), str(roadmap))
+        assert result.returncode == 1
+        assert "2 `Last updated:` lines" in result.stderr
+
+    def test_a_file_with_crlf_endings_is_refused(self, tmp_path: Path) -> None:
+        """CRLF would show a whole-file diff on every regeneration, so it fails where it is read."""
+        roadmap = tmp_path / "ROADMAP.md"
+        add_record(tmp_path, "2026-10-29-0900-one-change.md")
+        roadmap.write_bytes(roadmap_text().replace("\n", "\r\n").encode("utf-8"))
+        result = run("python3", str(PROGRESS), str(roadmap))
+        assert result.returncode == 1
+        assert "carriage return" in result.stderr
+        crlf_record = tmp_path / "docs" / "changes" / "2026-10-29-0900-one-change.md"
+        crlf_record.write_bytes(crlf_record.read_bytes().replace(b"\n", b"\r\n"))
+        roadmap.write_text(roadmap_text(), encoding="utf-8")
+        result = run("python3", str(PROGRESS), str(roadmap))
+        assert result.returncode == 1
+        assert "carriage return" in result.stderr
 
     def test_every_committed_record_renders_exactly_one_row(self) -> None:
         text = (REPO_ROOT / "ROADMAP.md").read_text(encoding="utf-8")
