@@ -65,7 +65,7 @@ what the checkout handed you). Also out: history scanning of unreachable gitlink
 - [ ] Positive and negative fixtures exist for every new rule id, and `tests/unit/test_fixtures.py` passes without being told about them by hand.
 - [ ] A trusted-base test proves the allow list is read from the base commit, so a pull request cannot add a gitlink and authorise it in the same change.
 - [ ] `ARCHITECTURE.md` 6.1 and 8, and the `ARCHITECTURE_ESSENTIALS.md` finding-id list, match the shipped severity, and any new id appears in `STATE_RULE_IDS` or the rule data as appropriate.
-- [ ] `ROADMAP.md` is updated in the same pull request: 7.2 ticked, changelog row with a UTC date, `Last updated` moved, `python scripts/roadmap_progress.py --check` passing.
+- [ ] `ROADMAP.md` is updated in the same pull request: 7.2 ticked, a change record under `docs/changes/` with a UTC date, `ROADMAP.md` regenerated from it, `python scripts/roadmap_progress.py --check` passing.
 - [ ] `python -m pytest`, `ruff check .`, `ruff format --check .` and `mypy src` all pass, and `airlock scan --mode full .` reports no HIGH findings.
 - [ ] PR description includes `Closes #{{issue:self}}`.
 

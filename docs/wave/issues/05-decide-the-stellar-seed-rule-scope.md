@@ -52,7 +52,7 @@ funding, live use and testnet use cannot be inferred from the encoding.
 - [ ] The strkey byte details in `ARCHITECTURE.md` 9.4 are confirmed against a reference or corrected, and the `[Unverified]` marker there is gone or replaced with a citation.
 - [ ] D-06 in the `ROADMAP.md` decision log reads Decided, with the date, the choice and the evidence.
 - [ ] Tasks 6.2 and 6.3, and `PRD.md`'s corresponding FR row, are consistent with that decision.
-- [ ] `ROADMAP.md` carries a changelog row with a UTC date, `Last updated` moved, and `python scripts/roadmap_progress.py --check` passing.
+- [ ] A change record with a UTC date exists under `docs/changes/`, `ROADMAP.md` has been regenerated from it, and `python scripts/roadmap_progress.py --check` passing.
 - [ ] `python -m pytest`, `ruff check .`, `ruff format --check .` and `mypy src` all pass.
 - [ ] No live-looking seed is committed anywhere in the repository: test vectors are constructed from a documented reference, and a real-looking `S…` string in a fixture is a rejection.
 - [ ] PR description includes `Closes #{{issue:self}}`.

@@ -57,7 +57,7 @@ say so in the pull request instead of inventing a justification.
 - [ ] The check runs in `.github/workflows/ci.yml` and its absence is not possible to merge unnoticed.
 - [ ] A unit test asserts the generator's output for at least one rule with a `pattern` and one without, so the two shapes cannot silently diverge.
 - [ ] `README.md` no longer maintains a second copy of the rule list, and links to the generated document instead.
-- [ ] `ROADMAP.md` is updated in the same pull request: 5.2 ticked or annotated with what 3.7 still owes, a changelog row with a UTC date, `Last updated` moved, and `python scripts/roadmap_progress.py --check` passing.
+- [ ] `ROADMAP.md` is updated in the same pull request: 5.2 ticked or annotated with what 3.7 still owes, a change record under `docs/changes/` with a UTC date, `ROADMAP.md` regenerated from it, and `python scripts/roadmap_progress.py --check` passing.
 - [ ] `python -m pytest`, `ruff check .`, `ruff format --check .` and `mypy src` all pass, and `airlock scan --mode full .` reports no HIGH findings.
 - [ ] `scripts/` is a protected path, so the pull request needs owner review.
 - [ ] PR description includes `Closes #{{issue:self}}`.

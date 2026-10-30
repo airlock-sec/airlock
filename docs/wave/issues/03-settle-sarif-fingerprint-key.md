@@ -47,7 +47,7 @@ when the name it will use is settled and documented.
 - [ ] `ARCHITECTURE.md` 6.6 names the decided key, and `sarif.py`'s docstring states it as settled rather than as an open question.
 - [ ] A D-09 row exists in the `ROADMAP.md` decision log with the date and the spelling.
 - [ ] The new tests fail when only the SARIF row or stub key changes, even if the decided key remains elsewhere, and pass otherwise.
-- [ ] `ROADMAP.md` is updated in the same pull request: 7.12 ticked, a changelog row with a UTC date, `Last updated` moved, and `python scripts/roadmap_progress.py --check` passing.
+- [ ] `ROADMAP.md` is updated in the same pull request: 7.12 ticked, a change record under `docs/changes/` with a UTC date, `ROADMAP.md` regenerated from it, and `python scripts/roadmap_progress.py --check` passing.
 - [ ] `python -m pytest`, `ruff check .`, `ruff format --check .` and `mypy src` all pass.
 - [ ] PR description includes `Closes #{{issue:self}}`.
 

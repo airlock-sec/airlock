@@ -31,9 +31,9 @@ The three rules that most often get a pull request closed here:
 - **Nothing may be skipped silently.** Every file the scanner does not read produces a finding, and
   scanner-state findings cannot be suppressed. A change that makes a skip quieter is a regression
   even when the tests pass.
-- **`ROADMAP.md` is updated in the same pull request**, with a changelog row, a refreshed progress
-  table and a new `Last updated`. The `roadmap` check fails otherwise, and there are no
-  exemptions, including for dependency bumps.
+- **The change is recorded in the same pull request**, as one file under `docs/changes/` with a UTC
+  date, and the `ROADMAP.md` that `scripts/roadmap_progress.py` regenerates from it. The `roadmap`
+  check fails otherwise, and there are no exemptions, including for dependency bumps.
 
 ## Commands CI runs
 

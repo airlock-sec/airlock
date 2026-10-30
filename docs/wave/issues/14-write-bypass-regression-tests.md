@@ -90,7 +90,7 @@ scope for this issue's own pull request either; they are in scope for the issue 
 - [ ] Cases 6 and 7 are recorded as blocked, naming the task that closes them, and no test asserts that a bypass succeeds.
 - [ ] `ROADMAP.md` 3.9's dependency line includes the rule task it actually waits on, and the stale rule-count sentence in section 2 is corrected.
 - [ ] `python -m pytest`, `ruff check .`, `ruff format --check .`, `mypy src` and `python -m airlock scan --mode full .` all pass, including the new tests.
-- [ ] `ROADMAP.md` carries a changelog row with a UTC date, `Last updated` moved, and `python scripts/roadmap_progress.py --check` passing.
+- [ ] A change record with a UTC date exists under `docs/changes/`, `ROADMAP.md` has been regenerated from it, and `python scripts/roadmap_progress.py --check` passing.
 - [ ] PR description includes `Closes #{{issue:self}}`.
 
 ## Tech stack

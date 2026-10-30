@@ -1,5 +1,6 @@
-# The roadmap gate (task 1.9): a pull request that changes files must change `ROADMAP.md`, and
-# the progress table must still describe the task lines.
+# The roadmap gate (tasks 1.9 and 1.15): a pull request that changes files must add a record under
+# `docs/changes/` and regenerate `ROADMAP.md` from the records, and the generated regions must still
+# describe their sources.
 #
 # Making this a required check is repository settings, not a file (1.3, 0.13), and until it is
 # required a PR can still merge with a stale roadmap. What this workflow does guarantee is that
@@ -25,10 +26,10 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: ROADMAP.md was updated
+      - name: The change is recorded under docs/changes and regenerated into ROADMAP.md
         env:
           BASE_REF: ${{ github.base_ref }}
         run: sh scripts/check_roadmap_touched.sh "origin/${BASE_REF}"
 
-      - name: The progress table matches the task lines
+      - name: The generated regions match their sources
         run: python scripts/roadmap_progress.py --check
