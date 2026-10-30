@@ -147,6 +147,7 @@ max_file_bytes = 5000000
 line_cap       = 20000
 tail_max_len   = 2000
 tail_entropy   = 4.5
+submodules     = []
 
 [soroban]
 
@@ -159,7 +160,7 @@ debug-assertions = false</pre>
         </div>
         <div class="prose">
           <p>The file is read from the trusted base in <code>pr</code> and <code>push</code> modes. A key this build does not read produces <b>policy-unknown-key</b> at WARN, so a typo cannot silently leave a setting at its default.</p>
-          <p><b>fail_on</b> moves the exit-code threshold. <b>max_file_bytes</b> is the read limit; a larger file is a finding, not a pass. <b>line_cap</b> is the longest line the regexes run on; a longer line is accounted for by <b>cfg-long-line</b>.</p>
+          <p><b>fail_on</b> moves the exit-code threshold. <b>max_file_bytes</b> is the read limit; a larger file is a finding, not a pass. <b>line_cap</b> is the longest line the regexes run on; a longer line is accounted for by <b>cfg-long-line</b>. <b>submodules</b> lists the allowed <code>.gitmodules</code> URLs; an unlisted gitlink is <b>submodule-present</b> at HIGH and an allowed one is WARN.</p>
           <p>The <code>[soroban]</code> table is reserved for the Phase 6 detectors and is not read by a rule yet. Stating it as reserved is more useful than presenting a setting that does nothing.</p>
         </div>
       </div>

@@ -205,6 +205,20 @@ class TestTrustedBase:
         assert result.manifest == EMPTY_MANIFEST
         assert finding_of(result, "policy-changed").path == MANIFEST_FILENAME
 
+    def test_pr_mode_reads_submodule_allowlist_from_the_base_commit(self, repo: Path) -> None:
+        base = seed(repo)
+        write(
+            repo,
+            POLICY_FILENAME,
+            BASE_POLICY + 'submodules = ["https://example.invalid/stellar/lib.git"]\n',
+        )
+        head = commit(repo)
+
+        result = resolve_policy(repo, Mode.PR, head, base=base)
+
+        assert result.policy.submodules == ()
+        assert finding_of(result, "policy-changed").path == POLICY_FILENAME
+
     def test_a_new_branch_gets_the_bootstrap_defaults(self, repo: Path) -> None:
         head = seed(repo)
 
@@ -361,6 +375,7 @@ class TestPolicyLoading:
         policy, findings = self.parse(
             'version = 1\n[policy]\nfail_on = "warn"\nmax_file_bytes = 10\n'
             "line_cap = 20\ntail_max_len = 30\ntail_entropy = 3.5\n"
+            'submodules = ["https://example.invalid/stellar/lib.git"]\n'
         )
 
         assert findings == ()
@@ -370,7 +385,14 @@ class TestPolicyLoading:
             line_cap=20,
             tail_max_len=30,
             tail_entropy=3.5,
+            submodules=("https://example.invalid/stellar/lib.git",),
         )
+
+    def test_an_empty_submodules_list_is_valid(self) -> None:
+        policy, findings = self.parse("version = 1\n[policy]\nsubmodules = []\n")
+
+        assert findings == ()
+        assert policy.submodules == ()
 
     def test_an_unknown_top_level_key_is_a_warning(self) -> None:
         policy, findings = self.parse("version = 1\n[plicy]\nline_cap = 10\n")
@@ -456,6 +478,18 @@ class TestPolicyLoading:
             ("version = 1\n[policy]\nline_cap = true\n", "line_cap must be a whole number"),
             ('version = 1\n[policy]\nfail_on = "critical"\n', "unknown severity"),
             ('version = 1\n[policy]\ntail_entropy = "high"\n', "must be a number"),
+            (
+                'version = 1\n[policy]\nsubmodules = "https://example.invalid/lib.git"\n',
+                "submodules must be a list of strings",
+            ),
+            (
+                'version = 1\n[policy]\nsubmodules = [""]\n',
+                "submodules entries must be non-empty strings without whitespace",
+            ),
+            (
+                'version = 1\n[policy]\nsubmodules = ["https://example.invalid/bad url.git"]\n',
+                "submodules entries must be non-empty strings without whitespace",
+            ),
             ("version = 1\npolicy = 3\n", r"\[policy\] must be a table"),
             ("version = 1\n[suppress]]\n", "cannot parse"),
         ],

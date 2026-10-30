@@ -385,6 +385,9 @@ def policy_from_toml(
         tail_entropy=_opt_float(
             settings.get("tail_entropy"), BOOTSTRAP_POLICY.tail_entropy, "policy.tail_entropy", path
         ),
+        submodules=_opt_string_list(
+            settings.get("submodules"), BOOTSTRAP_POLICY.submodules, "policy.submodules", path
+        ),
         soroban=_soroban_policy(soroban_table, path, unknown),
         suppressions=_suppressions(document, path, unknown),
     )
@@ -571,6 +574,18 @@ def _string(value: object, field: str, context: str) -> str:
 def _string_list(value: object, field: str, context: str) -> tuple[str, ...]:
     if not isinstance(value, list) or not value or not all(isinstance(item, str) for item in value):
         raise ValueError(f"{context}: {field} must be a non-empty list of strings")
+    return tuple(value)
+
+
+def _opt_string_list(
+    value: object, default: tuple[str, ...], field: str, context: str
+) -> tuple[str, ...]:
+    if value is None:
+        return default
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise ValueError(f"{context}: {field} must be a list of strings")
+    if any(not item.strip() or any(ch.isspace() for ch in item) for item in value):
+        raise ValueError(f"{context}: {field} entries must be non-empty strings without whitespace")
     return tuple(value)
 
 

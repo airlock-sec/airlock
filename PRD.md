@@ -149,7 +149,7 @@ Priority: **P0** ships in v0.1.0, **P1** in v0.2.0, **Later** is backlog (`ROADM
 | FR-17 | `stellar_seed`: offline, checksum-valid plaintext Stellar seeds in tracked files (D-06: KEEP, owner-approved 2026-10-28 UTC) | P1 | Canonical 56-character seeds detected within collector and line limits; invalid checksum, version or length rejected. Valid test vectors also detected unless explicitly suppressed with a reason. No funding or live-use inference. Implementation remains tasks 6.2 and 6.3. |
 | FR-18 | `cargo_vectors` | P1 | Fixtures pass |
 | FR-19 | SARIF 2.1.0 output (deferred to task 7.6) | P1 | Validates against the schema; result count capped; uses `partialFingerprints["airlock/v1"]` (D-09, ADR-019), settled before shipping with no migration needed |
-| FR-20 | Git LFS pointer and submodule handling | P1 | LFS-stored Wasm is checked against the manifest or reported |
+| FR-20 | Git LFS pointer and submodule handling | P1 | LFS-stored Wasm is checked against the manifest or reported; gitlinks are cross-checked against `.gitmodules` and `policy.submodules` (`submodule-present` HIGH/WARN, `submodule-unmapped` HIGH, `submodule-orphan` WARN) |
 | FR-21 | Extended config globs and vector roles (`vite`, `webpack`, `jest`, `.husky/*`, `devcontainer.json`, composite action files) | P1 | False-positive review on the six repos |
 | FR-22 | Watch mode: scheduled scan from a separate trusted repository, with an ancestry check against the last seen SHA | Later (decision D-04) | See ARCHITECTURE.md 16.2, item B2 |
 | FR-23 | Org scan and workflow-drift report | Later | |
