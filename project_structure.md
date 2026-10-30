@@ -15,6 +15,7 @@ until the engine exists.
 airlock/
   .gitignore                       # git ignores only, never scan skips (no default skips)                 (1.4)
   README.md                        # user-facing: what it checks, install snippet, limits, roadmap rule      (1.10, 5.1)
+  RULES.md                         # generated rule reference from rules/builtin/*.toml                      (5.2)
   PRD.md                           # what and for whom                                                       (done)
   ARCHITECTURE.md                  # full design, data models, ADRs, red-team review                         (done)
   ARCHITECTURE_ESSENTIALS.md       # outline for agents: hard rules and key decisions                        (done)
@@ -66,6 +67,7 @@ airlock/
   scripts/
     bypass_probe.py                # roadmap 0.4: runs Appendix B against the external script it is given
     build_site.py                  # regenerates the site's rule reference, hero counts and rules.json (8.6)
+    rule_reference.py              # generates and checks RULES.md from rules/builtin/*.toml                 (5.2)
     check_roadmap_touched.sh       # CI gate: PR must change ROADMAP.md                                      (1.9)
     roadmap_progress.py            # computes and checks the progress table                                  (1.9)
     create_wave_issues.sh          # publishes docs/wave/issues; dry run unless --apply                      (1.14)
@@ -179,6 +181,6 @@ If a code change contradicts a doc, fix the doc in the same PR. If a doc stateme
 
 ## 8. Generated and derived files
 
-- Rule reference docs are generated from `rules/*.toml` (task 5.2). Do not edit generated output by hand.
+- `RULES.md` is generated from `rules/builtin/*.toml` by `scripts/rule_reference.py` through `airlock.rules.load_rules` (task 5.2). Do not edit generated output by hand; `python scripts/rule_reference.py --check` runs in CI and fails a stale copy.
 - The site's rule reference and hero counts are generated from `rules/builtin/*.toml` by `scripts/build_site.py`, between the `RULES` and `TELEMETRY` markers; `site/data/rules.json` is written at the same time. Run the script after a rule change and commit the result. `--check` fails a stale page, and the Pages workflow and the unit suite both run it (8.6).
 - The progress table in `ROADMAP.md` is computed by `scripts/roadmap_progress.py`. Do not edit the numbers by hand once the script exists.

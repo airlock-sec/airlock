@@ -53,66 +53,35 @@ at, judge a change by the policy that existed before the change, and treat rules
 
 Three code detectors are registered, and the rule data lives in [`rules/builtin/`](rules/builtin):
 one file per family, plus the engine's own line-matching path for `detector = "pattern"` rules.
+Every shipped rule's ID, title, severity, suppressibility, target roles, detector, pattern,
+rationale, and fixture pair are generated into [`RULES.md`](RULES.md) by
+[`scripts/rule_reference.py`](scripts/rule_reference.py) and checked in CI so the reference cannot
+drift from the TOML files.
 
-**`config_role`** targets the tooling configs a Soroban frontend ships (`postcss.config.*`,
-`tailwind.config.*`, `next.config.*`, `eslint.config.*`, `babel.config.*`) and editor auto-run
-tasks. It looks for capabilities rather than signatures, and it reads raw text with no comment or
-string masking.
+- **`config_role`** targets the tooling configs a Soroban frontend ships (`postcss.config.*`,
+  `tailwind.config.*`, `next.config.*`, `eslint.config.*`, `babel.config.*`) and editor auto-run
+  tasks. It looks for capabilities rather than signatures (`cfg-dynamic-code`, `cfg-network-exec`,
+  `cfg-chain-endpoint`, `cfg-appended-tail` and `cfg-long-line` at HIGH; `cfg-network` and
+  `cfg-process-spawn` at WARN), and it reads raw text with no comment or string masking.
+- **`wasm_manifest`** checks every committed `.wasm` against a hash-keyed manifest, so an artifact
+  that was not built from the reviewed source is named (`wasm-unlisted` and `wasm-hash-mismatch` at
+  HIGH; `wasm-path-moved`, `wasm-manifest-stale` and `wasm-archive-skipped` at WARN).
+- **`builtin_patterns`** is rule data rather than a code detector: the text-side shapes the old
+  script matched (`pat-decode-eval` and `pat-invisible-unicode` at HIGH; `pat-exfil-endpoint`,
+  `pat-obfuscator-id`, `pat-credential-harvest` and `pat-chain-c2` at WARN), run line by line over
+  every role that is code, so a payload in a `.py` file, in an extensionless file or under
+  `vendor/` is read instead of waved past. Prose is out of scope by the `roles` lists, not by a
+  skip.
+- **`ci_surface`** covers the places a repository hands control to someone else: workflow triggers,
+  package lifecycle scripts under `package.json`, install hooks under `.husky/` and `.githooks/`,
+  and editor auto-run settings (`pat-secret-dump`, `pat-ptr-head-checkout` and `pat-lifecycle-exec`
+  at HIGH in the `ci_surface` code detector; `pat-privileged-trigger`, `pat-lifecycle-fetch` and
+  `pat-editor-command-path` at WARN in the pattern path). A file in one of those roles is treated
+  as executed with credentials attached, so a line past `line_cap` in it is HIGH rather than
+  demoted to WARN. Every rule in the family is suppressible, following `cfg-process-spawn`, and
+  none of them judge a string with masking.
 
-| Rule | Severity | Shape |
-|---|---|---|
-| `cfg-dynamic-code` | HIGH | `eval`, `new Function`, `vm.runIn*` in a build config |
-| `cfg-network-exec` | HIGH | a fetch or download whose result is executed |
-| `cfg-chain-endpoint` | HIGH | a chain or wallet RPC endpoint reached from tooling |
-| `cfg-appended-tail` | HIGH | a high-entropy run appended past the config's real content |
-| `cfg-long-line` | HIGH | a line over the cap, where the regexes deliberately do not run |
-| `cfg-network` | WARN | network capability with no execution alongside it |
-| `cfg-process-spawn` | WARN | a build step that spawns a process |
-
-**`wasm_manifest`** checks every committed `.wasm` against a hash-keyed manifest, so an artifact
-that was not built from the reviewed source is named.
-
-| Rule | Severity | Shape |
-|---|---|---|
-| `wasm-unlisted` | HIGH | an artifact with no manifest entry, including a git LFS pointer wearing a `.wasm` name |
-| `wasm-hash-mismatch` | HIGH | an artifact whose bytes are not the bytes the manifest recorded |
-| `wasm-path-moved` | WARN | a known hash at a path the manifest does not list |
-| `wasm-manifest-stale` | WARN | an entry whose file is gone |
-| `wasm-archive-skipped` | WARN | an artifact inside an archive, which the scanner does not open |
-
-**`builtin_patterns`** is rule data rather than a code detector: the text-side shapes the old
-script matched, run line by line over every role that is code, so a payload in a `.py` file, in an
-extensionless file or under `vendor/` is read instead of waved past. Prose is out of scope by the
-`roles` lists, not by a skip.
-
-| Rule | Severity | Shape |
-|---|---|---|
-| `pat-decode-eval` | HIGH | a decoder feeding `eval`, `Function`, `setTimeout` or a similar evaluator |
-| `pat-invisible-unicode` | HIGH | a zero-width or direction-flipping character inside code |
-| `pat-exfil-endpoint` | WARN | a paste site, webhook, tunnel or out-of-band callback host in code |
-| `pat-obfuscator-id` | WARN | the `_0x` plus hex identifier grammar an obfuscator emits |
-| `pat-credential-harvest` | WARN | a credential, private key, wallet or browser-login store named by path |
-| `pat-chain-c2` | WARN | a public chain RPC or explorer host named in code |
-
-**`ci_surface`** covers the places a repository hands control to someone else: workflow triggers,
-package lifecycle scripts under `package.json`, install hooks under `.husky/` and `.githooks/`, and
-editor auto-run settings. Whole-file shapes belong to the engine's pattern path, and the pairings
-that need two lines judged together (a secret read and displayed, a privileged checkout of a
-contributor's head, a fetched script handed to a shell) are code, because one regex for those is
-quadratic on a line of repeated `curl` at the cap.
-
-| Rule | Severity | Shape |
-|---|---|---|
-| `pat-secret-dump` | HIGH | a workflow that interpolates `secrets.*` into a command that prints or writes it |
-| `pat-ptr-head-checkout` | HIGH | `pull_request_target` plus a checkout pinned to the contributor's head ref |
-| `pat-lifecycle-exec` | HIGH | a `package.json` script or install hook that fetches and then executes the result |
-| `pat-privileged-trigger` | WARN | a workflow triggered by `pull_request_target`, where the head is reachable |
-| `pat-lifecycle-fetch` | WARN | a package or install hook that downloads something, with no execution seen |
-| `pat-editor-command-path` | WARN | an editor setting that names an executable to run on open |
-
-A file in one of those roles is treated as executed with credentials attached, so a line past
-`line_cap` in it is HIGH rather than demoted to WARN. Every rule in the family is suppressible,
-following `cfg-process-spawn`, and none of them judge a string with masking.
+See [`RULES.md`](RULES.md) for the complete generated rule reference.
 
 The collector adds the state findings on top: `nul-in-text`, `non-utf8-text`, `skipped-oversize`,
 `skipped-unreadable`, `skipped-symlink`, `skipped-unmerged`, `submodule-present`,
@@ -219,6 +188,7 @@ check: without that, a pull request that deletes the scan step simply never runs
 | Document | What it answers |
 |---|---|
 | [Documentation site](https://airlock-sec.github.io/airlock/) | overview, usage, the rule reference and the trust model, rendered from the rules that ship |
+| [`RULES.md`](RULES.md) | generated reference for every shipped rule: severity, suppressibility, roles, detector, pattern, fixtures and rationale |
 | [`PRD.md`](PRD.md) | requirements, the seven bypass measurements in Appendix B, open questions |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | components, data models, the fail-closed table, ADRs, red-team review |
 | [`ARCHITECTURE_ESSENTIALS.md`](ARCHITECTURE_ESSENTIALS.md) | the hard rules, in one screen |

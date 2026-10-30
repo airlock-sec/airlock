@@ -16,9 +16,9 @@ same bar. The design lives in [`PRD.md`](PRD.md), [`ARCHITECTURE.md`](ARCHITECTU
    with a UTC date, refresh the progress table and the `Last updated` line. A change is not
    finished until the roadmap is current.
 6. Update any document the change touches. If the code contradicts a doc, fix the doc.
-7. If you changed a rule, run `python scripts/build_site.py` and commit the regenerated
-   `site/` files. CI fails a stale page, because the published rule reference is generated from
-   the rule data rather than written by hand.
+7. If you changed a rule, run `python scripts/rule_reference.py` and `python scripts/build_site.py`
+   and commit the regenerated `RULES.md` and `site/` files. CI fails a stale reference or page,
+   because both are generated from the rule data rather than written by hand.
 
 ## Branches and commits
 
