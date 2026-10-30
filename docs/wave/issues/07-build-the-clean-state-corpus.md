@@ -70,7 +70,7 @@ not a mirror.
 - [ ] The corpus contains no secret, no seed and no live-looking payload, and the pull request states how that was checked rather than asserting it.
 - [ ] A scan over the corpus is runnable through a documented command, and its current output is committed as a golden file that the suite reproduces byte-for-byte.
 - [ ] `airlock scan --mode full .` still reports no HIGH findings, and the way that was achieved is stated explicitly in the pull request.
-- [ ] Tasks 3.3, 3.8 and 4.6 read consistently with whatever the corpus now provides, and `ROADMAP.md` 0.10 is ticked with a changelog row, `Last updated` moved, and `python scripts/roadmap_progress.py --check` passing.
+- [ ] Tasks 3.3, 3.8 and 4.6 read consistently with whatever the corpus now provides, and `ROADMAP.md` 0.10 is ticked with a change record under `docs/changes/`, `ROADMAP.md` regenerated from it, and `python scripts/roadmap_progress.py --check` passing.
 - [ ] `python -m pytest`, `ruff check .`, `ruff format --check .` and `mypy src` all pass.
 - [ ] PR description includes `Closes #{{issue:self}}`.
 

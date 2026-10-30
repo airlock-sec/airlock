@@ -88,7 +88,7 @@ output (7.6), and any change to how the reporters format findings.
 - [ ] `ARCHITECTURE.md` 10 loses the `[Unverified]` marker only if 0.8 closed it; a new ADR or decision-log row records any choice the sketch did not make.
 - [ ] No runtime dependency was added, no CI step was weakened, and the self-scan still reports zero HIGH findings on this repository.
 - [ ] `python -m pytest`, `ruff check .`, `ruff format --check .`, `mypy src` and `python scripts/roadmap_progress.py --check` pass.
-- [ ] `ROADMAP.md` records 4.1's state with a changelog row and a UTC date, `Last updated` moved, and the PR description includes `Closes #{{issue:self}}`.
+- [ ] `ROADMAP.md` records 4.1's state with a change record under `docs/changes/` and a UTC date, `ROADMAP.md` regenerated from it, and the PR description includes `Closes #{{issue:self}}`.
 
 ## Tech stack
 

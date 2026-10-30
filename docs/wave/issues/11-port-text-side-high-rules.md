@@ -81,7 +81,7 @@ any change to the twelve existing rules.
 - [ ] `ARCHITECTURE.md` 9.6 and the `ARCHITECTURE_ESSENTIALS.md` finding-id list match what shipped, and `ROADMAP.md` 3.6 records which half of its list this closes and which the CI-surface issue still owes.
 - [ ] `rules/` is a protected path: the pull request needs owner review and must not weaken an existing rule to make a new one fit.
 - [ ] `python -m pytest`, `ruff check .`, `ruff format --check .` and `mypy src` all pass.
-- [ ] `ROADMAP.md` carries a changelog row with a UTC date, `Last updated` moved, and `python scripts/roadmap_progress.py --check` passing.
+- [ ] A change record with a UTC date exists under `docs/changes/`, `ROADMAP.md` has been regenerated from it, and `python scripts/roadmap_progress.py --check` passing.
 - [ ] PR description includes `Closes #{{issue:self}}`.
 
 ## Tech stack
