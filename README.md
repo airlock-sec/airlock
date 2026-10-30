@@ -26,13 +26,13 @@ installer does not exist yet.
 
 | | |
 |---|---|
-| Works today | `airlock scan` in console, GitHub-annotation and JSON output, plus a step summary; `airlock manifest add` and `manifest check`; 16 rules across two code detectors and the pattern engine; 555 tests in CI |
-| Not built yet | the composite GitHub Action (`action.yml`), the Soroban-side detectors, the workflow and editor-auto-run half of the rules ported from the script this replaces, SARIF output |
+| Works today | `airlock scan` in console, GitHub-annotation and JSON output, plus a step summary; `airlock manifest add` and `manifest check`; 22 rules across three code detectors and the pattern engine; 652 tests in CI |
+| Not built yet | the composite GitHub Action (`action.yml`), the Soroban-side detectors, the build-script and native-binary rules, SARIF output |
 | Usable now | as a CLI, from a checkout or an installed wheel, on any git repository |
 
 There is no `uses: airlock-sec/airlock@…` line to copy into a workflow, and no package index
 release. Do not treat a scan from this build as complete coverage: a clean report means nothing
-matched the sixteen rules that ship, which is a narrower claim than "no compromise found". Track
+matched the twenty-two rules that ship, which is a narrower claim than "no compromise found". Track
 what exists in [ROADMAP.md](ROADMAP.md) and read the design in
 [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -50,7 +50,7 @@ at, judge a change by the policy that existed before the change, and treat rules
 
 ## What it checks
 
-Two code detectors are registered, and the rule data lives in [`rules/builtin/`](rules/builtin):
+Three code detectors are registered, and the rule data lives in [`rules/builtin/`](rules/builtin):
 one file per family, plus the engine's own line-matching path for `detector = "pattern"` rules.
 
 **`config_role`** targets the tooling configs a Soroban frontend ships (`postcss.config.*`,
@@ -91,15 +91,37 @@ extensionless file or under `vendor/` is read instead of waved past. Prose is ou
 | `pat-exfil-endpoint` | WARN | a paste site, webhook, tunnel or out-of-band callback host in code |
 | `pat-obfuscator-id` | WARN | the `_0x` plus hex identifier grammar an obfuscator emits |
 
+**`ci_surface`** covers the places a repository hands control to someone else: workflow triggers,
+package lifecycle scripts under `package.json`, install hooks under `.husky/` and `.githooks/`, and
+editor auto-run settings. Whole-file shapes belong to the engine's pattern path, and the pairings
+that need two lines judged together (a secret read and displayed, a privileged checkout of a
+contributor's head, a fetched script handed to a shell) are code, because one regex for those is
+quadratic on a line of repeated `curl` at the cap.
+
+| Rule | Severity | Shape |
+|---|---|---|
+| `pat-secret-dump` | HIGH | a workflow that interpolates `secrets.*` into a command that prints or writes it |
+| `pat-ptr-head-checkout` | HIGH | `pull_request_target` plus a checkout pinned to the contributor's head ref |
+| `pat-lifecycle-exec` | HIGH | a `package.json` script or install hook that fetches and then executes the result |
+| `pat-privileged-trigger` | WARN | a workflow triggered by `pull_request_target`, where the head is reachable |
+| `pat-lifecycle-fetch` | WARN | a package or install hook that downloads something, with no execution seen |
+| `pat-editor-command-path` | WARN | an editor setting that names an executable to run on open |
+
+A file in one of those roles is treated as executed with credentials attached, so a line past
+`line_cap` in it is HIGH rather than demoted to WARN. Every rule in the family is suppressible,
+following `cfg-process-spawn`, and none of them judge a string with masking.
+
 The collector adds the state findings on top: `nul-in-text`, `non-utf8-text`, `skipped-oversize`,
 `skipped-unreadable`, `skipped-symlink`, `skipped-unmerged`, `submodule-present`. Every one of them
 is a finding, because a file that was not read must not look the same as a file that was clean.
 
 The Stellar-side detectors (`soroban_profile`, `stellar_seed`, `cargo_vectors`) are designed in
 [ARCHITECTURE.md](ARCHITECTURE.md) 9 and not implemented: those modules carry docstrings and no
-code. Of the rules ported from the old script, the four text-side shapes above ship now; the CI
-surface ones (workflow secret dump, `pull_request_target` checkout, install-hook droppers, editor
-auto-run payloads) need a `workflow` role first and are task 3.6's remaining slice.
+code. Of the rules ported from the old script, the text-side shapes and the CI-surface families
+above ship now; the `build.rs` and native-binary families wait on the Cargo work. What the
+CI-surface rules do not see (a secret read in one line and echoed in another, `workflow_run` and
+`issue_comment` triggers, a fetch hidden in a helper script) is listed in
+[ARCHITECTURE.md](ARCHITECTURE.md) 9.7.
 
 ## What it does not do
 

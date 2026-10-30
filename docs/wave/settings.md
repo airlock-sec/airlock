@@ -187,7 +187,7 @@ Draft notes:
 > python -m airlock scan --mode full .
 > ```
 >
-> Twelve rules across two rule files, two detectors, three report formats (`console`, `github`,
+> Twenty-two rules across four rule files, three detectors, three report formats (`console`, `github`,
 > `json`) plus a step summary written when `GITHUB_STEP_SUMMARY` is set, fingerprint-keyed
 > suppressions with expiry, a Wasm manifest with
 > `airlock manifest add` and `check`, and fail-closed skips. Exit 0 only when nothing reached the

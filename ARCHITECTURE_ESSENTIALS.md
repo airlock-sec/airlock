@@ -78,7 +78,8 @@ Status: v0.2 (red-team revision). Outline of decisions an agent must not violate
 |---|---|---|
 | `config_role` | `cfg-dynamic-code`, `cfg-network-exec`, `cfg-network`, `cfg-process-spawn`, `cfg-chain-endpoint`, `cfg-appended-tail`, `cfg-long-line`, `cfg-nul` | P0 |
 | `wasm_manifest` | `wasm-unlisted`, `wasm-hash-mismatch`, `wasm-path-moved`, `wasm-manifest-stale`, `wasm-archive-skipped` | P0 |
-| `builtin_patterns` | rule data, not a code detector: `pat-decode-eval`, `pat-invisible-unicode` (HIGH), `pat-exfil-endpoint`, `pat-obfuscator-id` (WARN). CI-surface rules still owed by 3.6 | P0 |
+| `builtin_patterns` | rule data, not a code detector: `pat-decode-eval`, `pat-invisible-unicode` (HIGH), `pat-exfil-endpoint`, `pat-obfuscator-id` (WARN) | P0 |
+| `ci_surface` | `pat-secret-dump`, `pat-ptr-head-checkout`, `pat-lifecycle-exec` (HIGH, in code) and `pat-privileged-trigger`, `pat-lifecycle-fetch`, `pat-editor-command-path` (WARN, rule data) | P0 |
 | `soroban_profile` | release-profile keys, `testutils` placement (contract crates only) | P1 |
 | `stellar_seed` | strkey `S...` seed with valid checksum; suppressible | P1 |
 | `cargo_vectors` | `.cargo/config.toml` runner/linker/wrapper, custom `build`, git deps, `[patch]` | P1 |
@@ -89,6 +90,7 @@ Key behaviors:
 - `cfg-dynamic-code` is HIGH and not suppressible. Network or spawn alone is WARN; combined is HIGH.
 - `wasm_manifest` identifies Wasm by magic `00 61 73 6D`, never by extension. [9.2]
 - `pat-*` rules read every role that is code (`source`, `tooling-config`, `editor-autorun`, `other`) and not `doc`; the scope claim lives in each rule's `roles` list, so widening or narrowing it is a data change a reviewer sees. [9.6]
+- The CI surface has roles of its own (`workflow`, `package-manifest`, `install-hook`, plus `editor-autorun` for `.vscode/settings.json`) and each of the three new ones is in `SENSITIVE_ROLES`, because something executes them with credentials attached. A pairing rule reads its own half out of the WARN rule's pattern rather than restating it, and a code rule's regex is bound by `line_cap` like any other. [9.7]
 - D-06: owner-approved KEEP (2026-10-28 UTC). Planned `stellar_seed` is offline, checksum-valid plaintext in tracked files; valid test vectors also match, with no funding or live-use inference. Explicit reasoned suppressions only; implementation remains 6.2/6.3. [9.4]
 
 ## 8. Trust model [4]
@@ -107,7 +109,7 @@ Key behaviors:
 
 ```
 src/airlock/{cli,model,collector,roles,rules,policy,fingerprint,runner}.py    (+ strkey.py in P1)
-src/airlock/detectors/{config_role,wasm_manifest,builtin_patterns}.py         (+ P1 detectors)
+src/airlock/detectors/{config_role,wasm_manifest,ci_surface,builtin_patterns}.py  (+ P1 detectors)
 src/airlock/report/{console,github,jsonout,summary}.py                        (+ sarif.py in P1)
 rules/{roles.toml,builtin/*.toml}   scripts/   tests/{unit,fixtures,bypass,corpus,golden}/
 action.yml   pyproject.toml   airlock.toml   wasm-manifest.toml

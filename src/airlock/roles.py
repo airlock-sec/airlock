@@ -28,6 +28,9 @@ OTHER_ROLE = "other"
 #: detector.
 TOOLING_CONFIG_ROLE = "tooling-config"
 EDITOR_AUTORUN_ROLE = "editor-autorun"
+WORKFLOW_ROLE = "workflow"
+PACKAGE_MANIFEST_ROLE = "package-manifest"
+INSTALL_HOOK_ROLE = "install-hook"
 
 # Mach-O appears in both endiannesses and as a fat archive; PE files start with MZ.
 _NATIVE_PREFIXES: tuple[bytes, ...] = (
@@ -59,7 +62,22 @@ _TAR_MAGIC_AT_257 = b"ustar"
 #: Roles where a file the scanner could not fully read is a HIGH finding, not a WARN
 #: (`ARCHITECTURE.md` 8). Hiding a payload in a build config is the attack this tool exists
 #: for, so an incomplete read of one of these is treated as the payload it might conceal.
-SENSITIVE_ROLES = frozenset({"tooling-config", "editor-autorun"})
+#:
+#: The three CI surface roles join on the same test, which is whether something executes the file
+#: with credentials attached: a workflow runs in the repository's own GitHub App context with a
+#: write token, a package manifest's lifecycle scripts run on every `npm install`, and a hook runs
+#: on every commit a developer makes. The false-positive cost of the decision is bounded, because
+#: this only changes the severity of a file the scanner could not read in full, which is already a
+#: finding either way. A `.vscode/settings.json` is sensitive through `editor-autorun`.
+SENSITIVE_ROLES = frozenset(
+    {
+        TOOLING_CONFIG_ROLE,
+        EDITOR_AUTORUN_ROLE,
+        WORKFLOW_ROLE,
+        PACKAGE_MANIFEST_ROLE,
+        INSTALL_HOOK_ROLE,
+    }
+)
 
 #: Every role name the resolver can produce before `roles.toml` globs are added.
 BUILTIN_ROLES = frozenset({WASM_ROLE, NATIVE_ROLE, ARCHIVE_ROLE, SOURCE_ROLE, DOC_ROLE, OTHER_ROLE})

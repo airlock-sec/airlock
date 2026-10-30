@@ -15,7 +15,29 @@ globs = [
 ]
 
 [roles.editor-autorun]
-globs = ["**/.vscode/tasks.json"]
+globs = ["**/.vscode/tasks.json", "**/.vscode/settings.json"]
+
+# The CI surface (task 3.6). These three paths are each executed by something holding
+# credentials: a workflow runs in the repository's own GitHub App context, a package manifest
+# runs its lifecycle scripts on every install, and a hook runs on a developer's commit. They
+# are named as roles rather than left to the extension fallback so that `SENSITIVE_ROLES` in
+# `src/airlock/roles.py` can make an unreadable one of them a HIGH finding, and so a rule that
+# wants to read workflow grammar is not reading every `.yml` file in the tree.
+#
+# `.github/workflows` is matched anywhere in the tree, not only at the root, so a nested copy is
+# read and reported rather than waved past; only the root path is one GitHub executes. A
+# `workflow.yml` in `docs/` is not a workflow at all.
+[roles.workflow]
+globs = [
+  "**/.github/workflows/*.yml",
+  "**/.github/workflows/*.yaml",
+]
+
+[roles.package-manifest]
+globs = ["**/package.json"]
+
+[roles.install-hook]
+globs = ["**/.husky/**", "**/.githooks/**"]
 
 # Extra configs (vite, webpack, jest and others) are P1 and need false-positive review
 # against tests/corpus before they are added here.
