@@ -1,0 +1,107 @@
+# `builtin_patterns` rules: the text-side shapes `malware_scan.py` matched, ported as data
+# (`ARCHITECTURE.md` 9.6, task 3.6).
+#
+# Nothing in this file is scoped to `tooling-config` alone. That role resolves from five filenames
+# (`rules/roles.toml`), so a payload in a `.py` file, in a file with no extension, or under
+# `vendor/` was read by no pattern rule in the tree and reported clean (`PRD.md` Appendix B case 7).
+# The `roles` list on each rule is the coverage claim, stated here rather than in detector code, so
+# a reviewer and the rule reference generator can both read it. All four rules name the same four
+# roles: every role whose files the collector hands over as text and that is code rather than prose.
+# The `wasm`, `native-binary` and `archive` roles are absent because a file that resolves to one of
+# them carries no text for a line rule to read.
+#
+# `doc` appears on no rule in this file. Prose describes payloads: this repository's own `PRD.md`
+# quotes the exact string in Appendix B case 7, and a rule that read `doc` would report it as a
+# finding on every scan of a security tool's documentation. The residual is recorded in
+# `ARCHITECTURE.md` 9.6: a loader named `.md` keeps its invisible characters and its endpoints out of
+# these rules, but it also keeps an extension nothing executes, and `cfg-long-line` and `nul-in-text`
+# still read the role.
+#
+# Severity is a false-positive budget (risk R-2), so the two HIGHs are the shapes with no innocent
+# reading in a file that is code: a decoder feeding an evaluator, and a character that cannot be seen
+# in a diff. A tool fingerprint and a single endpoint mention are WARN, because each has a common
+# legitimate form (a committed obfuscated bundle, a webhook URL in a test) and each only becomes the
+# attack in combination with something that runs it. Combination rules over these roles are 3.7; the
+# source-role half of `cfg-network-exec` is not claimed here.
+#
+# Patterns use TOML multi-line literal strings ('''), so backslashes reach `re` as written. The
+# invisible-Unicode class is written as `\u200b`-style escapes for the same reason: this file stays
+# ASCII, and a rule about invisible characters must not contain one.
+#
+# The endpoint list writes each dot as `\.`. That is also what keeps this file from matching itself:
+# the text of a rule holds an escaped dot where the pattern looks for a real one, and every file under
+# `rules/` is role `source`, which all four rules here read. `pat-obfuscator-id` is saved the same way
+# by writing its hex run as a class rather than as an example. A host name in the comments below is
+# always written with its escape in it, because prose about a list of hosts is still a line the list
+# is matched against.
+
+# The endpoint list is matched case-sensitively, and that is a measured trade rather than an
+# oversight. A `(?i)` flag costs about ten times what the same alternation costs without it on the
+# ReDoS harness's own near-miss bait (`[a-z]` repeated to `line_cap`, where this machine reads 1.5 ms
+# and 15 ms for the two forms), because every candidate position in the line is case-folded against
+# every branch. Hosts in code are lowercase almost always, a shouty uppercase host is a defanging
+# convention for prose, which this file does not read, and a mixed-case host is an evasion of a WARN
+# rather than a hole in a gate. `pat-decode-eval` keeps `(?i)`, because the identifiers it names are camelCase by
+# convention (`decodeURIComponent`, `Buffer.from`) and the case there is not a choice the payload's
+# author is making.
+
+[[rule]]
+id = "pat-decode-eval"
+title = "Encoded payload fed to an evaluator"
+roles = ["source", "tooling-config", "editor-autorun", "other"]
+detector = "pattern"
+severity = "high"
+suppressible = true
+rationale = "A string that has to be decoded before it runs was written to be read by the machine and not by the reviewer, which is the shape the reported campaigns used. The old script scored it WARN unless the payload spelled the call with no space between the verb and the decoder, and said nothing at all once the file sat under a vendored directory (PRD.md 2.3 items 5 and 7). What separates this from cfg-dynamic-code is what each asks for: that rule fires on an evaluator call in one of five config filenames, this one fires on a decoder feeding an evaluator in any file that is code."
+pattern = { kind = "regex", value = '''(?i)\b(?:eval|exec|function|setTimeout|setInterval)\b\s*\(\s*[\w.$]{0,24}?(?:atob|b64[_-]?decode|base64[_-]?decode|decode[_-]?base64|from[_-]?base64|decodeUri\w*|unescape|unhex\w*|decrypt|Buffer\s*\.\s*from)\s*\(''' }
+tests = { positive = "pat_decode_eval", negative = "pat_decode_eval" }
+
+# HIGH, and suppressible, which is an asymmetry with `cfg-dynamic-code` on purpose: that rule cannot
+# be suppressed because a build config runs at install time, before anyone reads the diff, while this
+# one has an ordinary owner who can name a reason for a decoder feeding an evaluator in application
+# code. What buys the suppressibility is that the rule asks for the pair and not for the verb, so a
+# bare `eval(` in `src/app.js` is not a finding here. The argument window is capped at 24 characters,
+# which means `eval("return " + atob(x))` is not a finding either: string-built payloads are the known
+# limit, and 9.1 already states it for the config family.
+
+[[rule]]
+id = "pat-invisible-unicode"
+title = "Invisible or direction-flipping character in code"
+roles = ["source", "tooling-config", "editor-autorun", "other"]
+detector = "pattern"
+severity = "high"
+suppressible = true
+rationale = "A zero-width or bidi-override character inside an identifier is invisible in a diff, survives a reviewer reading the line out loud, and defeats a grep for the payload name, because the name on the screen is not the name in the file. This is why matching raw text with no masking is a hard rule rather than a style choice. U+200D is deliberately absent from the class: a zero-width joiner is how emoji sequences and several writing systems are spelled, and it is the one character in this neighbourhood that code carries legitimately."
+pattern = { kind = "regex", value = '''[\u00ad\u034f\u061c\u180e\u200b\u200c\u2060\u200e\u200f\u202a-\u202e\u2062-\u2064\ufeff]''' }
+tests = { positive = "pat_invisible_unicode", negative = "pat_invisible_unicode" }
+
+# This is the finding an owner will most often want an entry for, since a localized string table can
+# legitimately carry a mark, so `suppressible` is the design decision here rather than a default. Two
+# residuals come with it and both belong in the open rather than inside a detector. The engine has no
+# notion of a comment or a string, so a zero-width character inside a string literal is a finding
+# exactly as one inside an identifier is, and `AGENTS.md` 4 forbids the masking that would tell them
+# apart. And a rule that reads only lines at or under `line_cap` can be evaded by padding: the padded
+# line gets no pattern, and the `cfg-long-line` finding that stands in for it is WARN outside a
+# sensitive role (`rules._cap_severity`), so padding costs the exit-code gate and never the report.
+
+[[rule]]
+id = "pat-exfil-endpoint"
+title = "Paste, webhook or tunnel endpoint in code"
+roles = ["source", "tooling-config", "editor-autorun", "other"]
+detector = "pattern"
+severity = "warn"
+suppressible = true
+rationale = "A loader needs somewhere to put what it collected and somewhere to be told what to fetch, and the free services it uses for that are a short list that changes slowly. This is a separate rule from cfg-network rather than a wider role on that pattern: a named paste or tunnel host and a bare capability to open a socket have different false-positive profiles and different reasons to be suppressed, and only one of them is already a WARN inside a build config. The list is paste sites, tunnels and webhook or out-of-band callback hosts, kept as data so that adding a host never reads like a change to the matching logic."
+pattern = { kind = "regex", value = '''\b(?:pastebin\.com|hastebin\.com|controlc\.cc|rentry\.co|dpaste\.org|paste\.ee|termbin\.com|0x0\.st|transfer\.sh|file\.io|webhook\.site|requestbin\.(?:com|net)|hookbin\.com|pipedream\.(?:net|com)|ngrok\.(?:io|com)|trycloudflare\.com|localtunnel\.me|serveo\.net|bore\.pub|interact\.sh|burpcollaborator\.net|canarytokens\.com|oast\.(?:com|fun|pro|site)|dnslog\.cn|requestrepo\.com|ghostbin\.(?:com|co|site))''' }
+tests = { positive = "pat_exfil_endpoint", negative = "pat_exfil_endpoint" }
+
+[[rule]]
+id = "pat-obfuscator-id"
+title = "Obfuscator identifier grammar"
+roles = ["source", "tooling-config", "editor-autorun", "other"]
+detector = "pattern"
+severity = "warn"
+suppressible = true
+rationale = "The `_0x` plus hex identifier is the naming scheme the JavaScript obfuscators emit, and it survives a rename of the tool because it is a property of the output rather than of a banner. ARCHITECTURE.md 9.6 is explicit that obfuscator fingerprints rotate weekly while the mechanism stays, so this keys on the identifier grammar and not on a list of tool names. It is a WARN because the shape has one ordinary owner: a minified or packed bundle committed to the repository, which is a release-integrity question for the artifact rules rather than a payload by itself."
+pattern = { kind = "regex", value = '''\b_0x[0-9a-fA-F]{4,}\b''' }
+tests = { positive = "pat_obfuscator_id", negative = "pat_obfuscator_id" }

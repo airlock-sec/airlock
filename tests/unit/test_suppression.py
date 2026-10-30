@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
+from tests.fixtures import assemble
 
 from airlock.fingerprint import PendingFinding, number_occurrences
 from airlock.model import (
@@ -30,7 +31,7 @@ from airlock.policy import (
 
 CONFIG = "postcss.config.mjs"
 OTHER_CONFIG = "next.config.mjs"
-PAYLOAD = "eval(Buffer.from(process.env.P, 'base64'))"
+PAYLOAD = f"{assemble('ev', 'al')}({assemble('Buf', 'fer.from')}(process.env.P, 'base64'))"
 TODAY = date(2026, 10, 27)
 
 DYNAMIC = "cfg-dynamic-code"

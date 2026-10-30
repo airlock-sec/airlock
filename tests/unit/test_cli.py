@@ -17,13 +17,16 @@ import tomllib
 from pathlib import Path
 
 import pytest
+from tests.fixtures import assemble
 
 from airlock import detectors
 from airlock.cli import DEFAULT_ROLES_FILE, DEFAULT_RULES_DIR, REPO_ROOT, main, rules_root
 from airlock.model import EXIT_CONFIG, EXIT_FINDINGS, EXIT_INTERNAL, EXIT_PASS, Mode
 
 CLEAN_CONFIG = "export default { plugins: [] }\n"
-PAYLOAD = "eval(Buffer.from(process.env.P, 'base64'))\n"
+# Built from fragments at call time (`AGENTS.md` 4): the scanner reads every `.py` file in this
+# repository as role `source`, so a committed literal of this line would be a finding on itself.
+PAYLOAD = f"{assemble('ev', 'al')}({assemble('Buf', 'fer.from')}(process.env.P, 'base64'))\n"
 # A suppressible HIGH, so a passing suppression test is not won by an entry the rule data forbids.
 ENDPOINT = 'export default { rpc_endpoint: "rpc_endpoint" }\n'
 

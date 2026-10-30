@@ -523,6 +523,50 @@ at scan time. No network access, balance lookup or live-key verification during 
 
 Line rules ported from `malware_scan.py`: invisible Unicode, exfiltration endpoints, decode-and-eval, obfuscator identifiers, credential harvesting, blockchain C2 hosts, workflow secret dump, install-hook droppers, VS Code auto-run, `pull_request_target` checkout, `build.rs` network, native binaries. HIGH rules first, then WARN rules. Intentional changes from the old script: skips become findings, directory skips are gone and the inline `malware-scan: allow` marker is dropped.
 
+Shipped as of task 3.6 (text-side slice) in `rules/builtin/builtin_patterns.toml`, four rules with
+`detector = "pattern"` and no code detector module: `pat-decode-eval` (HIGH),
+`pat-invisible-unicode` (HIGH), `pat-exfil-endpoint` (WARN), `pat-obfuscator-id` (WARN). Each names
+`roles = ["source", "tooling-config", "editor-autorun", "other"]`, which is where the coverage claim
+lives: the old script's miss was not a wrong pattern but a wrong scope, since its only in-repo
+consumer was an allowlist of five config filenames (`PRD.md` 2.3 item 7, Appendix B case 7). Naming
+the roles in the rule data means a reviewer reads the claim and the rule reference generator (5.2)
+can publish it, instead of a detector hardcoding a path list.
+
+Residuals, stated rather than hidden:
+
+- `doc` appears on no rule here. Prose describes payloads, and this repository's own `PRD.md` quotes
+  the Appendix B case 7 string, so a rule reading `doc` would report a finding on every scan of a
+  security tool's documentation. A loader named `README.md` therefore keeps its invisible characters
+  and its endpoints from these rules; it also keeps an extension nothing executes, and
+  `cfg-long-line` and `nul-in-text` still read the role.
+- The severity tiers are a false-positive budget (risk R-2), not a ranking of harm. The two HIGHs are
+  shapes with no innocent reading in a file that is code; a tool fingerprint and a single endpoint
+  mention are WARN because each has a common legitimate form (a committed obfuscated bundle, a
+  webhook URL in a test) and each only becomes the attack in combination with something that runs it.
+  Combination rules over these roles are task 3.7.
+- Raw-text matching, no comment or string masking (ADR-013), and `line_cap` still applies: an
+  attacker who pads a payload line past the cap trades `pat-*` for a `cfg-long-line` finding, which
+  is HIGH inside `SENSITIVE_ROLES` and WARN elsewhere (`rules._cap_severity`). Padding therefore
+  costs the exit-code gate nothing it hides from the report.
+- `pat-exfil-endpoint` is matched case-sensitively. A `(?i)` flag measured about ten times slower on
+  the ReDoS harness's own near-miss bait for the same alternation (1.5 ms against 15 ms for `[a-z]`
+  repeated to the cap), which is a per-line cost multiplied by every line of every code file. Hosts
+  in code are lowercase almost always, and a shouty uppercase host is an evasion of a WARN rule
+  rather than a miss worth that multiplier. `pat-decode-eval` keeps `(?i)` because the identifiers it
+  names are camelCase by convention (`decodeURIComponent`, `Buffer.from`).
+
+Measured worst case per cap-length line on the shipped bait set (CPython 3.14 locally, fresh
+interpreter per pattern; the suite's own gate is `tests/unit/test_redos.py` against 60 ms):
+`pat-decode-eval` 8.5 ms, `pat-exfil-endpoint` 9.8 ms, `pat-obfuscator-id` 1.3 ms,
+`pat-invisible-unicode` 1.0 ms, all on the harness's repeated `[a-z]` line. CI runs 3.11 and asserts
+the same bound.
+
+Not yet ported from the list above: the CI surface (workflow secret dump, `pull_request_target`
+checkout with an untrusted head, install-hook droppers, VS Code auto-run payloads) plus
+`build.rs` network, native-binary and blockchain C2 shapes. The workflow rules need a `workflow`
+role that `rules/roles.toml` does not define yet, so a pattern naming one would be rejected by the
+loader's role cross-check (`ARCHITECTURE.md` 6.4). That is task 3.6's second slice.
+
 ### 9.7 Deferred designs
 
 - `deploy_gate`: text heuristics over workflow files cannot see deploys hidden in scripts, reusable workflows or `make` targets, so it would give false assurance. Reconsider only if a real repo deploys to mainnet from CI.

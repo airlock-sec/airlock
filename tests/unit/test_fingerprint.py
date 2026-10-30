@@ -6,6 +6,7 @@ import hashlib
 from dataclasses import replace
 
 import pytest
+from tests.fixtures import assemble
 
 from airlock.fingerprint import (
     MAX_EVIDENCE_CHARS,
@@ -17,7 +18,7 @@ from airlock.fingerprint import (
 )
 from airlock.model import FINGERPRINT_PREFIX, Severity
 
-SAME_LINE = "eval(Buffer.from(payload, 'base64'))"
+SAME_LINE = f"{assemble('ev', 'al')}({assemble('Buf', 'fer.from')}(payload, 'base64'))"
 
 
 def pending(

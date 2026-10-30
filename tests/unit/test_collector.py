@@ -14,6 +14,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from tests.fixtures import assemble
 
 from airlock import runner
 from airlock.collector import (
@@ -40,6 +41,10 @@ ROLE_GLOBS = {
 
 WASM_HEAD = b"\x00asm\x01\x00\x00\x00"
 GITLINK_SHA = "e3" + "0" * 38
+
+# Assembled at call time rather than committed whole (`AGENTS.md` 4). A skipped file's contents are
+# still bytes on disk here, and the `pat-` rules read every `.py` file in this repository.
+DROPPER = f"{assemble('ev', 'al')}({assemble('Buf', 'fer.from')}(a,'base64'))\n"
 
 
 def git(root: Path, *args: str) -> str:
@@ -212,7 +217,7 @@ class TestRolesAndReads:
 class TestSymlinks:
     def test_a_tracked_symlink_is_recorded_not_followed(self, repo: Path, tmp_path: Path) -> None:
         secret = tmp_path / "outside.txt"
-        secret.write_text("eval(Buffer.from(a,'base64'))\n")
+        secret.write_text(DROPPER)
         link = repo / "postcss.config.mjs"
         link.symlink_to(secret)
         git(repo, "add", "-A")
@@ -357,7 +362,7 @@ class TestDecoding:
         assert "nul-in-text" in rule_ids(scan(repo).pending)
 
     def test_utf8_bom_is_stripped(self, repo: Path) -> None:
-        write(repo, "a.py", "﻿x = 1\n")
+        write(repo, "a.py", "\ufeffx = 1\n")
         commit(repo)
         assert entry_of(scan(repo), "a.py").text == "x = 1\n"
 
@@ -503,7 +508,7 @@ class TestStateFindingsAreFindings:
     """
 
     def test_every_state_finding_from_a_skipping_repo_gets_a_fingerprint(self, repo: Path) -> None:
-        write(repo, "outside.txt", "eval(Buffer.from(a,'base64'))\n")
+        write(repo, "outside.txt", DROPPER)
         write(repo, "big.js", "b" * 60)
         (repo / "link.py").symlink_to(repo / "outside.txt")
         git(repo, "add", "-A")

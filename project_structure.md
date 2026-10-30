@@ -47,7 +47,7 @@ airlock/
       __init__.py                  # plain list of detector functions
       config_role.py               # P0                                                                      (3.1)
       wasm_manifest.py             # P0                                                                      (3.4)
-      builtin_patterns.py          # P0, runs ported data rules                                              (3.6, 3.7)
+      builtin_patterns.py          # stub; its rules are data run by the engine, not a code detector          (3.6, 3.7)
       soroban_profile.py           # P1                                                                      (6.1)
       stellar_seed.py              # planned offline plaintext tracked-file seeds, D-06 KEEP (P1)            (6.3)
       cargo_vectors.py             # P1                                                                      (6.4)
@@ -132,7 +132,7 @@ model  <-  fingerprint, roles, rules  <-  collector, policy  <-  detectors  <-  
 
 ## 5. Naming conventions
 
-- Rule IDs: kebab-case, prefixed by family (`cfg-`, `wasm-`, `soroban-`, `seed-`, `cargo-`). Stable once released; never reused.
+- Rule IDs: kebab-case, prefixed by family (`cfg-`, `wasm-`, `pat-`, `soroban-`, `seed-`, `cargo-`). Stable once released; never reused.
 - Finding IDs for states (not rules) use the same style (`history-rewritten`, `skipped-oversize`).
 - Detector module: snake_case, same as its family (`config_role.py`).
 - Fixture builder names match the rule ID with underscores (`cfg_dynamic_code`), one positive and one negative per rule.

@@ -78,7 +78,7 @@ Status: v0.2 (red-team revision). Outline of decisions an agent must not violate
 |---|---|---|
 | `config_role` | `cfg-dynamic-code`, `cfg-network-exec`, `cfg-network`, `cfg-process-spawn`, `cfg-chain-endpoint`, `cfg-appended-tail`, `cfg-long-line`, `cfg-nul` | P0 |
 | `wasm_manifest` | `wasm-unlisted`, `wasm-hash-mismatch`, `wasm-path-moved`, `wasm-manifest-stale`, `wasm-archive-skipped` | P0 |
-| `builtin_patterns` | ported rules from `malware_scan.py` (HIGH first, parity required) | P0 |
+| `builtin_patterns` | rule data, not a code detector: `pat-decode-eval`, `pat-invisible-unicode` (HIGH), `pat-exfil-endpoint`, `pat-obfuscator-id` (WARN). CI-surface rules still owed by 3.6 | P0 |
 | `soroban_profile` | release-profile keys, `testutils` placement (contract crates only) | P1 |
 | `stellar_seed` | strkey `S...` seed with valid checksum; suppressible | P1 |
 | `cargo_vectors` | `.cargo/config.toml` runner/linker/wrapper, custom `build`, git deps, `[patch]` | P1 |
@@ -88,6 +88,7 @@ Key behaviors:
 - `config_role` targets role `tooling-config` (postcss, tailwind, next, eslint, babel configs). Capabilities, not signatures. [9.1]
 - `cfg-dynamic-code` is HIGH and not suppressible. Network or spawn alone is WARN; combined is HIGH.
 - `wasm_manifest` identifies Wasm by magic `00 61 73 6D`, never by extension. [9.2]
+- `pat-*` rules read every role that is code (`source`, `tooling-config`, `editor-autorun`, `other`) and not `doc`; the scope claim lives in each rule's `roles` list, so widening or narrowing it is a data change a reviewer sees. [9.6]
 - D-06: owner-approved KEEP (2026-10-28 UTC). Planned `stellar_seed` is offline, checksum-valid plaintext in tracked files; valid test vectors also match, with no funding or live-use inference. Explicit reasoned suppressions only; implementation remains 6.2/6.3. [9.4]
 
 ## 8. Trust model [4]

@@ -81,11 +81,26 @@ class Fixture:
 Builder = Callable[[], Fixture]
 
 
+def assemble(*fragments: str) -> str:
+    """Put a trigger string together at call time, so no committed file holds the whole form.
+
+    `AGENTS.md` 4 forbids a live-looking payload in this repository, and the `builtin_patterns`
+    rules read every `.py` file here as role `source`, so a test constant that spells `eval` and a
+    decoder as a call is a finding against the scanner's own tree. Builders use it for the same
+    reason the fixture halves do: the assembled form exists only while a test is running.
+    """
+    return "".join(fragments)
+
+
 def builders() -> Mapping[str, Builder]:
     """Every builder the suite knows, by the name a rule file uses."""
-    from . import config_role, wasm_manifest
+    from . import builtin_patterns, config_role, wasm_manifest
 
-    return {**config_role.BUILDERS, **wasm_manifest.BUILDERS}
+    return {
+        **builtin_patterns.BUILDERS,
+        **config_role.BUILDERS,
+        **wasm_manifest.BUILDERS,
+    }
 
 
 def shipped_rules() -> tuple[Rule, ...]:
