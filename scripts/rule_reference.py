@@ -144,7 +144,7 @@ def render_reference(families: tuple[FamilyRules, ...]) -> str:
         "Do not edit by hand; run `python scripts/rule_reference.py` after changing a rule file.",
         "",
         f"**Total:** {len(all_rules)} rules across {len(families)} families "
-        f"({family_summary}) — {sev_summary}.",
+        f"({family_summary}); {sev_summary}.",
         "",
         "## Summary",
         "",

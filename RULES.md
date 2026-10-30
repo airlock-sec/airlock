@@ -2,7 +2,7 @@
 
 Generated from [`rules/builtin/*.toml`](rules/builtin) by [`scripts/rule_reference.py`](scripts/rule_reference.py). Do not edit by hand; run `python scripts/rule_reference.py` after changing a rule file.
 
-**Total:** 24 rules across 4 families (`builtin_patterns` (6), `ci_surface` (6), `config_role` (7), `wasm_manifest` (5)) — 12 HIGH, 12 WARN.
+**Total:** 24 rules across 4 families (`builtin_patterns` (6), `ci_surface` (6), `config_role` (7), `wasm_manifest` (5)); 12 HIGH, 12 WARN.
 
 ## Summary
 
