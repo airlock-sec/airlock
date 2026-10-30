@@ -1,0 +1,63 @@
+# Publish the documentation site (task 8.6).
+#
+# The site is static, so this workflow builds nothing: it checks that the committed rule
+# reference still matches `rules/builtin/*.toml`, uploads `site/` as an artefact and lets the
+# Pages action publish it. That check is the point of running at all, because a rule that lands
+# without regenerating the page would otherwise be described by a site that no longer knows it.
+#
+# Every action is pinned by commit SHA with the tag it was resolved from, and the three with a
+# readable diff behind them were read before pinning (AGENTS.md 9). Pages has to be enabled on
+# the repository with `build_type: workflow`; the first deployment is what turns that on.
+#
+# `permissions` is the smallest set Pages accepts: read the tree, write the deployment and mint
+# the OIDC token deploy-pages exchanges for it.
+
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "rules/builtin/**"
+      - "scripts/build_site.py"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+
+      # Exits 1 when a page is stale, so a rule change and the site it describes land together.
+      - name: Verify the rule reference matches the rule data
+        run: python scripts/build_site.py --check
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:; base-uri 'self'; form-action 'none'">
+  <title>Usage // Airlock</title>
+  <meta name="description" content="Install Airlock from a checkout, run a scan in pr, push or full mode, write policy and suppressions, and keep a Wasm manifest in the trusted base.">
+  <meta name="color-scheme" content="dark">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Airlock usage">
+  <meta property="og:description" content="Commands, trust modes, policy keys, suppressions and the Wasm manifest flow.">
+  <meta property="og:url" content="https://airlock-sec.github.io/airlock/usage.html">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/site.css">
+  <script src="assets/site.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="bar">
+  <div class="bar-in">
+    <a class="brand" href="index.html" aria-label="Airlock home">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">AIRLOCK</span>
+      <span class="brand-sec" aria-hidden="true">SEC</span>
+    </a>
+    <nav class="nav" aria-label="Primary">
+      <a href="index.html">01 / Overview</a>
+      <a href="usage.html" aria-current="page">02 / Usage</a>
+      <a href="rules.html">03 / Rules</a>
+      <a href="trust.html">04 / Trust</a>
+      <a class="nav-ext" href="https://github.com/airlock-sec/airlock">GitHub &nearr;</a>
+    </nav>
+    <div class="bar-meta" aria-hidden="true">DOC / 02 <span class="dot"></span> CLI</div>
+  </div>
+</header>
+
+<main id="main">
+
+  <section class="page-head">
+    <div class="wrap">
+      <p class="crumb"><a href="index.html">Overview</a> / Usage</p>
+      <h1 class="mega">OPERATIONS<span class="cursor" aria-hidden="true"></span></h1>
+      <p class="lede">Airlock is a CLI with no runtime dependencies. It is not a GitHub Action yet, and there is no package index release. Everything on this page runs from a checkout.</p>
+    </div>
+  </section>
+
+  <section class="sec" id="install">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="num">[ 01 ]</span>
+        <h2 class="sec-title">Install</h2>
+        <span class="tag">Python 3.11+</span>
+      </div>
+      <div class="split">
+        <div class="term">
+          <div class="term-bar"><span>From a checkout</span><button class="copy" type="button" data-copy="install-cmd">Copy</button></div>
+          <pre id="install-cmd"><span class="p">$</span> git clone https://github.com/airlock-sec/airlock.git
+<span class="p">$</span> cd airlock
+<span class="p">$</span> python3 -m venv .venv &amp;&amp; . .venv/bin/activate
+<span class="p">$</span> pip install .
+<span class="p">$</span> airlock --version</pre>
+        </div>
+        <div class="prose">
+          <p>The wheel carries the rule data inside the package, so an installed copy scans with the rules it shipped with. A source checkout resolves the same data from <code>rules/</code>.</p>
+          <p>Run without installing if you prefer:</p>
+          <p><code>PYTHONPATH=src python3 -m airlock scan --mode full</code></p>
+          <p>No network call is made during a scan. There is no telemetry and no update check.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="commands">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="num">[ 02 ]</span>
+        <h2 class="sec-title">Commands</h2>
+        <span class="tag">scan / manifest</span>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <caption>Command surface</caption>
+          <thead>
+            <tr><th scope="col">Command</th><th scope="col">What it does</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="mono">airlock scan --mode full</td><td>Scans the tree and reads policy from the working tree, announced with <b>untrusted-policy-source</b> at INFO.</td></tr>
+            <tr><td class="mono">airlock scan --event pull_request --base &lt;sha&gt;</td><td>Reads policy, suppressions and the manifest from the pull request base commit.</td></tr>
+            <tr><td class="mono">airlock scan --event push --before &lt;sha&gt;</td><td>Reads them from <b>github.event.before</b>, the commit the push started at.</td></tr>
+            <tr><td class="mono">airlock scan --fail-on warn</td><td>Moves the exit-code threshold. The report still prints every finding.</td></tr>
+            <tr><td class="mono">airlock scan --format github</td><td>Emits workflow commands as annotations. <b>console</b> is the default.</td></tr>
+            <tr><td class="mono">airlock scan --format json --output report.json</td><td>Writes the machine-readable report instead of printing it.</td></tr>
+            <tr><td class="mono">airlock manifest add &lt;targets&gt; ...</td><td>Records one or more artifacts by SHA-256 in <b>wasm-manifest.toml</b>. Stages nothing.</td></tr>
+            <tr><td class="mono">airlock manifest check</td><td>Runs the scan pipeline and keeps the <b>wasm-*</b> findings, so the manifest is judged the same way twice.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="prose mt">
+        <p>When <code>GITHUB_STEP_SUMMARY</code> is set, a step summary is written as well. GitHub caps annotations per level per step and a step summary at 1 MiB; both limits are measured and recorded in the repository rather than assumed.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="modes">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="num">[ 03 ]</span>
+        <h2 class="sec-title">Trust modes</h2>
+        <span class="tag">Policy source</span>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <caption>Where policy comes from</caption>
+          <thead>
+            <tr><th scope="col">Mode</th><th scope="col">Policy, suppressions, manifest</th><th scope="col">Failure behavior</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="mono">pr</td><td><b>The pull request base commit</b></td><td>An unresolvable base is exit 2. A policy edited inside the change is <b>policy-changed</b>, and the base copy runs.</td></tr>
+            <tr><td class="mono">push</td><td><b>github.event.before</b></td><td>A force push is <b>history-rewritten</b> at HIGH. A new branch reports <b>no-trusted-base</b> at WARN and uses the shipped defaults.</td></tr>
+            <tr><td class="mono">full</td><td>The working tree</td><td>Announced with <b>untrusted-policy-source</b> at INFO. For a local look, not a gate.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="prose mt">
+        <p>The workflow must check out enough history for the base to be reachable. <code>actions/checkout</code> defaults to depth 1; set <code>fetch-depth: 0</code>. Airlock never fetches, so a shallow checkout fails closed rather than guessing.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="policy">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="num">[ 04 ]</span>
+        <h2 class="sec-title">Policy</h2>
+        <span class="tag">airlock.toml</span>
+      </div>
+      <div class="split">
+        <div class="term">
+          <div class="term-bar"><span>airlock.toml</span><button class="copy" type="button" data-copy="policy-example">Copy</button></div>
+          <pre id="policy-example">version = 1
+
+[policy]
+fail_on        = "high"
+max_file_bytes = 5000000
+line_cap       = 20000
+tail_max_len   = 2000
+tail_entropy   = 4.5
+
+[soroban]
+
+[soroban.require_release_profile]
+overflow-checks  = true
+panic            = "abort"
+lto              = true
+codegen-units    = 1
+debug-assertions = false</pre>
+        </div>
+        <div class="prose">
+          <p>The file is read from the trusted base in <code>pr</code> and <code>push</code> modes. A key this build does not read produces <b>policy-unknown-key</b> at WARN, so a typo cannot silently leave a setting at its default.</p>
+          <p><b>fail_on</b> moves the exit-code threshold. <b>max_file_bytes</b> is the read limit; a larger file is a finding, not a pass. <b>line_cap</b> is the longest line the regexes run on; a longer line is accounted for by <b>cfg-long-line</b>.</p>
+          <p>The <code>[soroban]</code> table is reserved for the Phase 6 detectors and is not read by a rule yet. Stating it as reserved is more useful than presenting a setting that does nothing.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="suppressions">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="num">[ 05 ]</span>
+        <h2 class="sec-title">Suppressions</h2>
+        <span class="tag">Fingerprint-keyed</span>
+      </div>
+      <div class="split">
+        <div>
+          <div class="term">
+            <div class="term-bar"><span>One entry</span><button class="copy" type="button" data-copy="suppression-example">Copy</button></div>
+            <pre id="suppression-example">[[suppress]]
+rule        = "pat-obfuscator-id"
+path        = "vendor/legacy/bundle.js"
+# 64 hex characters, copied from the finding
+fingerprint = "PASTE_THE_FINDING_FINGERPRINT"
+reason      = "pinned vendor bundle, reviewed 2026-10-30"
+expires     = "2026-11-29"</pre>
+          </div>
+        </div>
+        <div class="prose">
+          <p>A suppression names a rule, a path and the fingerprint of one finding. It cannot use a glob, and it has no inline form: there is no comment a payload can add to exempt itself.</p>
+          <p>Fingerprints are occurrence-aware. The same line repeated twice produces two occurrences and needs two entries, because suppressing one copy must not hide the other.</p>
+          <p><b>reason</b> is required. An entry that does not apply is <b>suppression-invalid</b> at HIGH, and an entry within 30 days of its expiry is <b>suppression-expiring</b> at WARN. A scanner-state finding cannot be suppressed at all, even if the rule data says otherwise.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="manifest">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="num">[ 06 ]</span>
+        <h2 class="sec-title">Wasm manifest</h2>
+        <span class="tag">Hash-keyed / Two steps</span>
+      </div>
+      <div class="split">
+        <div class="term">
+          <div class="term-bar"><span>Record, land, then verify</span><button class="copy" type="button" data-copy="manifest-example">Copy</button></div>
+          <pre id="manifest-example"><span class="p">$</span> airlock manifest add target/*/*.wasm \
+    --origin built \
+    --source contracts/counter \
+    --build "cargo build --release --target wasm32-unknown-unknown"
+<span class="p">$</span> git add wasm-manifest.toml &amp;&amp; git commit -m "manifest: counter"
+<span class="c"># land the manifest on its own, then add the artifacts</span>
+<span class="p">$</span> airlock manifest check</pre>
+        </div>
+        <div class="prose">
+          <p>The manifest is keyed by SHA-256, not by path, so a known artifact that moves is a WARN rather than a HIGH. An unlisted artifact, or one whose bytes changed, is HIGH.</p>
+          <p>Land the manifest before the pull request that adds the artifacts. The trusted base is what a pull request is judged against, so a change that adds both at once has no reviewed entry to compare with.</p>
+          <p>Archives are reported by <b>wasm-archive-skipped</b> because the scanner reads bytes and never unpacks them. A Wasm file inside a zip is an unexamined hole, not a pass.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="action">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="num">[ 07 ]</span>
+        <h2 class="sec-title">The Action is planned</h2>
+        <span class="tag">Task 4.1 / Not shipped</span>
+      </div>
+      <div class="split">
+        <div>
+          <div class="term">
+            <div class="term-bar"><span>Intended shape, not usable</span><button class="copy" type="button" data-copy="action-example">Copy</button></div>
+            <pre id="action-example">- uses: airlock-sec/airlock@&lt;full commit sha&gt;   # pin the SHA, not a tag
+  with:
+    mode: pr</pre>
+          </div>
+        </div>
+        <div class="prose">
+          <p><code>action.yml</code> does not exist yet. When it does, pin the full commit SHA, read the diff before moving it, and make the check a required status check. Without that last part, a pull request that deletes the scan step simply never runs it.</p>
+          <p>Until then the honest usage is a CLI step in a workflow you control, with a full-history checkout and read-only permissions.</p>
+          <p><a href="trust.html#residual">Residual risk, and what a required check does not cover &rarr;</a></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="exit">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="num">[ 08 ]</span>
+        <h2 class="sec-title">Exit codes</h2>
+        <span class="tag">0 / 1 / 2 / 3</span>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <caption>What a run returns</caption>
+          <thead>
+            <tr><th scope="col">Code</th><th scope="col">Meaning</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="mono">0</td><td>Nothing at or above <b>fail_on</b>, which defaults to high.</td></tr>
+            <tr><td class="mono">1</td><td>A finding at or above the threshold.</td></tr>
+            <tr><td class="mono">2</td><td>Usage or configuration error, including an unresolvable base and a missing <b>git</b>.</td></tr>
+            <tr><td class="mono">3</td><td>Internal error.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="prose mt">A scan that could not run never reports success. That includes a detector that raised, an invalid configuration and a base this checkout cannot reach.</p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-grid">
+    <div>
+      <p class="foot-brand">AIRLOCK</p>
+      <p>Supply-chain scanning for Stellar and Soroban repositories. Apache-2.0, standard library only, no telemetry.</p>
+    </div>
+    <nav aria-label="Site">
+      <h2>Site</h2>
+      <a href="index.html">Overview</a>
+      <a href="rules.html">Rule reference</a>
+      <a href="trust.html">Trust model</a>
+      <a href="sitemap.xml">Sitemap</a>
+    </nav>
+    <nav aria-label="Project">
+      <h2>Project</h2>
+      <a href="https://github.com/airlock-sec/airlock">Repository &nearr;</a>
+      <a href="https://github.com/airlock-sec/airlock/blob/main/LICENSE">License &nearr;</a>
+      <a href="https://github.com/airlock-sec/airlock/blob/main/SECURITY.md">Security &nearr;</a>
+      <a href="https://github.com/airlock-sec/airlock/issues">Issues &nearr;</a>
+    </nav>
+    <p class="foot-legal">&copy; 2026 AIRLOCK-SEC<br>NO RUNTIME DEPENDENCIES / NO NETWORK DURING SCAN</p>
+  </div>
+</footer>
+</body>
+</html>

@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:; base-uri 'self'; form-action 'none'">
+  <title>Airlock // Supply-chain scanning for Stellar and Soroban</title>
+  <meta name="description" content="Airlock scans Stellar and Soroban repositories for supply-chain compromise and release-integrity gaps. It fails closed, reads policy from the trusted base, and ships with zero runtime dependencies.">
+  <meta name="color-scheme" content="dark">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Airlock // Stellar and Soroban supply-chain scanner">
+  <meta property="og:description" content="A gate that fails closed on everything it did not read. Rules are data, policy comes from the trusted base, and no scan makes a network call.">
+  <meta property="og:url" content="https://airlock-sec.github.io/airlock/">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/site.css">
+  <script src="assets/site.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="bar">
+  <div class="bar-in">
+    <a class="brand" href="index.html" aria-label="Airlock home">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">AIRLOCK</span>
+      <span class="brand-sec" aria-hidden="true">SEC</span>
+    </a>
+    <nav class="nav" aria-label="Primary">
+      <a href="index.html" aria-current="page">01 / Overview</a>
+      <a href="usage.html">02 / Usage</a>
+      <a href="rules.html">03 / Rules</a>
+      <a href="trust.html">04 / Trust</a>
+      <a class="nav-ext" href="https://github.com/airlock-sec/airlock">GitHub &nearr;</a>
+    </nav>
+    <div class="bar-meta" aria-hidden="true">BUILD / DEV <span class="dot"></span> PY 3.11+</div>
+  </div>
+</header>
+
+<main id="main">
+
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="wrap hero-grid">
+      <div class="hero-main">
+        <p class="kicker"><span class="live">[ SUPPLY-CHAIN DEFENSE ]</span><span>STELLAR / SOROBAN</span><span>0.0.1 / UNRELEASED</span></p>
+        <h1 class="mega" id="hero-title"><span>AIR</span><span class="accent">LOCK</span><span class="cursor" aria-hidden="true"></span></h1>
+        <p class="lede">A scanner for the shapes that have actually compromised Stellar and Soroban repositories. It reads the tracked tree, judges a change against the policy that existed before the change, and fails closed on every file it did not read.</p>
+        <div class="cta-row">
+          <a class="btn btn--red" href="usage.html">Run a scan</a>
+          <a class="btn" href="rules.html">Rule reference</a>
+          <a class="btn btn--ghost" href="https://github.com/airlock-sec/airlock">Source &nearr;</a>
+        </div>
+      </div>
+      <aside class="hero-side" aria-label="Build telemetry">
+        <div class="tel-stack">
+          <!-- TELEMETRY:START -->
+<div class="tel"><span class="tel-k">Rules</span><span class="tel-v">22</span></div>
+<div class="tel"><span class="tel-k">High / warn</span><span class="tel-v">12 / 10</span></div>
+<div class="tel"><span class="tel-k">Code detectors</span><span class="tel-v">03</span></div>
+<div class="tel"><span class="tel-k">Runtime dependencies</span><span class="tel-v">00</span></div>
+<div class="tel"><span class="tel-k">Python</span><span class="tel-v">3.11+</span></div>
+<div class="tel"><span class="tel-k">License</span><span class="tel-v">APACHE-2.0</span></div>
+<!-- TELEMETRY:END -->
+        </div>
+        <div class="tel tel--status">
+          <span class="tel-k">Self-scan</span>
+          <span class="tel-v"><span class="led" aria-hidden="true"></span>No high</span>
+        </div>
+        <p class="side-note">This repository scans itself on every pull request. <b>Nothing is skipped silently.</b> Every file it could not read becomes a finding.</p>
+      </aside>
+    </div>
+  </section>
+
+  <section class="band" aria-label="Measured bypasses">
+    <div class="wrap band-in">
+      <span class="band-k">[ Measured 2026-10-27 ]</span>
+      <p class="band-t">Seven ways past the old gate. All seven exited 0.</p>
+      <a class="band-a" href="trust.html#bypasses">Read the cases &rarr;</a>
+    </div>
+  </section>
+
+  <section class="sec" id="why">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="num">[ 01 ]</span>
+        <h2 class="sec-title">The gate was already there. It did not close.</h2>
+        <span class="tag">Why / Appendix B</span>
+      </div>
+      <div class="split">
+        <div class="prose">
+          <p>Five public Soroban repositories shipped the same copy-pasted scan step. A review of that step found seven ways to commit anything you like past it.</p>
+          <p>On 2026-10-27 all seven were run against the real script. Every one exited 0, which the workflow reads as a pass. The shapes include an artifact dropped before any rule sees it, a payload line that exempts itself with a comment, and a decode-then-evaluate line in a build config that scores one warning where only HIGH affects the exit code.</p>
+          <p><a href="trust.html#bypasses">The measurements, and what Airlock does with each shape &rarr;</a></p>
+        </div>
+        <div class="prose">
+          <p>Airlock is the rewrite those campaigns should have had. It fails closed on anything it did not read, judges a change by the policy that existed before it, and keeps detection rules as data with a fixture behind every one.</p>
+          <p>It is a scanner for a specific attack class, not a general-purpose antivirus. A clean report means nothing matched the rules that ship, which is a narrower claim than "no compromise found".</p>
+        </div>
+      </div>
+      <div class="stats">
+        <div class="stat"><b>7 / 7</b><span>Bypasses confirmed against the old gate</span></div>
+        <div class="stat"><b>6 / 7</b><span>Shapes with a fail-closed regression</span></div>
+        <div class="stat" data-open="true"><b>1 / 7</b><span>Open: Cargo vectors, task 6.4</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="detectors">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="num">[ 02 ]</span>
+        <h2 class="sec-title">What it checks</h2>
+        <span class="tag">Detectors / Rule data</span>
+      </div>
+      <div class="cards">
+        <article class="card">
+          <span class="card-k">[ 01 ] config_role</span>
+          <h3>Build tooling and editor autorun</h3>
+          <p>Capability, not signature: evaluate a string, open a socket, spawn a process, name a chain RPC, or append a tail past the config. Reads raw text, with no comment or string masking.</p>
+          <div class="chips">
+            <span class="chip">cfg-dynamic-code</span>
+            <span class="chip">cfg-network-exec</span>
+            <span class="chip">cfg-chain-endpoint</span>
+            <span class="chip">cfg-appended-tail</span>
+          </div>
+          <a class="card-link" href="rules.html#family-config_role">Read the rules &rarr;</a>
+        </article>
+        <article class="card">
+          <span class="card-k">[ 02 ] wasm_manifest</span>
+          <h3>Artifact integrity</h3>
+          <p>A committed Wasm file is trusted only when a hash-keyed manifest in the trusted base names its bytes. Unlisted, swapped, moved and stale artifacts are reported, and an archive is reported as unread.</p>
+          <div class="chips">
+            <span class="chip">wasm-unlisted</span>
+            <span class="chip">wasm-hash-mismatch</span>
+            <span class="chip">wasm-path-moved</span>
+          </div>
+          <a class="card-link" href="rules.html#family-wasm_manifest">Read the rules &rarr;</a>
+        </article>
+        <article class="card">
+          <span class="card-k">[ 03 ] pat-*</span>
+          <h3>Text-side patterns</h3>
+          <p>Invisible and direction-flipping characters, a decoder feeding an evaluator, paste and tunnel endpoints, obfuscator identifier grammar. The roles each rule reads are stated in the rule data, not in detector code.</p>
+          <div class="chips">
+            <span class="chip">pat-decode-eval</span>
+            <span class="chip">pat-invisible-unicode</span>
+            <span class="chip">pat-exfil-endpoint</span>
+          </div>
+          <a class="card-link" href="rules.html#family-builtin_patterns">Read the rules &rarr;</a>
+        </article>
+        <article class="card">
+          <span class="card-k">[ 04 ] ci_surface</span>
+          <h3>The CI layer</h3>
+          <p>Workflows, package manifests, install hooks and editor settings get roles of their own. Pairing rules catch a secret interpolated into a display command, and a privileged trigger checking out a pull request head.</p>
+          <div class="chips">
+            <span class="chip">pat-secret-dump</span>
+            <span class="chip">pat-ptr-head-checkout</span>
+            <span class="chip">pat-lifecycle-exec</span>
+          </div>
+          <a class="card-link" href="rules.html#family-ci_surface">Read the rules &rarr;</a>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="fail-closed">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="num">[ 03 ]</span>
+        <h2 class="sec-title">Everything it did not read is a finding</h2>
+        <span class="tag">Fail closed / Exit codes</span>
+      </div>
+      <p class="prose">Every skip carries a rule id, a severity and a path. There is no default directory skip, and no inline marker that hides a line from every rule. A scan that could not run never reports success.</p>
+      <div class="exit">
+        <div><b>0</b><span>Nothing at or above the threshold</span></div>
+        <div><b>1</b><span>A finding at or above the threshold</span></div>
+        <div><b>2</b><span>Usage or configuration error, including an unresolvable base</span></div>
+        <div><b>3</b><span>Internal error</span></div>
+      </div>
+      <div class="tags" aria-label="Scanner-state findings">
+        <span class="tag-id">skipped-oversize</span>
+        <span class="tag-id">skipped-unreadable</span>
+        <span class="tag-id">skipped-symlink</span>
+        <span class="tag-id">skipped-unmerged</span>
+        <span class="tag-id">submodule-present</span>
+        <span class="tag-id">nul-in-text</span>
+        <span class="tag-id">non-utf8-text</span>
+        <span class="tag-id">cfg-long-line</span>
+        <span class="tag-id">detector-error</span>
+        <span class="tag-id">history-rewritten</span>
+        <span class="tag-id">no-trusted-base</span>
+        <span class="tag-id">policy-changed</span>
+        <span class="tag-id">policy-unknown-key</span>
+        <span class="tag-id">untrusted-policy-source</span>
+        <span class="tag-id">suppression-invalid</span>
+        <span class="tag-id">suppression-expiring</span>
+      </div>
+      <p class="prose"><a href="trust.html#fail-closed">How each state finding is decided &rarr;</a></p>
+    </div>
+  </section>
+
+  <section class="sec" id="trust">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="num">[ 04 ]</span>
+        <h2 class="sec-title">The trusted base</h2>
+        <span class="tag">Trust model / Modes</span>
+      </div>
+      <div class="split">
+        <div>
+          <p class="quote">A change cannot relax the rules it is judged by.</p>
+          <p class="prose">In <code>pr</code> and <code>push</code> modes, policy, suppressions and the Wasm manifest are read from the trusted base: the pull request base commit, or the commit a push started at. Neither is read from HEAD. A base that cannot be resolved is exit 2, not a scan against HEAD.</p>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <caption>Policy source by mode</caption>
+            <thead>
+              <tr><th scope="col">Mode</th><th scope="col">Policy comes from</th><th scope="col">Use for</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="mono">pr</td><td><b>The pull request base commit</b></td><td>Gating a contribution</td></tr>
+              <tr><td class="mono">push</td><td><b>github.event.before</b>, where the push started</td><td>Gating a merge</td></tr>
+              <tr><td class="mono">full</td><td>The working tree, announced with an INFO</td><td>A local look at your own repository</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="start">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="num">[ 05 ]</span>
+        <h2 class="sec-title">Start from a checkout</h2>
+        <span class="tag">Install / Quick start</span>
+      </div>
+      <div class="split">
+        <div>
+          <div class="term">
+            <div class="term-bar"><span>Install and scan</span><button class="copy" type="button" data-copy="quickstart">Copy</button></div>
+            <pre id="quickstart"><span class="p">$</span> git clone https://github.com/airlock-sec/airlock.git
+<span class="p">$</span> cd airlock
+<span class="p">$</span> python3 -m venv .venv &amp;&amp; . .venv/bin/activate
+<span class="p">$</span> pip install .
+<span class="p">$</span> airlock scan --mode full
+<span class="c"># exit 0 when nothing reached fail_on, 1 when something did</span></pre>
+          </div>
+        </div>
+        <div class="prose">
+          <p>Python 3.11 or newer. There is no package index release yet, so install from a checkout; the PyPI name is not Airlock's to promise.</p>
+          <p>The composite Action is task 4.1 and does not exist. Until it ships, make the CLI the step in your workflow and keep the checkout at <code>fetch-depth: 0</code> so a pull request base is reachable.</p>
+          <p><a href="usage.html">Full usage, policy and manifest workflow &rarr;</a></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="docs">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="num">[ 06 ]</span>
+        <h2 class="sec-title">Read next</h2>
+        <span class="tag">Docs / Source</span>
+      </div>
+      <div class="linkgrid">
+        <a class="linkcard" href="usage.html">
+          <span class="lk">[ 02 ]</span>
+          <span class="lt">Usage</span>
+          <span class="ld">Install, scan modes, policy keys, suppressions and the Wasm manifest flow.</span>
+        </a>
+        <a class="linkcard" href="rules.html">
+          <span class="lk">[ 03 ]</span>
+          <span class="lt">Rule reference</span>
+          <span class="ld">Every shipped rule with its severity, detector, roles and rationale.</span>
+        </a>
+        <a class="linkcard" href="trust.html">
+          <span class="lk">[ 04 ]</span>
+          <span class="lt">Trust model</span>
+          <span class="ld">The trusted base, the fail-closed table and the seven measured bypasses.</span>
+        </a>
+        <a class="linkcard" href="https://github.com/airlock-sec/airlock/blob/main/ROADMAP.md">
+          <span class="lk">[ SOURCE ]</span>
+          <span class="lt">Roadmap</span>
+          <span class="ld">What is done, what is open and what each task has to observe before it closes.</span>
+        </a>
+        <a class="linkcard" href="https://github.com/airlock-sec/airlock/blob/main/PRD.md">
+          <span class="lk">[ SOURCE ]</span>
+          <span class="lt">PRD</span>
+          <span class="ld">Requirements, priorities and Appendix B, where the seven bypasses were measured.</span>
+        </a>
+        <a class="linkcard" href="https://github.com/airlock-sec/airlock/blob/main/SECURITY.md">
+          <span class="lk">[ SOURCE ]</span>
+          <span class="lt">Security</span>
+          <span class="ld">How to report a vulnerability in Airlock itself, privately.</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-grid">
+    <div>
+      <p class="foot-brand">AIRLOCK</p>
+      <p>Supply-chain scanning for Stellar and Soroban repositories. Apache-2.0, standard library only, no telemetry.</p>
+    </div>
+    <nav aria-label="Site">
+      <h2>Site</h2>
+      <a href="usage.html">Usage</a>
+      <a href="rules.html">Rule reference</a>
+      <a href="trust.html">Trust model</a>
+      <a href="sitemap.xml">Sitemap</a>
+    </nav>
+    <nav aria-label="Project">
+      <h2>Project</h2>
+      <a href="https://github.com/airlock-sec/airlock">Repository &nearr;</a>
+      <a href="https://github.com/airlock-sec/airlock/blob/main/LICENSE">License &nearr;</a>
+      <a href="https://github.com/airlock-sec/airlock/blob/main/SECURITY.md">Security &nearr;</a>
+      <a href="https://github.com/airlock-sec/airlock/issues">Issues &nearr;</a>
+    </nav>
+    <p class="foot-legal">&copy; 2026 AIRLOCK-SEC<br>NO RUNTIME DEPENDENCIES / NO NETWORK DURING SCAN</p>
+  </div>
+</footer>
+</body>
+</html>

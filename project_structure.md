@@ -65,6 +65,7 @@ airlock/
 
   scripts/
     bypass_probe.py                # roadmap 0.4: runs Appendix B against the external script it is given
+    build_site.py                  # regenerates the site's rule reference, hero counts and rules.json (8.6)
     check_roadmap_touched.sh       # CI gate: PR must change ROADMAP.md                                      (1.9)
     roadmap_progress.py            # computes and checks the progress table                                  (1.9)
     create_wave_issues.sh          # publishes docs/wave/issues; dry run unless --apply                      (1.14)
@@ -74,6 +75,18 @@ airlock/
       issues/NN-<slug>.md          # one file per Wave issue: front matter (title, labels, roadmap) + body   (1.14)
       settings.md                  # repo settings to apply for program readiness: topics, labels, ruleset   (1.13)
       application.md               # the Drips application text and its pre-flight checklist                 (8.4)
+
+  site/                            # static documentation site, published by Pages                          (8.6)
+    index.html                     # overview: the attack class, detectors, fail-closed behavior, quick start
+    usage.html                     # commands, trust modes, policy, suppressions, Wasm manifest
+    rules.html                     # rule reference; markers are rewritten from rules/builtin by build_site.py
+    trust.html                     # trusted base, every state finding, the seven measured bypasses, limits
+    assets/site.css                # the whole design system: dark substrate, one red accent, no gradients
+    assets/site.js                 # copy buttons and the rule filter; no dependencies, no network
+    data/rules.json                # generated rule data for consumers that do not parse HTML
+    favicon.svg                    # zero-request icon
+    robots.txt                     # allows the crawler and names the sitemap
+    sitemap.xml                    # the four pages, absolute URLs
 
   tests/
     unit/                          # one test module per source module
@@ -86,7 +99,7 @@ airlock/
     CODEOWNERS                     # protected paths
     ISSUE_TEMPLATE/                # false positive, and missed detection or coverage gap
     pull_request_template.md       # includes the ROADMAP checkbox
-    workflows/                     # ci.yml and roadmap-check.yml exist (1.5, 1.9); scorecard, scan, release do not
+    workflows/                     # ci.yml, roadmap-check.yml and pages.yml exist (1.5, 1.9, 8.6); scorecard, scan, release do not
 ```
 
 Removed on purpose (do not recreate without a roadmap decision): `jsmask.py`, `wasmparse.py`, `detectors/deploy_gate.py`, `schema/`, `templates/`, an `init` command, a `rules test` command. See `ARCHITECTURE.md` 16.4.
@@ -101,7 +114,7 @@ Changes here are security-relevant. They need CODEOWNERS review and extra care f
 | `rules/` | Detection logic |
 | `action.yml`, `.github/workflows/` | Supply chain of the tool itself |
 | `airlock.toml`, `wasm-manifest.toml` | Dogfood policy; a bad edit disables checks |
-| `scripts/` | The roadmap gate |
+| `scripts/` | The roadmap gate and the site generator |
 | `.github/CODEOWNERS` | Review enforcement |
 
 ## 3. Import rules (dependency direction)
@@ -128,6 +141,7 @@ model  <-  fingerprint, roles, rules  <-  collector, policy  <-  detectors  <-  
 | Add an output format | `report/<name>.py` | Sanitization test; golden test |
 | Add a bypass regression | `tests/bypass/` | Link it in `PRD.md` Appendix B |
 | Change the Action | `action.yml` | Re-run task 4.1 and 4.5 style checks; `ARCHITECTURE.md` 10 |
+| Change the documentation site | `site/`, `scripts/build_site.py` | Regenerate with the script, commit the diff, and update `ROADMAP.md`; a rule change without a regenerated page fails `--check` |
 | Change a hard rule or decision | `ARCHITECTURE_ESSENTIALS.md`, `ARCHITECTURE.md` section 13 | New ADR row; owner approval |
 | Record a decision | `ROADMAP.md` section 7 | |
 
@@ -158,6 +172,7 @@ model  <-  fingerprint, roles, rules  <-  collector, policy  <-  detectors  <-  
 | `project_structure.md` | This map | A file or directory is added, moved or removed |
 | `README.md`, `CONTRIBUTING.md` | Users and contributors | User-visible behavior or process changes |
 | `SUPPORT.md` | What a contributor runs before opening a PR | A CI command, a protected path or a rejection rule changes |
+| `site/` | Published documentation: overview, usage, generated rule reference, trust model | A rule, command, severity or trust statement changes; regenerate the derived blocks |
 | `docs/wave/` | Program readiness: issue batch, repo settings, application draft | An issue's scope changes, or a setting in this batch is applied |
 
 If a code change contradicts a doc, fix the doc in the same PR. If a doc statement is [Unverified], do not build on it; run the task that verifies it (Phase 0).
@@ -165,4 +180,5 @@ If a code change contradicts a doc, fix the doc in the same PR. If a doc stateme
 ## 8. Generated and derived files
 
 - Rule reference docs are generated from `rules/*.toml` (task 5.2). Do not edit generated output by hand.
+- The site's rule reference and hero counts are generated from `rules/builtin/*.toml` by `scripts/build_site.py`, between the `RULES` and `TELEMETRY` markers; `site/data/rules.json` is written at the same time. Run the script after a rule change and commit the result. `--check` fails a stale page, and the Pages workflow and the unit suite both run it (8.6).
 - The progress table in `ROADMAP.md` is computed by `scripts/roadmap_progress.py`. Do not edit the numbers by hand once the script exists.

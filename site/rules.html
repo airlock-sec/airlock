@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:; base-uri 'self'; form-action 'none'">
+  <title>Rule reference // Airlock</title>
+  <meta name="description" content="Every rule Airlock ships, generated from rules/builtin: id, severity, detector, roles, suppressibility and rationale.">
+  <meta name="color-scheme" content="dark">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Airlock rule reference">
+  <meta property="og:description" content="Every shipped rule with its severity, detector, roles and rationale, generated from the rule data.">
+  <meta property="og:url" content="https://airlock-sec.github.io/airlock/rules.html">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/site.css">
+  <script src="assets/site.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="bar">
+  <div class="bar-in">
+    <a class="brand" href="index.html" aria-label="Airlock home">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">AIRLOCK</span>
+      <span class="brand-sec" aria-hidden="true">SEC</span>
+    </a>
+    <nav class="nav" aria-label="Primary">
+      <a href="index.html">01 / Overview</a>
+      <a href="usage.html">02 / Usage</a>
+      <a href="rules.html" aria-current="page">03 / Rules</a>
+      <a href="trust.html">04 / Trust</a>
+      <a class="nav-ext" href="https://github.com/airlock-sec/airlock">GitHub &nearr;</a>
+    </nav>
+    <div class="bar-meta" aria-hidden="true">DOC / 03 <span class="dot"></span> RULES</div>
+  </div>
+</header>
+
+<main id="main">
+
+  <section class="page-head">
+    <div class="wrap">
+      <p class="crumb"><a href="index.html">Overview</a> / Rules</p>
+      <h1 class="mega">RULES<span class="cursor" aria-hidden="true"></span></h1>
+      <p class="lede">This page is generated from <code>rules/builtin/*.toml</code>. Every rule has a positive and a negative fixture, because a rule that cannot be shown to fire is not a rule.</p>
+    </div>
+  </section>
+
+  <section class="sec" id="reference">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="num">[ 01 ]</span>
+        <h2 class="sec-title">Reference</h2>
+        <span class="tag">Generated / Do not hand edit</span>
+      </div>
+      <p class="prose">Severity sets the exit-code threshold. Suppressible means a fingerprint-keyed entry in <code>airlock.toml</code> can hide that exact occurrence with a written reason; a scanner-state finding is never suppressible. The detector column says where the decision is made: the pattern engine runs the regex as data, and a code detector needs more than one line to decide.</p>
+      <p class="prose mt">The <code>builtin_patterns</code> family is rule data rather than a detector module. The module with that name carries a docstring and no code, because the engine is the thing that reads those rules.</p>
+
+      <div class="controls js-only">
+        <label class="field">
+          <span>Filter</span>
+          <input id="rule-filter" type="search" placeholder="ID, verb, role" autocomplete="off">
+        </label>
+        <div class="seg" role="group" aria-label="Severity">
+          <button type="button" data-severity-filter="all" aria-pressed="true">All</button>
+          <button type="button" data-severity-filter="high" aria-pressed="false">High</button>
+          <button type="button" data-severity-filter="warn" aria-pressed="false">Warn</button>
+        </div>
+        <p class="rule-summary" id="rule-summary" aria-live="polite">All rules</p>
+      </div>
+
+      <div id="rule-list">
+<!-- RULES:START -->
+<section class="family" id="family-builtin_patterns" data-family="builtin_patterns">
+  <h3 class="family-head"><span><b>[ 01 ] Pattern engine</b> / builtin_patterns</span><span>4 RULES / 2 HIGH / 2 WARN</span></h3>
+  <div class="rule-list-inner">
+    <article class="rule" id="pat-decode-eval" data-severity="high"
+      data-family="builtin_patterns">
+      <div class="rule-top">
+        <h3 class="rule-id">pat-decode-eval</h3>
+        <span class="sev sev--high">HIGH</span>
+      </div>
+      <p class="rule-title">Encoded payload fed to an evaluator</p>
+      <p class="rule-why">A string that has to be decoded before it runs was written to be read by the machine and not by the reviewer, which is the shape the reported campaigns used. The old script scored it WARN unless the payload spelled the call with no space between the verb and the decoder, and said nothing at all once the file sat under a vendored directory (PRD.md 2.3 items 5 and 7). What separates this from cfg-dynamic-code is what each asks for: that rule fires on an evaluator call in one of five config filenames, this one fires on a decoder feeding an evaluator in any file that is code.</p>
+      <p class="rule-meta">
+        <span>Detector <b>pattern engine</b></span>
+        <span>Roles <b>source, tooling-config, editor-autorun, other</b></span>
+        <span>Suppressible <b>yes</b></span>
+      </p>
+    </article>
+    <article class="rule" id="pat-invisible-unicode" data-severity="high"
+      data-family="builtin_patterns">
+      <div class="rule-top">
+        <h3 class="rule-id">pat-invisible-unicode</h3>
+        <span class="sev sev--high">HIGH</span>
+      </div>
+      <p class="rule-title">Invisible or direction-flipping character in code</p>
+      <p class="rule-why">A zero-width or bidi-override character inside an identifier is invisible in a diff, survives a reviewer reading the line out loud, and defeats a grep for the payload name, because the name on the screen is not the name in the file. This is why matching raw text with no masking is a hard rule rather than a style choice. U+200D is deliberately absent from the class: a zero-width joiner is how emoji sequences and several writing systems are spelled, and it is the one character in this neighbourhood that code carries legitimately.</p>
+      <p class="rule-meta">
+        <span>Detector <b>pattern engine</b></span>
+        <span>Roles <b>source, tooling-config, editor-autorun, other</b></span>
+        <span>Suppressible <b>yes</b></span>
+      </p>
+    </article>
+    <article class="rule" id="pat-exfil-endpoint" data-severity="warn"
+      data-family="builtin_patterns">
+      <div class="rule-top">
+        <h3 class="rule-id">pat-exfil-endpoint</h3>
+        <span class="sev sev--warn">WARN</span>
+      </div>
+      <p class="rule-title">Paste, webhook or tunnel endpoint in code</p>
+      <p class="rule-why">A loader needs somewhere to put what it collected and somewhere to be told what to fetch, and the free services it uses for that are a short list that changes slowly. This is a separate rule from cfg-network rather than a wider role on that pattern: a named paste or tunnel host and a bare capability to open a socket have different false-positive profiles and different reasons to be suppressed, and only one of them is already a WARN inside a build config. The list is paste sites, tunnels and webhook or out-of-band callback hosts, kept as data so that adding a host never reads like a change to the matching logic.</p>
+      <p class="rule-meta">
+        <span>Detector <b>pattern engine</b></span>
+        <span>Roles <b>source, tooling-config, editor-autorun, other</b></span>
+        <span>Suppressible <b>yes</b></span>
+      </p>
+    </article>
+    <article class="rule" id="pat-obfuscator-id" data-severity="warn"
+      data-family="builtin_patterns">
+      <div class="rule-top">
+        <h3 class="rule-id">pat-obfuscator-id</h3>
+        <span class="sev sev--warn">WARN</span>
+      </div>
+      <p class="rule-title">Obfuscator identifier grammar</p>
+      <p class="rule-why">The `_0x` plus hex identifier is the naming scheme the JavaScript obfuscators emit, and it survives a rename of the tool because it is a property of the output rather than of a banner. ARCHITECTURE.md 9.6 is explicit that obfuscator fingerprints rotate weekly while the mechanism stays, so this keys on the identifier grammar and not on a list of tool names. It is a WARN because the shape has one ordinary owner: a minified or packed bundle committed to the repository, which is a release-integrity question for the artifact rules rather than a payload by itself.</p>
+      <p class="rule-meta">
+        <span>Detector <b>pattern engine</b></span>
+        <span>Roles <b>source, tooling-config, editor-autorun, other</b></span>
+        <span>Suppressible <b>yes</b></span>
+      </p>
+    </article>
+  </div>
+</section>
+<section class="family" id="family-config_role" data-family="config_role">
+  <h3 class="family-head"><span><b>[ 02 ] Build tooling</b> / config_role</span><span>7 RULES / 5 HIGH / 2 WARN</span></h3>
+  <div class="rule-list-inner">
+    <article class="rule" id="cfg-dynamic-code" data-severity="high"
+      data-family="config_role">
+      <div class="rule-top">
+        <h3 class="rule-id">cfg-dynamic-code</h3>
+        <span class="sev sev--high">HIGH</span>
+      </div>
+      <p class="rule-title">Dynamic code execution in a build config</p>
+      <p class="rule-why">Build configs are evaluated at install and build time. Evaluating a string there is how this class of attack turns a dependency install into remote code execution.</p>
+      <p class="rule-meta">
+        <span>Detector <b>pattern engine</b></span>
+        <span>Roles <b>tooling-config</b></span>
+        <span>Suppressible <b>no</b></span>
+      </p>
+    </article>
+    <article class="rule" id="cfg-network" data-severity="warn"
+      data-family="config_role">
+      <div class="rule-top">
+        <h3 class="rule-id">cfg-network</h3>
+        <span class="sev sev--warn">WARN</span>
+      </div>
+      <p class="rule-title">Network access from a build config</p>
+      <p class="rule-why">A build step that reaches the network can be handed its payload after install, which no lockfile review would have seen. Alone this is a WARN: some legitimate Next.js configs fetch at build time.</p>
+      <p class="rule-meta">
+        <span>Detector <b>pattern engine</b></span>
+        <span>Roles <b>tooling-config</b></span>
+        <span>Suppressible <b>yes</b></span>
+      </p>
+    </article>
+    <article class="rule" id="cfg-chain-endpoint" data-severity="high"
+      data-family="config_role">
+      <div class="rule-top">
+        <h3 class="rule-id">cfg-chain-endpoint</h3>
+        <span class="sev sev--high">HIGH</span>
+      </div>
+      <p class="rule-title">Blockchain endpoint inside build tooling</p>
+      <p class="rule-why">The reported campaigns configured a chain RPC or JSON-RPC client inside tooling so the payload could sign and broadcast from the victim machine. A build config naming any chain endpoint is out of place, whichever chain it is. Bare SDK names stay out of this pattern: web tooling legitimately lists them in a webpack config, and the endpoint or its configuration variable is the signal. Specific C2 hosts belong in builtin_patterns once task 0.4 confirms the published list.</p>
+      <p class="rule-meta">
+        <span>Detector <b>pattern engine</b></span>
+        <span>Roles <b>tooling-config</b></span>
+        <span>Suppressible <b>yes</b></span>
+      </p>
+    </article>
+    <article class="rule" id="cfg-long-line" data-severity="high"
+      data-family="config_role">
+      <div class="rule-top">
+        <h3 class="rule-id">cfg-long-line</h3>
+        <span class="sev sev--high">HIGH</span>
+      </div>
+      <p class="rule-title">Line longer than the configured cap</p>
+      <p class="rule-why">Regexes are not run on lines past line_cap, because a minified bundle is a backtracking target. The line still has to be accounted for, so its length is the finding.</p>
+      <p class="rule-meta">
+        <span>Detector <b>pattern engine</b></span>
+        <span>Roles <b>tooling-config, editor-autorun, source, doc, other</b></span>
+        <span>Suppressible <b>no</b></span>
+      </p>
+    </article>
+    <article class="rule" id="cfg-network-exec" data-severity="high"
+      data-family="config_role">
+      <div class="rule-top">
+        <h3 class="rule-id">cfg-network-exec</h3>
+        <span class="sev sev--high">HIGH</span>
+      </div>
+      <p class="rule-title">Network access combined with execution in one build config</p>
+      <p class="rule-why">Remote content plus a way to run it is the whole attack. Each half alone can be legitimate; together they are the fetch-decrypt-evaluate shape, which is why the combination is HIGH even when neither capability would be on its own.</p>
+      <p class="rule-meta">
+        <span>Detector <b>config_role (code)</b></span>
+        <span>Roles <b>tooling-config</b></span>
+        <span>Suppressible <b>no</b></span>
+      </p>
+    </article>
+    <article class="rule" id="cfg-process-spawn" data-severity="warn"
+      data-family="config_role">
+      <div class="rule-top">
+        <h3 class="rule-id">cfg-process-spawn</h3>
+        <span class="sev sev--warn">WARN</span>
+      </div>
+      <p class="rule-title">Process execution from a build config</p>
+      <p class="rule-why">Spawning a shell from a build config is the install-hook dropper path. The detector escalates to HIGH when the command is not a build step stated up front but a downloader, a decoder or an inline script.</p>
+      <p class="rule-meta">
+        <span>Detector <b>config_role (code)</b></span>
+        <span>Roles <b>tooling-config</b></span>
+        <span>Suppressible <b>yes</b></span>
+      </p>
+    </article>
+    <article class="rule" id="cfg-appended-tail" data-severity="high"
+      data-family="config_role">
+      <div class="rule-top">
+        <h3 class="rule-id">cfg-appended-tail</h3>
+        <span class="sev sev--high">HIGH</span>
+      </div>
+      <p class="rule-title">Payload appended to the end of a build config</p>
+      <p class="rule-why">Campaigns append a long high-entropy line after a valid config rather than editing one, so the diff looks like one more line. Thresholds are placeholders until tuned on the corpus (ARCHITECTURE.md 15).</p>
+      <p class="rule-meta">
+        <span>Detector <b>config_role (code)</b></span>
+        <span>Roles <b>tooling-config</b></span>
+        <span>Suppressible <b>yes</b></span>
+      </p>
+    </article>
+  </div>
+</section>
+<section class="family" id="family-ci_surface" data-family="ci_surface">
+  <h3 class="family-head"><span><b>[ 03 ] CI surface</b> / ci_surface</span><span>6 RULES / 3 HIGH / 3 WARN</span></h3>
+  <div class="rule-list-inner">
+    <article class="rule" id="pat-privileged-trigger" data-severity="warn"
+      data-family="ci_surface">
+      <div class="rule-top">
+        <h3 class="rule-id">pat-privileged-trigger</h3>
+        <span class="sev sev--warn">WARN</span>
+      </div>
+      <p class="rule-title">Workflow trigger that runs base-context code with a write token</p>
+      <p class="rule-why">`pull_request_target` runs in the base repository with a writable token while the code it runs came from an outside fork. The trigger is not an attack on its own, so it is a WARN that tells a reviewer which files to read; what makes it fatal is the checkout of the head, which is the rule below. `workflow_run` and `issue_comment` are deliberately not in this pattern: both are real vectors and neither is the reported shape, so naming them here would cost coverage in false positives instead of buying it.</p>
+      <p class="rule-meta">
+        <span>Detector <b>pattern engine</b></span>
+        <span>Roles <b>workflow</b></span>
+        <span>Suppressible <b>yes</b></span>
+      </p>
+    </article>
+    <article class="rule" id="pat-secret-dump" data-severity="high"
+      data-family="ci_surface">
+      <div class="rule-top">
+        <h3 class="rule-id">pat-secret-dump</h3>
+        <span class="sev sev--high">HIGH</span>
+      </div>
+      <p class="rule-title">Secret interpolated into something that displays or writes it</p>
+      <p class="rule-why">`${{ secrets.X }}` in a `run:` line reaches the job log, where it stays readable to anyone who can see the artifact, and into `GITHUB_ENV`, where every later step inherits it. Passing a secret to a step through `env:` or `with:` is not this rule: that is how a workflow uses a secret, and it is the negative case. A line that masks the value first (`::add-mask::`) is the one echo that is deliberate hygiene.</p>
+      <p class="rule-meta">
+        <span>Detector <b>ci_surface (code)</b></span>
+        <span>Roles <b>workflow</b></span>
+        <span>Suppressible <b>yes</b></span>
+      </p>
+    </article>
+    <article class="rule" id="pat-ptr-head-checkout" data-severity="high"
+      data-family="ci_surface">
+      <div class="rule-top">
+        <h3 class="rule-id">pat-ptr-head-checkout</h3>
+        <span class="sev sev--high">HIGH</span>
+      </div>
+      <p class="rule-title">Privileged trigger combined with a checkout of the pull request head</p>
+      <p class="rule-why">This is the combination that turns a fork pull request into code execution with a write token: the trigger gives the base context and permissions, and the head ref gives the attacker&#x27;s tree to run. A `pull_request` trigger with the same checkout is reviewed code, and a `pull_request_target` that leaves the default base ref is the safe form, so the rule needs the trigger, a head ref and a checkout step in one file. `ARCHITECTURE.md` 11 worries about exactly this class of weakness in the design document itself.</p>
+      <p class="rule-meta">
+        <span>Detector <b>ci_surface (code)</b></span>
+        <span>Roles <b>workflow</b></span>
+        <span>Suppressible <b>yes</b></span>
+      </p>
+    </article>
+    <article class="rule" id="pat-lifecycle-fetch" data-severity="warn"
+      data-family="ci_surface">
+      <div class="rule-top">
+        <h3 class="rule-id">pat-lifecycle-fetch</h3>
+        <span class="sev sev--warn">WARN</span>
+      </div>
+      <p class="rule-title">Install hook or lifecycle script reaches the network</p>
+      <p class="rule-why">A `postinstall` script and a commit hook both run without a developer choosing them, so a downloader named in one is a payload server the reviewer cannot see in a lockfile. The bare host name stays out of this: a `repository.url` in the same manifest is not a fetch, which is why the pattern asks for a client verb or an install-from-URL argument rather than any `https://` text.</p>
+      <p class="rule-meta">
+        <span>Detector <b>pattern engine</b></span>
+        <span>Roles <b>package-manifest, install-hook</b></span>
+        <span>Suppressible <b>yes</b></span>
+      </p>
+    </article>
+    <article class="rule" id="pat-lifecycle-exec" data-severity="high"
+      data-family="ci_surface">
+      <div class="rule-top">
+        <h3 class="rule-id">pat-lifecycle-exec</h3>
+        <span class="sev sev--high">HIGH</span>
+      </div>
+      <p class="rule-title">Lifecycle script or hook runs what it fetched</p>
+      <p class="rule-why">The fetch rule becomes this one when the same line also hands the result to an interpreter or a shell, which is the PolinRider dropper shape: the server chooses the payload after install, so nothing in the repository or the lockfile describes what runs. An interpreter named without a fetch is a build step, and a fetch without an interpreter is the WARN above.</p>
+      <p class="rule-meta">
+        <span>Detector <b>ci_surface (code)</b></span>
+        <span>Roles <b>package-manifest, install-hook</b></span>
+        <span>Suppressible <b>yes</b></span>
+      </p>
+    </article>
+    <article class="rule" id="pat-editor-command-path" data-severity="warn"
+      data-family="ci_surface">
+      <div class="rule-top">
+        <h3 class="rule-id">pat-editor-command-path</h3>
+        <span class="sev sev--warn">WARN</span>
+      </div>
+      <p class="rule-title">Editor setting that names an interpreter or executable</p>
+      <p class="rule-why">`.vscode/settings.json` is the second half of the editor auto-run surface: `tasks.json` says what can run, and these keys say what the editor runs by itself when a folder opens. A path to an interpreter or a compiler directory is loaded by the extension host, so a planted one needs no user action. Preferences with nothing executable behind them are not reported, which is what keeps this a WARN about a handful of key names rather than about the file.</p>
+      <p class="rule-meta">
+        <span>Detector <b>pattern engine</b></span>
+        <span>Roles <b>editor-autorun</b></span>
+        <span>Suppressible <b>yes</b></span>
+      </p>
+    </article>
+  </div>
+</section>
+<section class="family" id="family-wasm_manifest" data-family="wasm_manifest">
+  <h3 class="family-head"><span><b>[ 04 ] Artifact integrity</b> / wasm_manifest</span><span>5 RULES / 2 HIGH / 3 WARN</span></h3>
+  <div class="rule-list-inner">
+    <article class="rule" id="wasm-unlisted" data-severity="high"
+      data-family="wasm_manifest">
+      <div class="rule-top">
+        <h3 class="rule-id">wasm-unlisted</h3>
+        <span class="sev sev--high">HIGH</span>
+      </div>
+      <p class="rule-title">Committed Wasm with no manifest entry</p>
+      <p class="rule-why">A binary artifact nobody declared is the payload delivery channel this class of attack ends in. A Wasm file the manifest does not carry, or that the scanner could not hash, has no stated origin, source or build command.</p>
+      <p class="rule-meta">
+        <span>Detector <b>wasm_manifest (code)</b></span>
+        <span>Roles <b>wasm</b></span>
+        <span>Suppressible <b>no</b></span>
+      </p>
+    </article>
+    <article class="rule" id="wasm-hash-mismatch" data-severity="high"
+      data-family="wasm_manifest">
+      <div class="rule-top">
+        <h3 class="rule-id">wasm-hash-mismatch</h3>
+        <span class="sev sev--high">HIGH</span>
+      </div>
+      <p class="rule-title">Listed Wasm path holds a different artifact</p>
+      <p class="rule-why">The path was declared as one build and now holds another. Rebuilding a contract changes the hash, so this is a deliberate swap until proven otherwise.</p>
+      <p class="rule-meta">
+        <span>Detector <b>wasm_manifest (code)</b></span>
+        <span>Roles <b>wasm</b></span>
+        <span>Suppressible <b>no</b></span>
+      </p>
+    </article>
+    <article class="rule" id="wasm-path-moved" data-severity="warn"
+      data-family="wasm_manifest">
+      <div class="rule-top">
+        <h3 class="rule-id">wasm-path-moved</h3>
+        <span class="sev sev--warn">WARN</span>
+      </div>
+      <p class="rule-title">Known artifact moved to an unlisted path</p>
+      <p class="rule-why">The bytes are known, the location is not. A move is usually a refactor; it is also how an artifact gets in front of a release step that no longer checks for it.</p>
+      <p class="rule-meta">
+        <span>Detector <b>wasm_manifest (code)</b></span>
+        <span>Roles <b>wasm</b></span>
+        <span>Suppressible <b>yes</b></span>
+      </p>
+    </article>
+    <article class="rule" id="wasm-manifest-stale" data-severity="warn"
+      data-family="wasm_manifest">
+      <div class="rule-top">
+        <h3 class="rule-id">wasm-manifest-stale</h3>
+        <span class="sev sev--warn">WARN</span>
+      </div>
+      <p class="rule-title">Manifest entry matches no tracked file</p>
+      <p class="rule-why">A manifest that no longer describes the tree is a manifest nobody checks. It also hides the case where the artifact was deleted here and shipped from somewhere else.</p>
+      <p class="rule-meta">
+        <span>Detector <b>wasm_manifest (code)</b></span>
+        <span>Roles <b>wasm</b></span>
+        <span>Suppressible <b>yes</b></span>
+      </p>
+    </article>
+    <article class="rule" id="wasm-archive-skipped" data-severity="warn"
+      data-family="wasm_manifest">
+      <div class="rule-top">
+        <h3 class="rule-id">wasm-archive-skipped</h3>
+        <span class="sev sev--warn">WARN</span>
+      </div>
+      <p class="rule-title">Archive in the tree was not looked inside</p>
+      <p class="rule-why">A zip or tarball can carry a Wasm artifact past every check in this file. The scanner reads bytes, never unpacks them, so the archive is reported as an unexamined hole rather than passed over.</p>
+      <p class="rule-meta">
+        <span>Detector <b>wasm_manifest (code)</b></span>
+        <span>Roles <b>archive</b></span>
+        <span>Suppressible <b>yes</b></span>
+      </p>
+    </article>
+  </div>
+</section>
+<!-- RULES:END -->
+      </div>
+
+      <div class="split mt">
+        <div class="prose">
+          <p>A rule that names a role no resolver can produce fails at load time, so a typo cannot silence a rule forever. Every rule's scope is in its own <code>roles</code> list: widening it is a data change a reviewer can see.</p>
+        </div>
+        <div class="prose">
+          <p>State findings such as <b>skipped-unreadable</b> and <b>detector-error</b> are not in this list because they are not matches inside a file. They are in the <a href="trust.html#fail-closed">fail-closed table</a>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-grid">
+    <div>
+      <p class="foot-brand">AIRLOCK</p>
+      <p>Supply-chain scanning for Stellar and Soroban repositories. Apache-2.0, standard library only, no telemetry.</p>
+    </div>
+    <nav aria-label="Site">
+      <h2>Site</h2>
+      <a href="index.html">Overview</a>
+      <a href="usage.html">Usage</a>
+      <a href="trust.html">Trust model</a>
+      <a href="sitemap.xml">Sitemap</a>
+    </nav>
+    <nav aria-label="Project">
+      <h2>Project</h2>
+      <a href="https://github.com/airlock-sec/airlock">Repository &nearr;</a>
+      <a href="https://github.com/airlock-sec/airlock/blob/main/LICENSE">License &nearr;</a>
+      <a href="https://github.com/airlock-sec/airlock/blob/main/SECURITY.md">Security &nearr;</a>
+      <a href="https://github.com/airlock-sec/airlock/issues">Issues &nearr;</a>
+    </nav>
+    <p class="foot-legal">&copy; 2026 AIRLOCK-SEC<br>NO RUNTIME DEPENDENCIES / NO NETWORK DURING SCAN</p>
+  </div>
+</footer>
+</body>
+</html>
