@@ -240,6 +240,7 @@ class TestPolicyAndManifest:
         assert BOOTSTRAP_POLICY.fail_on is Severity.HIGH
         assert BOOTSTRAP_POLICY.max_file_bytes == 5_000_000
         assert BOOTSTRAP_POLICY.line_cap == 20_000
+        assert BOOTSTRAP_POLICY.submodules == ()
         assert BOOTSTRAP_POLICY.version == model.SUPPORTED_POLICY_VERSION
         assert BOOTSTRAP_POLICY.soroban.require_release_profile == ReleaseProfile(
             overflow_checks=True,
@@ -262,11 +263,14 @@ class TestPolicyAndManifest:
             Policy(line_cap=0)
         with pytest.raises(ValueError, match="tail_max_len"):
             Policy(tail_max_len=-1)
+        with pytest.raises(ValueError, match=r"policy\.submodules"):
+            Policy(submodules=("",))
 
     def test_policy_keys_are_the_documented_set(self) -> None:
         top_level = frozenset({"version", "policy", "soroban", "suppress"})
         assert top_level == model.POLICY_TOP_LEVEL_KEYS
         assert "tail_entropy" in model.POLICY_SETTINGS_KEYS
+        assert "submodules" in model.POLICY_SETTINGS_KEYS
 
     def test_manifest_entry_needs_a_hash_origin_and_paths(self) -> None:
         entry = WasmEntry(
@@ -403,6 +407,8 @@ class TestDocumentedConstants:
             "skipped-symlink",
             "skipped-unmerged",
             "submodule-present",
+            "submodule-unmapped",
+            "submodule-orphan",
             "nul-in-text",
             "non-utf8-text",
             "cfg-long-line",
@@ -415,7 +421,22 @@ class TestDocumentedConstants:
             "suppression-invalid",
             "untrusted-policy-source",
         }
-        assert documented <= model.STATE_RULE_IDS
+        assert documented == model.STATE_RULE_IDS
+        root = Path(__file__).resolve().parents[2]
+        essentials = (root / "ARCHITECTURE_ESSENTIALS.md").read_text(encoding="utf-8")
+        section_six = essentials.split("## 6. Exit codes and fail-closed findings", 1)[1].split(
+            "\n## ", 1
+        )[0]
+        assert set(re.findall(r"`([a-z0-9-]+)`", section_six)) - {"fail_on"} == model.STATE_RULE_IDS
+
+        architecture = (root / "ARCHITECTURE.md").read_text(encoding="utf-8")
+        fail_closed = architecture.split("## 8. Fail-closed behavior\n", 1)[1].split("\n## ", 1)[0]
+        assert "submodule-present` (INFO)" not in fail_closed
+        assert "submodule-present` (HIGH unless URL is in `policy.submodules`, then WARN)" in (
+            fail_closed
+        )
+        assert "submodule-unmapped` (HIGH)" in fail_closed
+        assert "submodule-orphan` (WARN)" in fail_closed
 
     def test_exit_codes_are_distinct(self) -> None:
         codes = {model.EXIT_PASS, model.EXIT_FINDINGS, EXIT_CONFIG, model.EXIT_INTERNAL}

@@ -110,7 +110,7 @@ Removed since v0.1 of this document: `jsmask.py`, `wasmparse.py`, `detectors/dep
 
 ### 6.1 Collector
 
-- Lists tracked files with `git ls-files -z --stage`. Entries with mode 160000 are submodules and yield `submodule-present` (INFO, P1 hardening). Untracked files are out of scope. A path the index holds unmerged (stages 1 to 3, no stage 0) is kept as one entry and yields `skipped-unmerged`; it is never dropped for having no committed version.
+- Lists tracked files with `git ls-files -z --stage`. Entries with mode 160000 are submodules: each gitlink is cross-checked against `.gitmodules` and `policy.submodules` (task 7.2), yielding `submodule-present` (HIGH unless its `.gitmodules` URL is listed in `policy.submodules`, then WARN) or `submodule-unmapped` (HIGH when `.gitmodules` has no unambiguous entry for the path), while a `.gitmodules` entry with no gitlink at its path yields `submodule-orphan` (WARN). Untracked files are out of scope. A path the index holds unmerged (stages 1 to 3, no stage 0) is kept as one entry and yields `skipped-unmerged`; it is never dropped for having no committed version.
 - **No default directory skips.** The first draft skipped `node_modules/`, `target/`, `dist/`, `.next/` and `vendor/` and reported them as INFO. That let an attacker hide a payload in a committed vendor directory (B6). If a repo tracks a very large vendored tree, policy may list `low_priority_dirs`, which only suppress WARN-level content rules there. HIGH rules, role magic and config-role globs still apply.
 - Reads each file once: size, first 4096 bytes and (lazily) the full bytes and SHA-256.
 - Decoding: honor a UTF-8 or UTF-16 BOM; otherwise decode UTF-8 strictly. Undecodable text yields `non-utf8-text` (HIGH in sensitive roles, WARN elsewhere). A NUL byte after BOM handling yields `nul-in-text`.
@@ -319,6 +319,7 @@ max_file_bytes = 5000000
 line_cap       = 20000
 tail_max_len   = 2000        # placeholder; tune on corpus (task 3.3)
 tail_entropy   = 4.5         # placeholder; tune on corpus (task 3.3)
+submodules     = []          # allowed .gitmodules URLs; unlisted gitlinks report HIGH (task 7.2)
 
 [soroban]                    # used by soroban_profile (P1)
 [soroban.require_release_profile]
@@ -430,7 +431,9 @@ The invariant this enforces is that detector code cannot see less than it needs 
 | Line over `line_cap` | `cfg-long-line` (HIGH in a `SENSITIVE_ROLES` file, else WARN); regex skipped for that line |
 | Symlink | `skipped-symlink` (INFO) |
 | Unmerged index entry (merge conflict) | `skipped-unmerged` (HIGH for sensitive roles, else WARN); no version of the file is read |
-| Submodule | `submodule-present` (INFO) |
+| Submodule (gitlink mapped in `.gitmodules`) | `submodule-present` (HIGH unless URL is in `policy.submodules`, then WARN) |
+| Submodule gitlink with no `.gitmodules` entry | `submodule-unmapped` (HIGH) |
+| `.gitmodules` entry with no gitlink at that path | `submodule-orphan` (WARN) |
 | Archive present | `wasm-archive-skipped` (WARN) |
 | Detector raises | `detector-error` (HIGH) |
 | Pushed `before` unreachable or non-ancestor | `history-rewritten` (HIGH) |

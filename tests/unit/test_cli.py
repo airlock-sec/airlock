@@ -278,6 +278,69 @@ reason      = "trust me"
         assert "no-trusted-base" in out
         assert head
 
+    def test_a_pr_cannot_add_a_gitlink_and_authorize_it_in_the_same_change(
+        self, repo: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        base = seed(repo)
+        url = "https://example.invalid/stellar/lib.git"
+        write(repo, "airlock.toml", BASE_POLICY + f'submodules = ["{url}"]\n')
+        write(
+            repo,
+            ".gitmodules",
+            f'[submodule "vendor/lib"]\n\tpath = vendor/lib\n\turl = {url}\n',
+        )
+        commit(repo)
+        git(
+            repo,
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            f"160000,{'e3' + '0' * 38},vendor/lib",
+        )
+
+        code, out = scan(
+            repo, "--event", "pull_request", "--base", base, "--format", "json", capsys=capsys
+        )
+        payload = json.loads(out)
+        by_rule = {item["rule_id"]: item for item in payload["findings"]}
+
+        assert code == EXIT_FINDINGS
+        assert by_rule["policy-changed"]["severity"] == "warn"
+        assert by_rule["submodule-present"]["severity"] == "high"
+        assert "not listed in policy.submodules" in by_rule["submodule-present"]["message"]
+
+    def test_a_gitlink_authorized_in_the_trusted_base_reports_warn_and_exits_zero(
+        self, repo: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        seed(repo)
+        url = "https://example.invalid/stellar/lib.git"
+        write(repo, "airlock.toml", BASE_POLICY + f'submodules = ["{url}"]\n')
+        base = commit(repo)
+        write(
+            repo,
+            ".gitmodules",
+            f'[submodule "vendor/lib"]\n\tpath = vendor/lib\n\turl = {url}\n',
+        )
+        commit(repo)
+        git(
+            repo,
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            f"160000,{'e3' + '0' * 38},vendor/lib",
+        )
+
+        code, out = scan(
+            repo, "--event", "pull_request", "--base", base, "--format", "json", capsys=capsys
+        )
+        payload = json.loads(out)
+        by_rule = {item["rule_id"]: item for item in payload["findings"]}
+
+        assert code == EXIT_PASS
+        assert payload["files_skipped"] == {"submodule": 1}
+        assert by_rule["submodule-present"]["severity"] == "warn"
+        assert "allowed by policy.submodules" in by_rule["submodule-present"]["message"]
+
 
 class TestSuppressionThroughTheCLI:
     def digest_for(self, root: Path, rule_id: str, capsys: pytest.CaptureFixture[str]) -> str:

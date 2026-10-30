@@ -27,7 +27,7 @@ installer does not exist yet.
 
 | | |
 |---|---|
-| Works today | `airlock scan` in console, GitHub-annotation and JSON output, plus a step summary; `airlock manifest add` and `manifest check`; 24 rules across three code detectors and the pattern engine; 739 tests in CI |
+| Works today | `airlock scan` in console, GitHub-annotation and JSON output, plus a step summary; `airlock manifest add` and `manifest check`; 24 rules across three code detectors and the pattern engine; 758 tests in CI |
 | Not built yet | the composite GitHub Action (`action.yml`), the Soroban-side detectors, the build-script and native-binary rules, SARIF output |
 | Usable now | as a CLI, from a checkout or an installed wheel, on any git repository |
 
@@ -115,8 +115,9 @@ A file in one of those roles is treated as executed with credentials attached, s
 following `cfg-process-spawn`, and none of them judge a string with masking.
 
 The collector adds the state findings on top: `nul-in-text`, `non-utf8-text`, `skipped-oversize`,
-`skipped-unreadable`, `skipped-symlink`, `skipped-unmerged`, `submodule-present`. Every one of them
-is a finding, because a file that was not read must not look the same as a file that was clean.
+`skipped-unreadable`, `skipped-symlink`, `skipped-unmerged`, `submodule-present`,
+`submodule-unmapped`, `submodule-orphan`. Every one of them is a finding, because a file that was
+not read must not look the same as a file that was clean.
 
 The Stellar-side detectors (`soroban_profile`, `stellar_seed`, `cargo_vectors`) are designed in
 [ARCHITECTURE.md](ARCHITECTURE.md) 9 and not implemented: those modules carry docstrings and no

@@ -30,7 +30,7 @@ from airlock.collector import (
 )
 from airlock.detectors import DETECTOR_NAMES
 from airlock.fingerprint import number_occurrences
-from airlock.model import EMPTY_MANIFEST, Finding, Policy, ScanContext, Severity
+from airlock.model import EMPTY_MANIFEST, STATE_RULE_IDS, Finding, Policy, ScanContext, Severity
 from airlock.roles import ARCHIVE_ROLE, NATIVE_ROLE, SOURCE_ROLE, WASM_ROLE, known_roles
 from airlock.rules import load_role_globs, load_rules
 
@@ -231,22 +231,168 @@ class TestSymlinks:
 
 
 class TestSubmodules:
+    SUBMODULE_URL = "https://example.invalid/stellar/lib.git"
+    OTHER_URL = "https://example.invalid/other/fork.git"
+
+    @staticmethod
+    def add_gitlink(root: Path, rel: str = "vendor/lib", sha: str = GITLINK_SHA) -> None:
+        git(root, "update-index", "--add", "--cacheinfo", f"160000,{sha},{rel}")
+
+    @staticmethod
+    def write_gitmodules(root: Path, rel: str = "vendor/lib", url: str = SUBMODULE_URL) -> None:
+        write(
+            root,
+            ".gitmodules",
+            f'[submodule "{rel}"]\n\tpath = {rel}\n\turl = {url}\n',
+        )
+
     def test_a_gitlink_yields_submodule_present(self, repo: Path) -> None:
         write(repo, "keep.py", "x = 1\n")
+        self.write_gitmodules(repo)
         git(repo, "add", "-A")
         git(repo, "commit", "-q", "-m", "seed")
         # A gitlink added straight to the index: a real submodule clone would need the
         # network, and the collector only ever looks at the index mode.
-        git(
-            repo,
-            "update-index",
-            "--add",
-            "--cacheinfo",
-            f"160000,{GITLINK_SHA},vendor/lib",
-        )
+        self.add_gitlink(repo)
+
         result = scan(repo)
-        assert "submodule-present" in rule_ids(result.pending)
+
+        assert rule_ids(result.pending) == ["submodule-present"]
+        finding = result.pending[0]
+        assert finding.severity is Severity.HIGH
+        assert finding.path == "vendor/lib"
+        assert finding.suppressible is False
+        assert GITLINK_SHA[:12] in finding.message
+        assert self.SUBMODULE_URL in finding.message
+        assert "not listed in policy.submodules" in finding.message
+        assert "scanned by its own pipeline" not in finding.message
         assert entry_of(result, "vendor/lib").skip_reason == SKIP_SUBMODULE
+
+    def test_an_allowed_submodule_url_lowers_submodule_present_to_warn(self, repo: Path) -> None:
+        write(repo, "keep.py", "x = 1\n")
+        self.write_gitmodules(repo)
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "seed")
+        self.add_gitlink(repo)
+
+        result = scan(repo, Policy(submodules=(self.SUBMODULE_URL,)))
+
+        assert rule_ids(result.pending) == ["submodule-present"]
+        finding = result.pending[0]
+        assert finding.severity is Severity.WARN
+        assert finding.suppressible is False
+        assert "allowed by policy.submodules" in finding.message
+        assert entry_of(result, "vendor/lib").skip_reason == SKIP_SUBMODULE
+
+    def test_a_gitlink_without_a_gitmodules_entry_yields_submodule_unmapped(
+        self, repo: Path
+    ) -> None:
+        write(repo, "keep.py", "x = 1\n")
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "seed")
+        self.add_gitlink(repo)
+
+        result = scan(repo, Policy(submodules=(self.SUBMODULE_URL,)))
+
+        assert rule_ids(result.pending) == ["submodule-unmapped"]
+        finding = result.pending[0]
+        assert finding.severity is Severity.HIGH
+        assert finding.path == "vendor/lib"
+        assert finding.suppressible is False
+        assert GITLINK_SHA[:12] in finding.message
+        assert entry_of(result, "vendor/lib").skip_reason == SKIP_SUBMODULE
+
+    def test_a_gitmodules_entry_without_a_gitlink_yields_submodule_orphan(self, repo: Path) -> None:
+        write(repo, "vendor/lib/regular.py", "x = 1\n")
+        self.write_gitmodules(repo)
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "seed")
+
+        result = scan(repo)
+
+        assert rule_ids(result.pending) == ["submodule-orphan"]
+        finding = result.pending[0]
+        assert finding.severity is Severity.WARN
+        assert finding.path == ".gitmodules"
+        assert finding.line == 1
+        assert finding.suppressible is False
+        assert "vendor/lib" in finding.message
+        assert self.SUBMODULE_URL in finding.message
+
+    def test_duplicate_gitmodules_entries_for_one_path_fail_closed_as_unmapped(
+        self, repo: Path
+    ) -> None:
+        write(
+            repo,
+            ".gitmodules",
+            f'[submodule "first"]\n\tpath = vendor/lib\n\turl = {self.SUBMODULE_URL}\n'
+            f'[submodule "second"]\n\tpath = vendor/lib\n\turl = {self.OTHER_URL}\n',
+        )
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "seed")
+        self.add_gitlink(repo)
+
+        result = scan(repo, Policy(submodules=(self.SUBMODULE_URL,)))
+
+        assert rule_ids(result.pending) == ["submodule-unmapped"]
+        assert result.pending[0].severity is Severity.HIGH
+        assert "multiple entries in .gitmodules" in result.pending[0].message
+
+    def test_damaged_or_incomplete_gitmodules_cannot_authorize_a_gitlink(self, repo: Path) -> None:
+        write(
+            repo,
+            ".gitmodules",
+            '# \x00\n[submodule "vendor/lib"]\n\tpath = vendor/lib\n'
+            f"\turl = {self.SUBMODULE_URL}\n",
+        )
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "seed")
+        self.add_gitlink(repo)
+
+        result = scan(repo, Policy(submodules=(self.SUBMODULE_URL,)))
+
+        assert {"nul-in-text", "submodule-unmapped"} <= set(rule_ids(result.pending))
+        assert "submodule-present" not in rule_ids(result.pending)
+
+    @pytest.mark.parametrize(
+        "rule_id",
+        sorted(rid for rid in STATE_RULE_IDS if rid.startswith("submodule-")),
+    )
+    def test_every_submodule_state_rule_has_a_positive_and_a_negative_repo_case(
+        self, tmp_path: Path, rule_id: str
+    ) -> None:
+        def make_repo(name: str) -> Path:
+            root = tmp_path / name
+            root.mkdir()
+            git(root, "init", "-q", "--initial-branch=main")
+            write(root, "keep.py", "x = 1\n")
+            return root
+
+        pos = make_repo(f"pos-{rule_id}")
+        neg = make_repo(f"neg-{rule_id}")
+
+        if rule_id == "submodule-present":
+            self.write_gitmodules(pos)
+            commit(pos)
+            self.add_gitlink(pos)
+            commit(neg)
+        elif rule_id == "submodule-unmapped":
+            commit(pos)
+            self.add_gitlink(pos)
+            self.write_gitmodules(neg)
+            commit(neg)
+            self.add_gitlink(neg)
+        elif rule_id == "submodule-orphan":
+            self.write_gitmodules(pos)
+            commit(pos)
+            self.write_gitmodules(neg)
+            commit(neg)
+            self.add_gitlink(neg)
+        else:
+            pytest.fail(f"no positive/negative repository fixture defined for {rule_id}")
+
+        assert rule_id in rule_ids(scan(pos).pending)
+        assert rule_id not in rule_ids(scan(neg).pending)
 
 
 class TestUnmergedPaths:
@@ -509,19 +655,30 @@ class TestStateFindingsAreFindings:
 
     def test_every_state_finding_from_a_skipping_repo_gets_a_fingerprint(self, repo: Path) -> None:
         write(repo, "outside.txt", DROPPER)
-        write(repo, "big.js", "b" * 60)
+        write(repo, "big.js", "b" * 200)
+        write(
+            repo,
+            ".gitmodules",
+            '[submodule "vendored"]\n\tpath = vendored\n\turl = https://example.invalid/v.git\n'
+            '[submodule "gone"]\n\tpath = gone\n\turl = https://example.invalid/g.git\n',
+        )
         (repo / "link.py").symlink_to(repo / "outside.txt")
         git(repo, "add", "-A")
         commit(repo)
         # After the commit, because `commit` stages the working tree and a fresh `git add -A`
         # would drop a mode the working tree cannot produce.
         git(repo, "update-index", "--add", "--cacheinfo", f"160000,{GITLINK_SHA},vendored")
+        git(repo, "update-index", "--add", "--cacheinfo", f"160000,{GITLINK_SHA},unmapped")
 
-        collection = collect(repo, Policy(max_file_bytes=10), ROLE_GLOBS)
+        collection = collect(repo, Policy(max_file_bytes=160), ROLE_GLOBS)
 
-        assert {"submodule-present", "skipped-symlink", "skipped-oversize"} <= set(
-            rule_ids(collection.pending)
-        )
+        assert {
+            "submodule-present",
+            "submodule-unmapped",
+            "submodule-orphan",
+            "skipped-symlink",
+            "skipped-oversize",
+        } <= set(rule_ids(collection.pending))
         findings = number_occurrences(collection.pending)
         assert all(finding.fingerprint.startswith("sha256:") for finding in findings)
         assert len({finding.fingerprint for finding in findings}) == len(findings)

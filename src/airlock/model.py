@@ -26,7 +26,7 @@ EXIT_INTERNAL = 3
 SUPPORTED_POLICY_VERSION = 1
 POLICY_TOP_LEVEL_KEYS = frozenset({"version", "policy", "soroban", "suppress"})
 POLICY_SETTINGS_KEYS = frozenset(
-    {"fail_on", "max_file_bytes", "line_cap", "tail_max_len", "tail_entropy"}
+    {"fail_on", "max_file_bytes", "line_cap", "tail_max_len", "tail_entropy", "submodules"}
 )
 SOROBAN_KEYS = frozenset({"require_release_profile"})
 SUPPRESSION_KEYS = frozenset({"rule", "path", "fingerprint", "reason", "expires"})
@@ -49,6 +49,8 @@ STATE_RULE_IDS = frozenset(
         "skipped-symlink",
         "skipped-unmerged",
         "submodule-present",
+        "submodule-unmapped",
+        "submodule-orphan",
         "nul-in-text",
         "non-utf8-text",
         "cfg-long-line",
@@ -294,6 +296,7 @@ class Policy:
     line_cap: int = 20_000
     tail_max_len: int = 2_000
     tail_entropy: float = 4.5
+    submodules: tuple[str, ...] = ()
     soroban: SorobanPolicy = SorobanPolicy()
     suppressions: tuple[Suppression, ...] = ()
 
@@ -307,6 +310,11 @@ class Policy:
             raise ValueError("size limits must be positive")
         if self.tail_max_len <= 0:
             raise ValueError("tail_max_len must be positive")
+        if any(
+            not isinstance(url, str) or not url.strip() or any(ch.isspace() for ch in url)
+            for url in self.submodules
+        ):
+            raise ValueError("policy.submodules entries must be non-empty URLs without whitespace")
 
 
 #: Defaults applied when a push has no reachable base (new branch). Fail closed: the scan
