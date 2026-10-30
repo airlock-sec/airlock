@@ -104,6 +104,10 @@ count=0
 numbers=""
 for file in "$dir"/*.md; do
     [ -e "$file" ] || continue
+    # A directory may carry a README that explains the batch; it is not an issue.
+    if [ "$(basename "$file")" = "README.md" ]; then
+        continue
+    fi
     title=$(read_field title "$file")
     labels=$(read_field labels "$file")
     roadmap=$(read_field roadmap "$file")
