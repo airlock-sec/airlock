@@ -169,7 +169,7 @@ model  <-  fingerprint, roles, rules  <-  collector, policy  <-  detectors  <-  
 | `ARCHITECTURE.md` | Design and decisions | Behavior, data models or ADRs change |
 | `ARCHITECTURE_ESSENTIALS.md` | Short outline for agents; keep under about 150 lines | Any hard rule, decision or detector list changes |
 | `ROADMAP.md` | Work queue, progress, changelog | **Every contribution**; its generated regions only through `scripts/roadmap_progress.py` |
-| `docs/changes/` | One record per change, the source the changelog is rendered from | Every contribution that changes a file; a record is never edited after merge |
+| `docs/changes/` | One record per change, the source the changelog is rendered from | Every contribution that changes a file; records sit directly in this directory, are never edited after merge, and a record that has landed is never deleted or renamed |
 | `AGENTS.md`, `CLAUDE.md` | Agent instructions | Workflow, commands or boundaries change |
 | `project_structure.md` | This map | A file or directory is added, moved or removed |
 | `README.md`, `CONTRIBUTING.md` | Users and contributors | User-visible behavior or process changes |

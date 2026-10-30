@@ -770,7 +770,7 @@ exercised by these benign cases. Task 4.1 remains open, including the composite 
 - **Golden outputs:** JSON (and SARIF once it exists).
 - **Corpus gate:** a clean-state snapshot of the six repos (`tests/corpus/`) must yield zero HIGH findings.
 - **Self-scan test:** the Airlock repo passes its own scan in CI.
-- **Roadmap gate test:** the script fails a diff that adds no change record under `docs/changes/`, and fails one that adds a record without the regenerated `ROADMAP.md`; it passes a diff carrying both, and a diff whose only file is `ROADMAP.md`.
+- **Roadmap gate test:** the script fails a diff that adds no change record directly under `docs/changes/`, fails one that adds a record without the regenerated `ROADMAP.md`, and fails one that removes a record already on the base branch, because the records are the changelog's source and a landed change stays described; it passes a diff carrying both, and a diff whose only file is `ROADMAP.md`. `roadmap_progress.py --check` owns the three generated regions, including `Last updated`, and the generator refuses a record rather than rendering it: bad name, future date, date disagreeing with the name, nested path, CRLF, duplicate `Last updated:` lines, an empty or over-long summary, a summary carrying a bare `|` or a stray `\`, an empty task list, unknown or repeated front matter keys, and markers missing, doubled, out of order or mismatched against the directory.
 
 ## 13. Architecture decision records
 

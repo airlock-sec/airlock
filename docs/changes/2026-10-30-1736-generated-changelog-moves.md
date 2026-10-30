@@ -20,26 +20,38 @@ generated block is resolved by keeping either side and running the generator aga
 `scripts/roadmap_progress.py` renders three regions from their sources: the progress
 table from the task lines, the changelog from the records, and `Last updated` from the
 newest record. It refuses a record rather than rendering it: a name that is not
-`YYYY-MM-DD-HHMM-<slug>.md`, a date that disagrees with its own name, an empty,
-over-long or pipe-bearing summary, an empty task list or one carrying a pipe, an unknown
-or repeated front matter key, a roadmap whose markers are missing, doubled or in the
-wrong order, records with no block, and a block with no records. `--check` now names the
-region that went stale and prints the diff against what the sources say.
+`YYYY-MM-DD-HHMM-<slug>.md`, a date that disagrees with its own name or sits in the
+future, a record in a subdirectory the render does not walk, an empty or over-long
+summary, a summary carrying a bare `|` or a stray `\` (the `\|` shape would have rendered
+a four-cell row), an empty task list or one carrying a pipe, an unknown or repeated front
+matter key, a source file with CRLF endings, a document with two `Last updated:` lines, a
+roadmap whose markers are missing, doubled or in the wrong order, records with no block,
+and a block with no records. A row whose count is zero out of zero renders as `0%`
+instead of raising. `--check` now names the region that went stale and prints the diff
+against what the sources say.
 
 `scripts/check_roadmap_touched.sh` was broadened with it. A diff that touches anything
-other than `ROADMAP.md` must add a record and carry the regenerated file; a diff whose
-only file is `ROADMAP.md` is a planning edit and stays allowed. The `Last updated` check
-kept its place and changed meaning, because that line is now generated: one that did not
-move means the newest record predates the change being merged. A pull request that used
-to pass by editing a row in place now fails, which task 1.9's row records as a
-strengthening rather than a change of subject.
+other than `ROADMAP.md` must add a record directly under `docs/changes/` and carry the
+regenerated file; a record that exists on the base and is gone here fails the run, which
+is the only thing standing between a pull request and deleting the changelog's source
+whole; and a diff whose only file is `ROADMAP.md` is a planning edit and stays allowed.
+The `Last updated` string comparison left the shell script for `--check`, which
+regenerates the line from the newest record: the comparison could not prove the line was
+right, and it rejected a backfill record for work that landed before the newest one. A
+pull request that used to pass by editing a row in place now fails, which task 1.9's row
+records as a strengthening rather than a change of subject.
 
 Verified locally: the 36 rows that existed before this change are the first 36 files in
-this directory, checked by comparing the multiset of (date, whitespace-normalized body,
-tasks) read back out of the generated block against the rows parsed from the pre-change
-file;
+this directory, and the check that ran was containment rather than identity. Each old
+row's text appears, whitespace-normalized, inside its own record body, all 36 of them,
+which is why the detail is lossless. The rendered cells are summaries: 2 are the old row
+whole, 27 are its opening cut at a word boundary, and 7 were written by hand because the
+first sentence described the change badly. Every row's date and task list survives; 5
+rows sit in a different position, all inside the 2026-10-27 cluster, because 3 records
+carry only a date and now order by slug and one pair the hand-written table had
+oldest-first is now newest-first.
 `python scripts/roadmap_progress.py --check` exits 0 on the committed document;
-`tests/unit/test_roadmap_gate.py` is 38 cases, up from 10, and the two that read this
+`tests/unit/test_roadmap_gate.py` is 48 cases, up from 10, and the two that read this
 repository's own commit tie every row to a record and every record to the order the
 generator produces; `ruff check`, `ruff format --check`, `mypy src` and the full
 self-scan run green over the tree with the new directory in it.

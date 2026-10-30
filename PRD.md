@@ -144,7 +144,7 @@ Priority: **P0** ships in v0.1.0, **P1** in v0.2.0, **Later** is backlog (`ROADM
 | FR-12 | `manifest add` and `manifest check` | P0 | Adding a fixture is one command |
 | FR-13 | Every rule has a positive and a negative fixture, enforced by the pytest suite (no separate `rules test` command) | P0 | The suite fails when a rule lacks fixtures |
 | FR-14 | ReDoS bound: lines over `line_cap` skip regex rules and raise non-suppressible `cfg-long-line`; every pattern passes an adversarial timing test | P0 | No scan exceeds the runtime target on a 5 MB single-line file |
-| FR-15 | Roadmap gate: `scripts/check_roadmap_touched.sh`, PR template checkbox and a required CI check | P0 | A PR that changes files without a change record under `docs/changes/`, or without the regenerated `ROADMAP.md`, fails |
+| FR-15 | Roadmap gate: `scripts/check_roadmap_touched.sh`, PR template checkbox and a required CI check | P0 | A PR that changes files without adding a change record under `docs/changes/`, or without the regenerated `ROADMAP.md`, or that removes a record already on the base branch, fails |
 | FR-16 | `soroban_profile`, contextual to contract crates | P1 | No false positive on a test-support library crate |
 | FR-17 | `stellar_seed`: offline, checksum-valid plaintext Stellar seeds in tracked files (D-06: KEEP, owner-approved 2026-10-28 UTC) | P1 | Canonical 56-character seeds detected within collector and line limits; invalid checksum, version or length rejected. Valid test vectors also detected unless explicitly suppressed with a reason. No funding or live-use inference. Implementation remains tasks 6.2 and 6.3. |
 | FR-18 | `cargo_vectors` | P1 | Fixtures pass |

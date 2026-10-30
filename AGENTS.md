@@ -26,7 +26,7 @@ Do not load every document up front. Start with the essentials.
 4. Implement the smallest change that passes.
 5. Run the checks in section 5.
 6. Update docs that the change touches (`project_structure.md` for file moves, the PRD and architecture docs for behavior changes).
-7. **Record the change** (rule above): one file under `docs/changes/` (UTC minute in the name, `date:`, `tasks:` and `summary:` front matter, the record below), your task boxes in `ROADMAP.md`, then `python scripts/roadmap_progress.py` to regenerate the table, the changelog and `Last updated`.
+7. **Record the change** (rule above): one file directly under `docs/changes/` (UTC minute in the name, `date:`, `tasks:` and `summary:` front matter, the record below; the date is not in the future and a record that has landed is never deleted or renamed), your task boxes in `ROADMAP.md`, then `python scripts/roadmap_progress.py` to regenerate the table, the changelog and `Last updated`.
 8. Open a small PR using the template. One task or one tightly related group per PR.
 
 ## 4. Hard rules
@@ -61,7 +61,7 @@ ruff check .
 ruff format --check .
 mypy src
 python -m airlock scan --mode full             # self-scan; must report no HIGH findings
-scripts/check_roadmap_touched.sh origin/main   # the PR adds a docs/changes/ record and regenerates ROADMAP.md
+scripts/check_roadmap_touched.sh origin/main   # the PR adds a docs/changes/ record, regenerates ROADMAP.md, deletes no landed record
 python scripts/roadmap_progress.py --check     # the generated regions match the tasks and the records
 ```
 

@@ -14,9 +14,11 @@ same bar. The design lives in [`PRD.md`](PRD.md), [`ARCHITECTURE.md`](ARCHITECTU
 4. Run `python -m pytest`, `ruff check .`, `ruff format --check .` and `mypy src`.
 5. **Record the change in the same pull request.** Add one file under `docs/changes/`, named
    `YYYY-MM-DD-HHMM-<slug>.md` for the UTC minute it landed, with `date:`, `tasks:` and
-   `summary:` front matter and the record itself below. Tick or add your tasks in `ROADMAP.md`,
-   then run `python scripts/roadmap_progress.py`, which regenerates the progress table, the
-   changelog in section 9 and the `Last updated` line from those two sources. Check with
+   `summary:` front matter and the record itself below. The date cannot be in the future, and a
+   record that has landed on the default branch is never deleted or renamed: if it is wrong, a
+   later record says so. Tick or add your tasks in `ROADMAP.md`, then run
+   `python scripts/roadmap_progress.py`, which regenerates the progress table, the changelog in
+   section 9 and the `Last updated` line from those two sources. Check with
    `python scripts/roadmap_progress.py --check`. A change is not finished until the roadmap is
    current.
 6. Update any document the change touches. If the code contradicts a doc, fix the doc.
