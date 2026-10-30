@@ -141,7 +141,7 @@ action.yml   pyproject.toml   airlock.toml   wasm-manifest.toml
 - `tail_max_len` and `tail_entropy` values (placeholders until tuned on corpus).
 - Executed seed coverage of Gitleaks/TruffleHog and custom configurations; source-only comparison is verified in 9.4, not a runtime benchmark.
 - Resolver-2 feature behavior for `testutils` inheritance.
-- GitHub limits: annotations per step, step summary size, SARIF size; required-check behavior when a job is deleted.
+- Required-check behavior when a job is deleted (0.13); `merge_group` base reachability, which needs a merge queue to measure (4.1). GitHub's reporting limits are verified: 10 annotations of each level per step, 1 MiB per step summary with no effect on step status, 10 MB and 5,000 kept results per SARIF run. Numbers, sources and probe runs: [ARCHITECTURE.md 6.6](ARCHITECTURE.md#66-reporters) (0.9).
 
 ## 15. Definition of done for v0.1.0
 

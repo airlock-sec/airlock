@@ -298,13 +298,14 @@ No calendar dates are promised. Phases, tasks and exit criteria live in `ROADMAP
 - Scorecard results for five repos as of 2026-10-26.
 - The existing script's `SKIP_DIRS` skips `node_modules/`, `target/`, `dist/`, `.next/` and `vendor/` (read from the pasted source).
 - Stellar seed encoding and the source-level Gitleaks/TruffleHog comparison at pinned revisions, 2026-10-28 UTC (`ARCHITECTURE.md` 9.4). Neither tool was executed; valid test vectors pass the checksum too.
+- GitHub's reporting and upload limits, from its documentation and from hosted probe runs, 2026-10-30 UTC (`ARCHITECTURE.md` 6.6). A step keeps the first 10 annotations of each level; a step summary above 1 MiB is dropped without failing the step or the job; SARIF upload takes a gzip-compressed file up to 10 MB and keeps the top 5,000 results of a run. `github.event.before` on a new branch, an ordinary push and a force push were read off three runs, including whether `actions/checkout` at its default depth can reach the base.
 
 **Unverified or untested**
 
 - Drips Wave maintainers specifically being hit.
 - Whether any of the five repos carries a tracked `node_modules/`, `dist/` or `vendor/` directory today, which decides how much real exposure bypass 7 has.
 - RUSTSEC-2026-0387 (not found in search); RUSTSEC-2024-0436 believed to be the unmaintained `paste` crate.
-- GitHub limits on annotations, step summaries and SARIF; `github.event.before` behavior on new branches and force pushes; `merge_group` events.
+- `merge_group` events delivering a usable base. The reporting limits above are verified; this one needs a merge queue on a repository to observe, and 4.1 decides whether the event is supported at all.
 - Aptos RPC hostnames, stellar-cli identity storage, SEP-58 key names.
 - Executed Gitleaks/TruffleHog seed coverage and custom configurations; Airlock's planned seed implementation and reference-vector tests (6.2, 6.3).
 - Performance, ReDoS and Scorecard targets; all effort sizing.
