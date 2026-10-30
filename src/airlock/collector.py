@@ -264,37 +264,21 @@ def _reserved_windows_device(path: str) -> tuple[str, str] | None:
     return None
 
 
-def _sanitize_model_path(raw_path: str) -> str:
-    """Turn a raw index path containing `\\` into a forward-slash path `FileEntry` can hold."""
-    parts = [
-        part if part != ".." else "__dotdot__"
-        for part in raw_path.replace("\\", "/").split("/")
-        if part
-    ]
-    return "/".join(parts) or "."
+def _escape_backslash_path(raw_path: str) -> str:
+    """Escape `\\` as `%5C` so a backslash-bearing index path satisfies `require_repo_path`
+    without colliding with any forward-slash sibling path on `FileEntry` or `Finding`."""
+    escaped = raw_path.replace("\\", "%5C").strip("/")
+    if not escaped or escaped == ".":
+        return "%5C"
+    return escaped
 
 
-def _actual_disk_relpath(repo_root: Path, target: Path) -> str | None:
+def _actual_disk_relpath(resolved_root: Path, target: Path) -> str | None:
     """Return the case-preserved repo-relative path on disk, or `None` if resolution fails."""
     try:
-        return target.resolve().relative_to(repo_root.resolve()).as_posix()
+        return target.resolve().relative_to(resolved_root).as_posix()
     except (OSError, ValueError):
         return None
-
-
-def _git_blob_sha1(data: bytes) -> str:
-    """Compute the git object SHA-1 for `blob <len>\\0<data>`."""
-    header = f"blob {len(data)}\0".encode("ascii")
-    return hashlib.sha1(header + data).hexdigest()
-
-
-def _blob_matches_index(data: bytes, expected_sha: str) -> bool:
-    """True when `data` (or its LF-normalized copy under `core.autocrlf`) matches `expected_sha`."""
-    if not expected_sha:
-        return True
-    if _git_blob_sha1(data) == expected_sha:
-        return True
-    return b"\r\n" in data and _git_blob_sha1(data.replace(b"\r\n", b"\n")) == expected_sha
 
 
 def _collect_one(
@@ -303,6 +287,7 @@ def _collect_one(
     policy: Policy,
     role_globs: Mapping[str, tuple[str, ...]],
     *,
+    resolved_root: Path | None = None,
     collided_casefolds: frozenset[str] = frozenset(),
     seen_case_inodes: dict[tuple[str, int, int], str] | None = None,
 ) -> tuple[FileEntry, tuple[PendingFinding, ...]]:
@@ -312,8 +297,9 @@ def _collect_one(
         # Git emits forward slashes on every platform, so a backslash in `ls-files` output is a
         # literal filename character from a POSIX index that Windows treats as a directory
         # separator and `require_repo_path` refuses on `FileEntry` and `Finding` (task 7.8).
-        safe_path = _sanitize_model_path(entry.path)
-        roles = resolve_roles(safe_path, b"", role_globs)
+        safe_path = _escape_backslash_path(entry.path)
+        role_probe = entry.path.replace("\\", "/").strip("/") or safe_path
+        roles = resolve_roles(role_probe, b"", role_globs)
         findings.append(
             _state(
                 "skipped-nonportable-path",
@@ -446,7 +432,8 @@ def _collect_one(
 
     folded = entry.path.casefold()
     if folded in collided_casefolds:
-        actual_rel = _actual_disk_relpath(repo_root, target)
+        root_for_rel = resolved_root if resolved_root is not None else repo_root.resolve()
+        actual_rel = _actual_disk_relpath(root_for_rel, target)
         inode_key = (folded, st.st_dev, st.st_ino)
         prior = (
             seen_case_inodes.get(inode_key)
@@ -527,28 +514,6 @@ def _collect_one(
                 ),
                 tuple(findings),
             )
-
-    if folded in collided_casefolds and not _blob_matches_index(data, entry.sha):
-        findings.append(
-            _state(
-                "skipped-nonportable-path",
-                Severity.HIGH,
-                entry.path,
-                roles,
-                f"tracked path {entry.path!r} collides case-insensitively in the index and "
-                "its working-tree bytes do not match its staged blob; nothing was scanned",
-                evidence=entry.path,
-            )
-        )
-        return (
-            FileEntry(
-                path=entry.path,
-                sha256=None,
-                roles=roles,
-                skip_reason=SKIP_NONPORTABLE_PATH,
-            ),
-            tuple(findings),
-        )
 
     sha256 = hashlib.sha256(data).hexdigest()
 
@@ -857,6 +822,7 @@ def collect(
             folded = index_entry.path.casefold()
             casefold_counts[folded] = casefold_counts.get(folded, 0) + 1
     collided_casefolds = frozenset(folded for folded, count in casefold_counts.items() if count > 1)
+    resolved_root = repo_root.resolve() if collided_casefolds else None
     seen_case_inodes: dict[tuple[str, int, int], str] = {}
     entries: list[FileEntry] = []
     findings: list[PendingFinding] = []
@@ -868,6 +834,7 @@ def collect(
             index_entry,
             policy,
             role_globs,
+            resolved_root=resolved_root,
             collided_casefolds=collided_casefolds,
             seen_case_inodes=seen_case_inodes,
         )

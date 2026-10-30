@@ -27,6 +27,8 @@ from airlock.collector import (
     SKIP_SYMLINK,
     SKIP_UNMERGED,
     SKIP_UNREADABLE,
+    IndexEntry,
+    _collect_one,
     check_runtime,
     collect,
     git_text,
@@ -810,10 +812,16 @@ class TestWindowsAndPathPortability:
 
         result = scan(repo)
 
+        paths = [entry.path for entry in result.entries]
+        assert paths == ["dir/postcss.config.mjs", "dir%5Cpostcss.config.mjs"]
+        assert entry_of(result, "dir/postcss.config.mjs").skip_reason is None
+        assert entry_of(result, "dir/postcss.config.mjs").text == "export default {}\n"
+        assert entry_of(result, "dir%5Cpostcss.config.mjs").skip_reason == SKIP_NONPORTABLE_PATH
+
         assert rule_ids(result.pending) == ["skipped-nonportable-path"]
         finding = result.pending[0]
+        assert finding.path == "dir%5Cpostcss.config.mjs"
         assert finding.severity is Severity.HIGH
-        assert finding.path == "dir/postcss.config.mjs"
         assert finding.roles == ("tooling-config", "source")
         assert finding.evidence == "dir\\postcss.config.mjs"
         assert finding.suppressible is False
@@ -821,6 +829,19 @@ class TestWindowsAndPathPortability:
         numbered = number_occurrences(result.pending)
         assert len(numbered) == 1
         assert numbered[0].rule_id == "skipped-nonportable-path"
+
+        lone_entry, lone_findings = _collect_one(
+            repo,
+            IndexEntry(mode="100644", path="\\"),
+            Policy(),
+            ROLE_GLOBS,
+        )
+        assert lone_entry.path == "%5C"
+        assert lone_entry.path != "."
+        assert lone_entry.skip_reason == SKIP_NONPORTABLE_PATH
+        assert len(lone_findings) == 1
+        assert lone_findings[0].path == "%5C"
+        assert lone_findings[0].evidence == "\\"
 
     def test_case_insensitive_index_collision_never_merges_two_paths_into_one(
         self, repo: Path
@@ -899,26 +920,52 @@ class TestWindowsAndPathPortability:
     ) -> None:
         write(repo, "pipe.py", "x = 1\n")
         commit(repo)
-        real_lstat = os.lstat
+        target_pipe = repo / "pipe.py"
+        mkfifo = getattr(os, "mkfifo", None)
+        if mkfifo is not None:
+            target_pipe.unlink()
+            mkfifo(target_pipe)
+        else:
+            real_lstat = os.lstat
 
-        def fake_lstat(target: os.PathLike[str] | str):
-            st = real_lstat(target)
-            if Path(target).name == "pipe.py":
-                return os.stat_result((stat.S_IFIFO | 0o600, *st[1:]))
-            return st
+            def fake_lstat(target: os.PathLike[str] | str):
+                st = real_lstat(target)
+                if Path(target).name == "pipe.py":
+                    return os.stat_result((stat.S_IFIFO | 0o600, *st[1:]))
+                return st
 
-        monkeypatch.setattr("airlock.collector.os.lstat", fake_lstat)
+            monkeypatch.setattr("airlock.collector.os.lstat", fake_lstat)
+
         result = scan(repo)
         assert rule_ids(result.pending) == ["skipped-unreadable"]
         assert entry_of(result, "pipe.py").skip_reason == SKIP_UNREADABLE
 
-    @pytest.mark.parametrize(
-        "rule_id",
-        sorted(rid for rid in STATE_RULE_IDS if rid == "skipped-nonportable-path"),
-    )
-    def test_every_nonportable_path_state_rule_has_a_positive_and_a_negative_repo_case(
-        self, tmp_path: Path, rule_id: str
+    def test_regular_index_entry_replaced_on_disk_by_symlink_outside_repo_fails_closed(
+        self, repo: Path, tmp_path: Path
     ) -> None:
+        outside = tmp_path / "outside-secret.txt"
+        outside.write_text("SECRET_FROM_OUTSIDE\n", encoding="utf-8")
+        write(repo, "dir/x.py", "x = 1\n")
+        commit(repo)
+        link_path = repo / "dir" / "x.py"
+        link_path.unlink()
+        try:
+            os.symlink(outside, link_path)
+        except OSError:
+            pytest.skip("unprivileged symlink creation unavailable on this host")
+
+        result = scan(repo)
+        assert rule_ids(result.pending) == ["skipped-unreadable"]
+        entry = entry_of(result, "dir/x.py")
+        assert entry.skip_reason == SKIP_UNREADABLE
+        assert entry.text is None
+        assert entry.sha256 is None
+
+    def test_skipped_nonportable_path_state_rule_has_a_positive_and_a_negative_repo_case(
+        self, tmp_path: Path
+    ) -> None:
+        rule_id = "skipped-nonportable-path"
+        assert rule_id in STATE_RULE_IDS
         pos = tmp_path / f"pos-{rule_id}"
         neg = tmp_path / f"neg-{rule_id}"
         for root in (pos, neg):
