@@ -2,9 +2,9 @@
   "source": "rules/builtin",
   "counts": {
     "high": 12,
-    "warn": 10,
+    "warn": 12,
     "info": 0,
-    "total": 22
+    "total": 24
   },
   "rules": [
     {
@@ -66,6 +66,36 @@
       ],
       "suppressible": true,
       "rationale": "The `_0x` plus hex identifier is the naming scheme the JavaScript obfuscators emit, and it survives a rename of the tool because it is a property of the output rather than of a banner. ARCHITECTURE.md 9.6 is explicit that obfuscator fingerprints rotate weekly while the mechanism stays, so this keys on the identifier grammar and not on a list of tool names. It is a WARN because the shape has one ordinary owner: a minified or packed bundle committed to the repository, which is a release-integrity question for the artifact rules rather than a payload by itself."
+    },
+    {
+      "id": "pat-credential-harvest",
+      "title": "A credential, key or wallet store named in code",
+      "severity": "warn",
+      "family": "builtin_patterns",
+      "detector": "pattern",
+      "roles": [
+        "source",
+        "tooling-config",
+        "editor-autorun",
+        "other"
+      ],
+      "suppressible": true,
+      "rationale": "A loader collects before it sends, and what it collects is a short list of files whose only purpose is to be secret: an AWS credentials file, an OpenSSH private key, a GnuPG private-key directory, a Solana CLI keypair, the browser database that holds saved logins, and the wallet files of the chains whose keys are one file in a known place. The old script carried this list at HIGH and matched the directory rather than the file, which is how a rule about paths becomes a rule about false positives. Each branch names the store and not the folder it sits in, and the trailing guard on the key branches is what keeps a provisioned public key out of the report, because a pub file in a setup script is ordinary infrastructure. A chain's own keypair path is listed because a CLI writes a signing key to one fixed location, which is the shape worth naming; a secret handed over as an environment value is not a path, and stays with the workflow rules in `ci_surface.toml`."
+    },
+    {
+      "id": "pat-chain-c2",
+      "title": "Public chain RPC or explorer host in code",
+      "severity": "warn",
+      "family": "builtin_patterns",
+      "detector": "pattern",
+      "roles": [
+        "source",
+        "tooling-config",
+        "editor-autorun",
+        "other"
+      ],
+      "suppressible": true,
+      "rationale": "The reported campaigns did not host their own endpoints. They pointed the payload at public chain infrastructure it could reach without a key and without a notice, which is why this list holds a Tron node provider and a Binance Smart Chain data seed rather than attacker-owned domains, and why those names are data: a campaign that moves to another public node is a one-line edit here and a rewrite nowhere else. This is the reach half of `cfg-chain-endpoint`, which stays the stricter rule and the only one that can fail a build: that rule reads one of five config filenames and fires on an endpoint being *configured*, which no innocent build step does, while this one reads every file that is code and fires on a host being named, which a dApp integration does every day. The two tiers are the trade, and a line that hits both is one finding each by design. Case-sensitive for the measured reason at the top of this file, with the same residual recorded there: a defanged or shouty host is an evasion of a WARN."
     },
     {
       "id": "cfg-dynamic-code",

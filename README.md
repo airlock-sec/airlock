@@ -27,13 +27,13 @@ installer does not exist yet.
 
 | | |
 |---|---|
-| Works today | `airlock scan` in console, GitHub-annotation and JSON output, plus a step summary; `airlock manifest add` and `manifest check`; 22 rules across three code detectors and the pattern engine; 664 tests in CI |
+| Works today | `airlock scan` in console, GitHub-annotation and JSON output, plus a step summary; `airlock manifest add` and `manifest check`; 24 rules across three code detectors and the pattern engine; 739 tests in CI |
 | Not built yet | the composite GitHub Action (`action.yml`), the Soroban-side detectors, the build-script and native-binary rules, SARIF output |
 | Usable now | as a CLI, from a checkout or an installed wheel, on any git repository |
 
 There is no `uses: airlock-sec/airlock@…` line to copy into a workflow, and no package index
 release. Do not treat a scan from this build as complete coverage: a clean report means nothing
-matched the twenty-two rules that ship, which is a narrower claim than "no compromise found". Track
+matched the twenty-four rules that ship, which is a narrower claim than "no compromise found". Track
 what exists in [ROADMAP.md](ROADMAP.md) and read the design in
 [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -91,6 +91,8 @@ extensionless file or under `vendor/` is read instead of waved past. Prose is ou
 | `pat-invisible-unicode` | HIGH | a zero-width or direction-flipping character inside code |
 | `pat-exfil-endpoint` | WARN | a paste site, webhook, tunnel or out-of-band callback host in code |
 | `pat-obfuscator-id` | WARN | the `_0x` plus hex identifier grammar an obfuscator emits |
+| `pat-credential-harvest` | WARN | a credential, private key, wallet or browser-login store named by path |
+| `pat-chain-c2` | WARN | a public chain RPC or explorer host named in code |
 
 **`ci_surface`** covers the places a repository hands control to someone else: workflow triggers,
 package lifecycle scripts under `package.json`, install hooks under `.husky/` and `.githooks/`, and
