@@ -119,8 +119,8 @@ def _add_flags(parser: argparse.ArgumentParser) -> None:
         "--event",
         help=f"github event name; implies a mode from {', '.join(sorted(EVENT_MODES))}",
     )
-    parser.add_argument("--base", help="pull request base SHA (pr mode)")
-    parser.add_argument("--before", help="github.event.before (push mode)")
+    parser.add_argument("--base", help="pull request base SHA; read only in pr mode")
+    parser.add_argument("--before", help="github.event.before; read only in push mode")
     parser.add_argument(
         "--fail-on", choices=[severity.name.lower() for severity in Severity], dest="fail_on"
     )
@@ -186,6 +186,26 @@ def _mode_for(args: argparse.Namespace) -> Mode:
     if args.mode is not None:
         return Mode(args.mode)
     return Mode.FULL
+
+
+#: The flags each trust model actually reads. A flag outside its model is refused rather than
+#: dropped, so a scan never quietly means something other than what the caller asked for.
+_MODE_FLAGS = {
+    Mode.FULL: frozenset(),
+    Mode.PR: frozenset({"--base"}),
+    Mode.PUSH: frozenset({"--before"}),
+}
+
+
+def _refuse_ignored_flags(mode: Mode, base: str | None, before: str | None) -> None:
+    """A flag the resolved mode discards is a usage error, the same rule `--event` follows."""
+    for flag, value in (("--base", base), ("--before", before)):
+        if value is None or flag in _MODE_FLAGS[mode]:
+            continue
+        owners = ", ".join(model.value for model, flags in _MODE_FLAGS.items() if flag in flags)
+        raise UsageError(
+            f"{flag} is not read in {mode.value} mode; it only applies to {owners} mode"
+        )
 
 
 def run_scan(
@@ -260,9 +280,11 @@ def run_scan(
 
 def _scan_command(args: argparse.Namespace) -> int:
     repo = Path(args.path)
+    mode = _mode_for(args)
+    _refuse_ignored_flags(mode, args.base, args.before)
     report = run_scan(
         repo,
-        _mode_for(args),
+        mode,
         base=args.base,
         before=args.before,
         config=args.config,

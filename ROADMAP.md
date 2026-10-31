@@ -1,6 +1,6 @@
 # ROADMAP: Airlock
 
-Last updated: 2026-10-31 04:58 UTC
+Last updated: 2026-10-31 05:21 UTC
 
 Roadmap version: 1
 
@@ -43,7 +43,7 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 |---|---|---|---|---|
 | 0 | Decisions and validation | 8 | 16 | 50% |
 | 1 | Repository bootstrap and self-protection | 12 | 16 | 75% |
-| 2 | Core engine | 15 | 15 | 100% |
+| 2 | Core engine | 16 | 16 | 100% |
 | 3 | P0 detectors | 4 | 11 | 36% |
 | 4 | Action and dogfood | 0 | 7 | 0% |
 | 5 | Release v0.1.0 | 1 | 7 | 14% |
@@ -51,7 +51,7 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 | 7 | Hardening and edge cases | 7 | 15 | 47% |
 | 8 | Release v0.2.0 and community | 1 | 6 | 17% |
 | 9 (backlog) | Backlog | 0 | 10 | 0% |
-| **Phases 0 to 8** | **Readiness total** | **48** | **98** | **49%** |
+| **Phases 0 to 8** | **Readiness total** | **49** | **99** | **49%** |
 | Gates | G1 to G10 | 0 | 10 | 0% |
 <!-- PROGRESS:END -->
 
@@ -213,6 +213,8 @@ families.
 - [x] **2.14** Two collector gaps found by the 2026-10-28 audit. (a) `collector.list_tracked_files` drops every index entry whose stage is not 0, meaning a file in the middle of a merge conflict is scanned by nobody and said nothing about, which breaks the rule that no file is skipped silently and gives the case no state rule id. (b) The same function calls `subprocess.run` directly rather than through `git_text`, so a git timeout leaves the module as `subprocess.TimeoutExpired` instead of the `ValueError` the CLI turns into exit 2, contradicting this module's own docstring. S. Deps: 2.2. Done when: an unmerged path yields a finding with a rule id in `STATE_RULE_IDS`, a counted skip reason and a test over a real conflicted repository; every git call in the module goes through `git_text`. (done 2026-10-28: an unmerged path now collects as one `IndexEntry` with `stage` recorded and `is_unmerged` true, and `_collect_one` returns it before any read as `SKIP_UNMERGED` with a `skipped-unmerged` finding, WARN for an ordinary path and HIGH for a sensitive role, so it counts in `files_skipped` and is non-suppressible through `STATE_RULE_IDS`. All three staged versions of one conflict collapse into that one entry and one finding. Both halves were written as tests over a real conflicted repository first: two branches editing the same lines, `git merge` exiting non-zero, and the index holding stages 1 to 3. For (b) the module's one subprocess call site is now `git_bytes`, with `git_text` as its text view, because the listing needs byte-exact paths from `-z` and `os.fsdecode` rather than stripped text; a timeout raises `ValueError("git failed to run: ...")` from either caller and the test proves it by monkeypatching `subprocess.run`. Documented in `ARCHITECTURE.md` 6.1 and the section 8 table, and in the `ARCHITECTURE_ESSENTIALS.md` finding-id list, which also names `policy-unknown-key`: it shipped in 2.7 and was missing from that list, and `test_model.py` checks the list against `STATE_RULE_IDS` verbatim, so both now say `skipped-unmerged`. Verified: `pytest` 461 passed (6 new), `ruff check` and `ruff format --check` clean on 43 files, `mypy src` clean on 24 files, self-scan exit 0 over 72 files with nothing skipped, and an end-to-end `airlock scan --mode full` over a scratch repository left mid-merge, which prints `skipped-unmerged` HIGH for `postcss.config.mjs` and WARN for `app.py`, reports "2 file(s) scanned, 2 unmerged" and exits 1. Not verified: a conflict in a real pull request's working tree, which needs the Action (4.1), since GitHub checks out a merge commit rather than an unresolved merge)
 - [x] **2.15** A loaded rule that is also scanner-state makes a non-suppressible finding suppressible. `policy._entry_problem` checks `entry.rule in STATE_RULE_IDS` only in the branch where the rule is *not* loaded, so `cfg-long-line`, which is in both sets and is authored `suppressible = true`, lets a `[[suppress]]` entry cover an over-cap line: the suppression is honoured and no `suppression-invalid` is reported. Reproduced on `main` against a 30,013-character line. M. Deps: 2.8. Done when: state membership is checked before the rule lookup, a test covers an id present in both sets, and the reproduction prints `suppression-invalid` at HIGH. (done 2026-10-28: state membership now precedes lookup; `finding_for`, the shipped rule and its fallback all refuse state suppression. Tests iterate all 16 state IDs with and without a conflicting loaded rule. Before the fix: 19 new checks failed, including the CLI hiding a 30,013-character line. After: 158 suppression, rule and CLI tests pass; the CLI reports `cfg-long-line` and `suppression-invalid` at HIGH, both non-suppressible, with no suppressed findings. Existing ordinary-rule suppression tests still pass.)
 
+- [x] **2.16** Refuse the flags a scan mode discards: `--base` outside `pr` and `--before` outside `push` are usage errors, the same rule `--event` follows, and the flag help names the mode. S. Deps: 2.10. Done when: `--mode full --base` and `--mode pr --before` exit 2 with a message naming the mode and the flag, an accepted combination still passes, and `scan --help` names the consuming mode for each flag. (done 2026-10-31, #54: `cli._MODE_FLAGS` maps each `Mode` to the flags it reads and `_refuse_ignored_flags` raises `UsageError` before `run_scan` for anything else, so a caller that passes a base to a full scan is told instead of silently getting a working-tree scan. Two tests in `tests/unit/test_cli.py` cover both refused directions and the accepted no-flag path; the `--base` and `--before` help text now names the consuming mode. Verified: `pytest -q tests/unit/test_cli.py` 55 passed, 1 skipped, plus four `TestManifestCommands` failures that reproduce on the unmodified branch in this Windows environment; `ruff check` and `ruff format --check` clean on 64 files.)
+
 ### Phase 3: P0 detectors
 
 - [x] **3.1** `config_role` with tiered rules (`cfg-dynamic-code`, `cfg-network-exec`, `cfg-network`, `cfg-process-spawn`, `cfg-chain-endpoint`, `cfg-appended-tail`, `cfg-long-line`, `cfg-nul`). L. Deps: 2.5, 2.11. Done when: all positive fixtures fire and no negative fixture does. (done 2026-10-27: detector and rule data landed earlier, and the fixture half is now proved. `cfg-nul` is not a rule in this family; the collector reports a NUL after BOM handling as `nul-in-text` for every role, which is recorded in `ARCHITECTURE.md` 9.1 and in the header of `rules/builtin/config_role.toml`, so the id in this task line is the finding id, not a seventh pattern. Every positive fixture fires and fires only its own rule, except `cfg-network-exec`, whose positive is deliberately also a `cfg-network` and `cfg-dynamic-code` hit because the combination needs both halves)
@@ -369,6 +371,7 @@ by slug, and one pair the hand-written table had the wrong way round is now corr
 <!-- CHANGELOG:START -->
 | Date (UTC) | Change | Tasks |
 |---|---|---|
+| 2026-10-31 05:21 | Refuse `--base`/`--before` in a mode that discards them (2.16): a flag the resolved trust model does not read is a usage error, the same rule `--event` follows, and the flag help names its mode. [details](docs/changes/2026-10-31-0521-refuse-flags-a-mode-discards.md) | 2.16 |
 | 2026-10-31 04:58 | Close #55 (task 7.15): an unreadable working-tree policy or manifest file is reported as unreadable at WARN, not as absent. [details](docs/changes/2026-10-31-0458-unreadable-policy-file-not-absent.md) | 7.15 |
 | 2026-10-31 04:30 | Install the OpenSSF Scorecard workflow and README badge (1.7): pinned actions, published results with OIDC, weekly and push-to-main runs. [details](docs/changes/2026-10-31-0430-scorecard-workflow.md) | 1.7 |
 | 2026-10-31 04:27 | Unmapped gitlink findings now name .gitmodules state-finding IDs and explain why severity remains HIGH. [details](docs/changes/2026-10-31-0427-submodule-state-finding-reasons.md) | 7.14 |
