@@ -34,6 +34,10 @@ check.
 
 `project_structure.md` records `dependabot.yml` and the fifth workflow.
 
-Not verified at the time of this record: the first CodeQL run, which this pull request
-triggers, and the first Dependabot pull requests, which GitHub opens on its next weekly
-schedule.
+The first CodeQL run on the pull request that added the workflow succeeded: the
+`Analyze Python` job passed in 57 seconds and analysis `2067326533` appeared in code
+scanning for merge commit `e24f588`, category `/language:python`, 43 rules and 0 results.
+
+Not verified at the time of this record: the first analysis on `main` itself, which
+follows the merge, and the first Dependabot pull requests, which GitHub opens on its
+next weekly schedule.

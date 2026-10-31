@@ -42,7 +42,7 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 | Phase | Name | Done | Total | Progress |
 |---|---|---|---|---|
 | 0 | Decisions and validation | 8 | 16 | 50% |
-| 1 | Repository bootstrap and self-protection | 13 | 17 | 76% |
+| 1 | Repository bootstrap and self-protection | 14 | 17 | 82% |
 | 2 | Core engine | 15 | 15 | 100% |
 | 3 | P0 detectors | 4 | 11 | 36% |
 | 4 | Action and dogfood | 0 | 7 | 0% |
@@ -51,7 +51,7 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 | 7 | Hardening and edge cases | 5 | 13 | 38% |
 | 8 | Release v0.2.0 and community | 1 | 6 | 17% |
 | 9 (backlog) | Backlog | 0 | 10 | 0% |
-| **Phases 0 to 8** | **Readiness total** | **47** | **97** | **48%** |
+| **Phases 0 to 8** | **Readiness total** | **48** | **97** | **49%** |
 | Gates | G1 to G10 | 0 | 10 | 0% |
 <!-- PROGRESS:END -->
 
@@ -194,7 +194,7 @@ families.
 
 - [x] **1.16** Second issue intake: fifty-six standalone issues under `docs/issues/`, each grounded in a shipped file and in a reproduction or an audit finding rather than in a roadmap bullet, in the 1.14 template, aimed at rows that are still unticked across the engine, the rule families, reporting, tests and governance, plus `docs/issues/README.md` and a `README.md` skip in the publisher. M. Deps: 1.14. Done when: every issue cites a file that exists, every `roadmap:` id is a row in this file, every `labels:` entry is one the repository defines, no issue names another as a blocker, and the publisher's dry run stages all of them without creating anything. (done 2026-10-30 22:22: 56 files numbered 01 to 56 plus the README, which the publisher now skips by name because a README has no front matter and the old glob would have refused it. The front matter was checked rather than trusted: all 42 distinct `roadmap:` ids parse out of this file's task lines, all 13 distinct labels exist in `gh label list` for this repository, and an earlier draft that used `complexity: low`, `area: reporting` and `area: detectors` was corrected, since only `trivial`, `medium` and `high` exist and the area set has no reporting value. Of the issue references in the batch, the only placeholder left is `{{issue:self}}`, so no issue waits on another and the publish order in the README is a convenience rather than a dependency graph. The grounding is a probe or a read per issue, not a paraphrase: examples are the line-cap path that drops a HIGH when a line is padded past 20000 characters (`rules.py:285`), the capability rules in `config_role.toml` that all claim `tooling-config` so no `package.json` is ever read, the appended-tail rule that inspects one line (`config_role.py:139`), and `report/sarif.py`, which is a docstring line the CLI cannot select. The batch avoids the work already in flight: it re-files nothing from open issues #23, #26, #28, #29 and #34 or from the two open pull requests. No `Stellar Wave` label is attached by design, so the curated funded set stays at the fifteen issues in `docs/wave/issues/` published as #20 to #34. The dry run printed `56 issue(s) staged, nothing created`, and the apply run then created #52 to #107 in filename order; each body's `{{issue:self}}` was patched right after creation, checked as `Closes #52` on the first and `Closes #107` on the last. Also not verified: the hosted run of the shell change, since the apply run used the local gh session; the `--apply` path was exercised against this repository, not a fresh one.)
 
-- [ ] **1.17** CodeQL for Python: a pinned workflow that runs on pushes to `main`, on same-repository pull requests and weekly, and uploads SARIF to code scanning. S. Deps: 1.5. Done when: the analyze job succeeds and a CodeQL analysis appears in code scanning. (started 2026-10-31 05:15: `.github/workflows/codeql.yml` uses `github/codeql-action/init` and `analyze` at the same v4.39.1 pin as the Scorecard workflow, with `permissions: contents: read` and job-level `security-events: write`. Pull requests from forks are skipped because `security-events: write` is not granted to them; `main` is analyzed on every push. Not verified: the first run, which this pull request triggers.)
+- [x] **1.17** CodeQL for Python: a pinned workflow that runs on pushes to `main`, on same-repository pull requests and weekly, and uploads SARIF to code scanning. S. Deps: 1.5. Done when: the analyze job succeeds and a CodeQL analysis appears in code scanning. (done 2026-10-31 05:21: `.github/workflows/codeql.yml` uses `github/codeql-action/init` and `analyze` at the same v4.39.1 pin as the Scorecard workflow, with `permissions: contents: read` and job-level `security-events: write`. Pull requests from forks are skipped because `security-events: write` is not granted to them; `main` is analyzed on every push. Observed on the pull request that added it: the `Analyze Python` job passed in 57 seconds ([run `41172147406`](https://github.com/airlock-sec/airlock/actions/runs/41172147406)), and analysis `2067326533` appeared in code scanning for merge commit `e24f588`, category `/language:python`, with 43 rules and 0 results. The first analysis on `main` itself follows the merge.)
 
 ### Phase 2: Core engine
 
