@@ -20,9 +20,11 @@ from pathlib import Path
 import pytest
 from tests.fixtures import assemble
 
-from airlock import detectors
-from airlock.cli import DEFAULT_ROLES_FILE, DEFAULT_RULES_DIR, REPO_ROOT, main, rules_root
+from airlock import cli, detectors
+from airlock.cli import DEFAULT_ROLES_FILE, DEFAULT_RULES_DIR, main, rules_root
 from airlock.model import EXIT_CONFIG, EXIT_FINDINGS, EXIT_INTERNAL, EXIT_PASS, Mode
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 CLEAN_CONFIG = "export default { plugins: [] }\n"
 # Built from fragments at call time (`AGENTS.md` 4): the scanner reads every `.py` file in this
@@ -171,6 +173,14 @@ class TestUsage:
         wheel = config["tool"]["hatch"]["build"]["targets"]["wheel"]
         assert wheel["packages"] == ["src/airlock"]
         assert wheel["force-include"]["rules"] == "airlock/rules"
+
+
+class TestNoDeadModuleNames:
+    """Issue #63: `rules_root` replaced the resolution `REPO_ROOT` came from, and nothing else in
+    the module reads it. Guard against it, or a name like it, coming back unread."""
+
+    def test_repo_root_was_removed_as_dead_code(self) -> None:
+        assert not hasattr(cli, "REPO_ROOT")
 
 
 class TestExitCodes:

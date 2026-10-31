@@ -1,6 +1,6 @@
 # ROADMAP: Airlock
 
-Last updated: 2026-10-31 05:46 UTC
+Last updated: 2026-10-31 06:13 UTC
 
 Roadmap version: 1
 
@@ -48,10 +48,10 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 | 4 | Action and dogfood | 0 | 7 | 0% |
 | 5 | Release v0.1.0 | 1 | 7 | 14% |
 | 6 | Stellar detectors | 0 | 5 | 0% |
-| 7 | Hardening and edge cases | 7 | 15 | 47% |
+| 7 | Hardening and edge cases | 8 | 16 | 50% |
 | 8 | Release v0.2.0 and community | 1 | 6 | 17% |
 | 9 (backlog) | Backlog | 0 | 10 | 0% |
-| **Phases 0 to 8** | **Readiness total** | **53** | **100** | **53%** |
+| **Phases 0 to 8** | **Readiness total** | **54** | **101** | **53%** |
 | Gates | G1 to G10 | 0 | 10 | 0% |
 <!-- PROGRESS:END -->
 
@@ -280,6 +280,8 @@ families.
 
 - [x] **7.15** Tell an unreadable working-tree policy file apart from an absent one. S. Deps: 2.7. (done 2026-10-31, #55: `policy._read_working` returns absent only for `FileNotFoundError`/`NotADirectoryError`; any other `OSError` keeps the bootstrap fallback but emits `untrusted-policy-source` at WARN naming `type(exc).__name__` and the errno name, because the maintainer's suppressions are not applied. The absent INFO text is unchanged. Tests in `tests/unit/test_policy.py::TestFullMode` cover absent, unreadable (directory in place, mode 000) and over-cap for both files.)
 
+- [x] **7.16** Remove `cli.REPO_ROOT`, dead since 5.7 replaced the resolution it came from with `rules_root`. S. Deps: 5.7. Done when: a grep-recorded sweep of every other module-level name in `cli.py` (`RULES_ROOT`, `DEFAULT_RULES_DIR`, `DEFAULT_ROLES_FILE`, `EVENT_MODES`, `RENDERERS`, `STEP_SUMMARY_ENV`, `WASM_RULE_PREFIX`) confirms each is read somewhere, the wheel-layout and checkout-layout `rules_root` tests are unchanged, and a new test fails without the removal. (done 2026-10-31, #63: `git grep` found nothing reading `REPO_ROOT` outside its own definition and the four test files that compute their own copy; `tests/unit/test_cli.py` now defines its own `REPO_ROOT` for the one test that used the import, matching the other test files, and `TestNoDeadModuleNames::test_repo_root_was_removed_as_dead_code` asserts `cli` carries no such attribute, confirmed failing against the pre-fix module. Every other module-level name in `cli.py` is read inside the module itself or imported by `test_cli.py`; see the change record for the full grep. `ARCHITECTURE.md` 10 already describes `cli.rules_root`, not `REPO_ROOT`, and `AGENTS.md` makes no mention of either name, so neither doc needed a wording fix.)
+
 ### Phase 8: Release v0.2.0 and community
 
 - [ ] **8.1** Update every doc for v0.2 behavior (`PRD.md`, `ARCHITECTURE.md`, `ARCHITECTURE_ESSENTIALS.md`, `project_structure.md`, `README.md`, `AGENTS.md`, `CLAUDE.md`). M. Deps: Phases 6 and 7. Gate G7.
@@ -373,6 +375,7 @@ by slug, and one pair the hand-written table had the wrong way round is now corr
 <!-- CHANGELOG:START -->
 | Date (UTC) | Change | Tasks |
 |---|---|---|
+| 2026-10-31 06:13 | Close #63 (task 7.16): delete the dead `cli.REPO_ROOT` and record what reads every other module-level name in `cli.py`. [details](docs/changes/2026-10-31-0613-remove-dead-cli-repo-root.md) | 7.16 |
 | 2026-10-31 05:46 | Accept Dependabot's grouped bump of pytest, ruff and mypy in the dev dependency group, with the CI suite unchanged. [details](docs/changes/2026-10-31-0546-dependabot-python-group.md) | 1.6 |
 | 2026-10-31 05:21 | Refuse `--base`/`--before` in a mode that discards them (2.16): a flag the resolved trust model does not read is a usage error, the same rule `--event` follows, and the flag help names its mode. [details](docs/changes/2026-10-31-0521-refuse-flags-a-mode-discards.md) | 2.16 |
 | 2026-10-31 05:15 | Add weekly grouped Dependabot updates and a pinned CodeQL workflow for Python, the two largest quick gains in the Scorecard report. [details](docs/changes/2026-10-31-0515-dependabot-and-codeql.md) | 1.6, 1.17 |
