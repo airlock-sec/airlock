@@ -1,6 +1,6 @@
 # ROADMAP: Airlock
 
-Last updated: 2026-10-31 06:19 UTC
+Last updated: 2026-10-31 06:31 UTC
 
 Roadmap version: 1
 
@@ -42,7 +42,7 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 | Phase | Name | Done | Total | Progress |
 |---|---|---|---|---|
 | 0 | Decisions and validation | 8 | 16 | 50% |
-| 1 | Repository bootstrap and self-protection | 16 | 18 | 89% |
+| 1 | Repository bootstrap and self-protection | 17 | 18 | 94% |
 | 2 | Core engine | 16 | 16 | 100% |
 | 3 | P0 detectors | 4 | 11 | 36% |
 | 4 | Action and dogfood | 0 | 7 | 0% |
@@ -51,7 +51,7 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 | 7 | Hardening and edge cases | 8 | 16 | 50% |
 | 8 | Release v0.2.0 and community | 1 | 6 | 17% |
 | 9 (backlog) | Backlog | 0 | 10 | 0% |
-| **Phases 0 to 8** | **Readiness total** | **54** | **102** | **53%** |
+| **Phases 0 to 8** | **Readiness total** | **55** | **102** | **54%** |
 | Gates | G1 to G10 | 0 | 10 | 0% |
 <!-- PROGRESS:END -->
 
@@ -196,7 +196,7 @@ families.
 
 - [x] **1.17** CodeQL for Python: a pinned workflow that runs on pushes to `main`, on same-repository pull requests and weekly, and uploads SARIF to code scanning. S. Deps: 1.5. Done when: the analyze job succeeds and a CodeQL analysis appears in code scanning. (done 2026-10-31 05:21: `.github/workflows/codeql.yml` uses `github/codeql-action/init` and `analyze` at the same v4.39.1 pin as the Scorecard workflow, with `permissions: contents: read` and job-level `security-events: write`. Pull requests from forks are skipped because `security-events: write` is not granted to them; `main` is analyzed on every push. Observed on the pull request that added it: the `Analyze Python` job passed in 57 seconds ([run `41172147406`](https://github.com/airlock-sec/airlock/actions/runs/41172147406)), and analysis `2067326533` appeared in code scanning for merge commit `e24f588`, category `/language:python`, with 43 rules and 0 results. The first analysis on `main` itself follows the merge.)
 
-- [ ] **1.18** Pin the CI toolchain by hash: a requirements lock covering pytest, ruff, mypy and hatchling, installed with `--require-hashes`, and the project installed from a wheel built without build isolation. S. Deps: 1.5. Done when: every `pip install` in `ci.yml` is hash-pinned or wheel-only, the workflow passes on a clean runner, and Scorecard's Pinned-Dependencies reports 10. (started 2026-10-31 06:19: `requirements-ci.txt` is generated from the `dev` group in `pyproject.toml`, which now also lists the hatchling build backend, with `uv pip compile --generate-hashes --python-version 3.11 --python-platform x86_64-unknown-linux-gnu`. A clean Python 3.11 venv installed it with real pip and `--require-hashes`, built the wheel with `--no-build-isolation`, installed the wheel with `--no-deps`, and passed the suite, ruff, mypy and the self-scan. Not verified: the workflow on a hosted runner and the next Scorecard run.)
+- [x] **1.18** Pin the CI toolchain by hash: a requirements lock covering pytest, ruff, mypy and hatchling, installed with `--require-hashes`, and the project installed from a wheel built without build isolation. S. Deps: 1.5. Done when: every `pip install` in `ci.yml` is hash-pinned or wheel-only, the workflow passes on a clean runner, and Scorecard's Pinned-Dependencies reports 10. (done 2026-10-31 06:31: `requirements-ci.txt` is generated from the `dev` group in `pyproject.toml`, which now also lists the hatchling build backend, with `uv pip compile --generate-hashes --python-version 3.11 --python-platform x86_64-unknown-linux-gnu`. A clean Python 3.11 venv installed it with real pip and `--require-hashes`, built the wheel with `--no-build-isolation`, installed the wheel with `--no-deps`, and passed the suite, ruff, mypy and the self-scan. The `checks` job passed on the hosted runner ([run `41176464491`](https://github.com/airlock-sec/airlock/actions/runs/41176464491)), and Scorecard on `main` for merge commit `30b809e` reports Pinned-Dependencies 10 with "2 out of 2 pipCommand dependencies pinned", raising the overall score from 6.9 to 7.0 ([run `41176617992`](https://github.com/airlock-sec/airlock/actions/runs/41176617992)).)
 
 ### Phase 2: Core engine
 
@@ -377,6 +377,7 @@ by slug, and one pair the hand-written table had the wrong way round is now corr
 <!-- CHANGELOG:START -->
 | Date (UTC) | Change | Tasks |
 |---|---|---|
+| 2026-10-31 06:31 | Tick 1.18 after Scorecard on main reports Pinned-Dependencies 10 and the overall score moves from 6.9 to 7.0. [details](docs/changes/2026-10-31-0631-tick-pinned-ci-dependencies.md) | 1.18 |
 | 2026-10-31 06:19 | Hash-pin the CI toolchain and build backend, install with --require-hashes, and install the project from a wheel so every pip command in CI is pinned. [details](docs/changes/2026-10-31-0619-hash-pinned-ci-install.md) | 1.18 |
 | 2026-10-31 06:13 | Close #63 (task 7.16): delete the dead `cli.REPO_ROOT` and record what reads every other module-level name in `cli.py`. [details](docs/changes/2026-10-31-0613-remove-dead-cli-repo-root.md) | 7.16 |
 | 2026-10-31 05:46 | Accept Dependabot's grouped bump of pytest, ruff and mypy in the dev dependency group, with the CI suite unchanged. [details](docs/changes/2026-10-31-0546-dependabot-python-group.md) | 1.6 |
