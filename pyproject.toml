@@ -34,7 +34,9 @@ packages = ["src/airlock"]
 "rules" = "airlock/rules"
 
 [dependency-groups]
-dev = ["pytest>=9.2.0", "ruff>=0.17.3", "mypy>=2.4.0"]
+# hatchling is the build backend, listed here so CI can build the wheel with
+# `--no-build-isolation` from the same hash-pinned lock as the test tools (1.18).
+dev = ["pytest>=9.2.0", "ruff>=0.17.3", "mypy>=2.4.0", "hatchling"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
