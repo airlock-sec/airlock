@@ -1,6 +1,6 @@
 # ROADMAP: Airlock
 
-Last updated: 2026-10-30 17:36 UTC
+Last updated: 2026-10-31 00:21 UTC
 
 Roadmap version: 1
 
@@ -363,6 +363,7 @@ by slug, and one pair the hand-written table had the wrong way round is now corr
 <!-- CHANGELOG:START -->
 | Date (UTC) | Change | Tasks |
 |---|---|---|
+| 2026-10-31 00:21 | A manifest or report write that fails is reported as a usage error (exit 2) naming the path, not as an internal error (exit 3). [details](docs/changes/2026-10-31-0021-manifest-write-usage-error.md) | 2.10, 3.5 |
 | 2026-10-30 17:36 | Take the changelog out of `ROADMAP.md`: one record per change under `docs/changes/`, the section 9 block and `Last updated` generated from them, and the roadmap gate asking for a record instead of an edit to the shared file. [details](docs/changes/2026-10-30-1736-generated-changelog-moves.md) | 1.15, 1.9 |
 | 2026-10-30 15:56 | Close the last two unblocked 3.6 indicators: `pat-credential-harvest` and `pat-chain-c2` land as WARN data rules, with the credential alternation anchored to cut its ReDoS-harness cost from 10.3 ms to 1.2 ms. [details](docs/changes/2026-10-30-1556-close-two-unblocked-indicators-credential.md) | 3.6, FR-13, FR-14, R-2, 9.6, 3.7, 3.11 |
 | 2026-10-30 15:52 | Close #27 (task 7.2): make submodules actionable scanner-state findings instead of an `INFO` note. [details](docs/changes/2026-10-30-1552-make-submodules-actionable-scanner.md) | 7.2, FR-20 |

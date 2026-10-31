@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -759,3 +760,42 @@ class TestRegistryIntegrity:
     )
     def test_every_core_module_is_importable(self, module: str) -> None:
         __import__(f"airlock.{module}")
+
+
+class TestWriteFailures:
+    """A caller-supplied path that cannot be written is a usage error, not an internal one."""
+
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="Windows does not enforce read-only file permissions for write_text",
+    )
+    def test_an_unwritable_manifest_is_a_usage_error(self, repo: Path, capsys) -> None:
+        seed(repo)
+        artifact(repo, "target/counter.wasm", "counter")
+        manifest = repo / "wasm-manifest.toml"
+        manifest.chmod(0o444)
+        try:
+            code = manifest_add(repo, "target/counter.wasm")
+        finally:
+            manifest.chmod(0o644)
+
+        assert code == EXIT_CONFIG
+        err = capsys.readouterr().err
+        assert "cannot write" in err
+        assert "wasm-manifest.toml" in err
+        assert "internal error" not in err
+
+    def test_an_unwritable_report_destination_is_a_usage_error(
+        self, repo: Path, tmp_path: Path, capsys
+    ) -> None:
+        seed(repo)
+        destination = tmp_path / "reports"
+        destination.mkdir()
+
+        code = main(["scan", str(repo), "--output", str(destination)])
+
+        assert code == EXIT_CONFIG
+        err = capsys.readouterr().err
+        assert "cannot write" in err
+        assert str(destination) in err
+        assert "internal error" not in err

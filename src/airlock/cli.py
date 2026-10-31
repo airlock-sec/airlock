@@ -294,7 +294,11 @@ def _manifest_add(args: argparse.Namespace) -> int:
     if change.unchanged:
         print(f"airlock: {args.manifest} already lists every target; nothing written")
         return EXIT_PASS
-    (repo / args.manifest).write_text(change.text, encoding="utf-8")
+    target = repo / args.manifest
+    try:
+        target.write_text(change.text, encoding="utf-8")
+    except OSError as exc:
+        raise UsageError(f"cannot write {target}: {exc.strerror or exc}") from exc
     print(
         f"airlock: {args.manifest}: "
         + f"{len(change.added)} added, {len(change.extended)} path(s) joined"
@@ -333,7 +337,11 @@ def _emit(report: ScanReport, args: argparse.Namespace) -> int:
     """Render a report to the chosen destination and return its exit code."""
     text = RENDERERS[args.format](report)
     if args.output:
-        Path(args.output).write_text(text, encoding="utf-8")
+        destination = Path(args.output)
+        try:
+            destination.write_text(text, encoding="utf-8")
+        except OSError as exc:
+            raise UsageError(f"cannot write {destination}: {exc.strerror or exc}") from exc
     else:
         sys.stdout.write(text)
     _write_step_summary(report)
