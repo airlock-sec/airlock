@@ -14,6 +14,19 @@
 /src/airlock/collector.py @Gabbydunkk
 /src/airlock/runner.py @Gabbydunkk
 
+# Fingerprint truncation runs before hashing; a constant change alters every suppression match
+/src/airlock/fingerprint.py @Gabbydunkk
+
+# Non-suppressible rule IDs, Severity/Mode/EXIT constants form the exit-code contract
+/src/airlock/model.py @Gabbydunkk
+
+# Sensitive role classification decides HIGH vs WARN for unreadable files; resolve_roles is the coverage claim
+/src/airlock/roles.py @Gabbydunkk
+
+# Reporters are the escaping boundary; CLI decides which policy was trusted
+/src/airlock/report/ @Gabbydunkk
+/src/airlock/cli.py @Gabbydunkk
+
 # Dogfood policy and the Wasm manifest
 /airlock.toml @Gabbydunkk
 /wasm-manifest.toml @Gabbydunkk
