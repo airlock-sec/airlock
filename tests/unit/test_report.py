@@ -290,10 +290,31 @@ class TestGithubAnnotations:
         text = github.render(report(suppressed=(finding(),)))
         expected = (
             "::notice title=airlock::1 finding(s) are hidden by the trusted airlock.toml; "
-            "the JSON output names each one and its reason.\n"
+            f"{github.FULL_LIST_HINT}\n"
         )
 
         assert text == expected
+
+    def test_the_withheld_note_names_the_command_that_lists_everything(self) -> None:
+        """Issue #79: the note must not promise a step summary or JSON file this run may lack."""
+        highs = tuple(finding(rule_id=f"cfg-h{i}", path=f"h{i}.js") for i in range(60))
+        text = github.render(report(*highs))
+        withheld_line = text.rstrip("\n").split("\n")[-1]
+
+        assert "--format json" in withheld_line
+        assert "same `--mode`, `--base` and `--before`" in withheld_line
+        assert "step summary" not in withheld_line
+        assert "51 HIGH finding(s) are not annotated" in withheld_line
+
+    def test_the_withheld_and_suppression_notes_share_the_same_sentence(self) -> None:
+        highs = tuple(finding(rule_id=f"cfg-h{i}", path=f"h{i}.js") for i in range(60))
+        text = github.render(report(*highs, suppressed=(finding(),)))
+        lines = text.rstrip("\n").split("\n")
+        withheld_line = next(line for line in lines if "are not annotated above" in line)
+        suppression_line = next(line for line in lines if "hidden by the trusted" in line)
+
+        assert withheld_line.endswith(github.FULL_LIST_HINT)
+        assert suppression_line.endswith(github.FULL_LIST_HINT)
 
 
 class TestDocumentedLimits:
