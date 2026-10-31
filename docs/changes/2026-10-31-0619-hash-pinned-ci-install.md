@@ -38,5 +38,12 @@ skipped with the known load-sensitive ReDoS timing failure that passes in isolat
 and format were clean, mypy was clean, and the installed console script scanned 237 files with
 0 HIGH and nothing skipped.
 
-Not verified at the time of this record: the workflow on a hosted runner and the next
-Scorecard run. Task 1.18 stays started until Pinned-Dependencies reports 10.
+The `checks` job passed on the hosted runner: 51 seconds on the pull request, with the
+three install steps and the suite unchanged. Scorecard on `main` for merge commit `30b809e`
+reports Pinned-Dependencies 10, with "14 out of 14 GitHub-owned GitHubAction dependencies
+pinned", "1 out of 1 third-party GitHubAction dependencies pinned" and "2 out of 2 pipCommand
+dependencies pinned". The overall score moved from 6.9 to 7.0. No other check changed except
+SAST, which rose from 7 to 8 as more commits received a CodeQL analysis.
+
+Not verified at the time of this record: nothing outstanding; the hosted workflow and the
+Scorecard run were the two open items.
