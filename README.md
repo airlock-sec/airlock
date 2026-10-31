@@ -5,6 +5,7 @@
 **Supply-chain scanning for Stellar and Soroban repositories**
 
 [![CI](https://github.com/airlock-sec/airlock/actions/workflows/ci.yml/badge.svg)](https://github.com/airlock-sec/airlock/actions/workflows/ci.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/airlock-sec/airlock/badge)](https://scorecard.dev/viewer/?uri=github.com/airlock-sec/airlock)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
 [![Runtime dependencies](https://img.shields.io/badge/runtime%20dependencies-0-green)](pyproject.toml)
