@@ -1,6 +1,6 @@
 # ROADMAP: Airlock
 
-Last updated: 2026-10-31 06:13 UTC
+Last updated: 2026-10-31 06:19 UTC
 
 Roadmap version: 1
 
@@ -42,7 +42,7 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 | Phase | Name | Done | Total | Progress |
 |---|---|---|---|---|
 | 0 | Decisions and validation | 8 | 16 | 50% |
-| 1 | Repository bootstrap and self-protection | 16 | 17 | 94% |
+| 1 | Repository bootstrap and self-protection | 16 | 18 | 89% |
 | 2 | Core engine | 16 | 16 | 100% |
 | 3 | P0 detectors | 4 | 11 | 36% |
 | 4 | Action and dogfood | 0 | 7 | 0% |
@@ -51,7 +51,7 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 | 7 | Hardening and edge cases | 8 | 16 | 50% |
 | 8 | Release v0.2.0 and community | 1 | 6 | 17% |
 | 9 (backlog) | Backlog | 0 | 10 | 0% |
-| **Phases 0 to 8** | **Readiness total** | **54** | **101** | **53%** |
+| **Phases 0 to 8** | **Readiness total** | **54** | **102** | **53%** |
 | Gates | G1 to G10 | 0 | 10 | 0% |
 <!-- PROGRESS:END -->
 
@@ -195,6 +195,8 @@ families.
 - [x] **1.16** Second issue intake: fifty-six standalone issues under `docs/issues/`, each grounded in a shipped file and in a reproduction or an audit finding rather than in a roadmap bullet, in the 1.14 template, aimed at rows that are still unticked across the engine, the rule families, reporting, tests and governance, plus `docs/issues/README.md` and a `README.md` skip in the publisher. M. Deps: 1.14. Done when: every issue cites a file that exists, every `roadmap:` id is a row in this file, every `labels:` entry is one the repository defines, no issue names another as a blocker, and the publisher's dry run stages all of them without creating anything. (done 2026-10-30 22:22: 56 files numbered 01 to 56 plus the README, which the publisher now skips by name because a README has no front matter and the old glob would have refused it. The front matter was checked rather than trusted: all 42 distinct `roadmap:` ids parse out of this file's task lines, all 13 distinct labels exist in `gh label list` for this repository, and an earlier draft that used `complexity: low`, `area: reporting` and `area: detectors` was corrected, since only `trivial`, `medium` and `high` exist and the area set has no reporting value. Of the issue references in the batch, the only placeholder left is `{{issue:self}}`, so no issue waits on another and the publish order in the README is a convenience rather than a dependency graph. The grounding is a probe or a read per issue, not a paraphrase: examples are the line-cap path that drops a HIGH when a line is padded past 20000 characters (`rules.py:285`), the capability rules in `config_role.toml` that all claim `tooling-config` so no `package.json` is ever read, the appended-tail rule that inspects one line (`config_role.py:139`), and `report/sarif.py`, which is a docstring line the CLI cannot select. The batch avoids the work already in flight: it re-files nothing from open issues #23, #26, #28, #29 and #34 or from the two open pull requests. No `Stellar Wave` label is attached by design, so the curated funded set stays at the fifteen issues in `docs/wave/issues/` published as #20 to #34. The dry run printed `56 issue(s) staged, nothing created`, and the apply run then created #52 to #107 in filename order; each body's `{{issue:self}}` was patched right after creation, checked as `Closes #52` on the first and `Closes #107` on the last. Also not verified: the hosted run of the shell change, since the apply run used the local gh session; the `--apply` path was exercised against this repository, not a fresh one.)
 
 - [x] **1.17** CodeQL for Python: a pinned workflow that runs on pushes to `main`, on same-repository pull requests and weekly, and uploads SARIF to code scanning. S. Deps: 1.5. Done when: the analyze job succeeds and a CodeQL analysis appears in code scanning. (done 2026-10-31 05:21: `.github/workflows/codeql.yml` uses `github/codeql-action/init` and `analyze` at the same v4.39.1 pin as the Scorecard workflow, with `permissions: contents: read` and job-level `security-events: write`. Pull requests from forks are skipped because `security-events: write` is not granted to them; `main` is analyzed on every push. Observed on the pull request that added it: the `Analyze Python` job passed in 57 seconds ([run `41172147406`](https://github.com/airlock-sec/airlock/actions/runs/41172147406)), and analysis `2067326533` appeared in code scanning for merge commit `e24f588`, category `/language:python`, with 43 rules and 0 results. The first analysis on `main` itself follows the merge.)
+
+- [ ] **1.18** Pin the CI toolchain by hash: a requirements lock covering pytest, ruff, mypy and hatchling, installed with `--require-hashes`, and the project installed from a wheel built without build isolation. S. Deps: 1.5. Done when: every `pip install` in `ci.yml` is hash-pinned or wheel-only, the workflow passes on a clean runner, and Scorecard's Pinned-Dependencies reports 10. (started 2026-10-31 06:19: `requirements-ci.txt` is generated from the `dev` group in `pyproject.toml`, which now also lists the hatchling build backend, with `uv pip compile --generate-hashes --python-version 3.11 --python-platform x86_64-unknown-linux-gnu`. A clean Python 3.11 venv installed it with real pip and `--require-hashes`, built the wheel with `--no-build-isolation`, installed the wheel with `--no-deps`, and passed the suite, ruff, mypy and the self-scan. Not verified: the workflow on a hosted runner and the next Scorecard run.)
 
 ### Phase 2: Core engine
 
@@ -375,6 +377,7 @@ by slug, and one pair the hand-written table had the wrong way round is now corr
 <!-- CHANGELOG:START -->
 | Date (UTC) | Change | Tasks |
 |---|---|---|
+| 2026-10-31 06:19 | Hash-pin the CI toolchain and build backend, install with --require-hashes, and install the project from a wheel so every pip command in CI is pinned. [details](docs/changes/2026-10-31-0619-hash-pinned-ci-install.md) | 1.18 |
 | 2026-10-31 06:13 | Close #63 (task 7.16): delete the dead `cli.REPO_ROOT` and record what reads every other module-level name in `cli.py`. [details](docs/changes/2026-10-31-0613-remove-dead-cli-repo-root.md) | 7.16 |
 | 2026-10-31 05:46 | Accept Dependabot's grouped bump of pytest, ruff and mypy in the dev dependency group, with the CI suite unchanged. [details](docs/changes/2026-10-31-0546-dependabot-python-group.md) | 1.6 |
 | 2026-10-31 05:21 | Refuse `--base`/`--before` in a mode that discards them (2.16): a flag the resolved trust model does not read is a usage error, the same rule `--event` follows, and the flag help names its mode. [details](docs/changes/2026-10-31-0521-refuse-flags-a-mode-discards.md) | 2.16 |
