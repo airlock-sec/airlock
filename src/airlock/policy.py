@@ -21,6 +21,7 @@ Like `collector.py`, this is one of the two modules allowed to run `subprocess`,
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import tomllib
 from collections import Counter
@@ -296,8 +297,8 @@ def _change_summary(base_text: str | None, head_text: str | None) -> str | None:
 
 def _from_working_tree(repo_root: Path, policy_path: str, manifest_path: str) -> TrustedConfig:
     """`full` mode: read what is on disk, then state the weaker guarantee (6.5)."""
-    policy_text = _working_text(repo_root, policy_path)
-    manifest_text = _working_text(repo_root, manifest_path)
+    policy_text, policy_failure = _read_working(repo_root, policy_path)
+    manifest_text, manifest_failure = _read_working(repo_root, manifest_path)
 
     policy_pending: tuple[PendingFinding, ...] = ()
     manifest_pending: tuple[PendingFinding, ...] = ()
@@ -315,8 +316,8 @@ def _from_working_tree(repo_root: Path, policy_path: str, manifest_path: str) ->
         )
 
     pending = (
-        _untrusted_source(policy_path, policy_text is not None),
-        _untrusted_source(manifest_path, manifest_text is not None),
+        _untrusted_source(policy_path, policy_text is not None, policy_failure),
+        _untrusted_source(manifest_path, manifest_text is not None, manifest_failure),
     )
     return TrustedConfig(
         policy=policy,
@@ -326,7 +327,17 @@ def _from_working_tree(repo_root: Path, policy_path: str, manifest_path: str) ->
     )
 
 
-def _untrusted_source(path: str, present: bool) -> PendingFinding:
+def _untrusted_source(path: str, present: bool, failure: str | None = None) -> PendingFinding:
+    if failure is not None:
+        # WARN, not INFO: the file is there but its suppressions and settings are not applied.
+        return _state(
+            UNTRUSTED_SOURCE_RULE_ID,
+            Severity.WARN,
+            path,
+            f"{path} is in the working tree but could not be read ({failure}), "
+            "so the shipped defaults apply",
+            evidence="unreadable",
+        )
     return _state(
         UNTRUSTED_SOURCE_RULE_ID,
         Severity.INFO,
@@ -339,16 +350,29 @@ def _untrusted_source(path: str, present: bool) -> PendingFinding:
 
 
 def _working_text(repo_root: Path, path: str) -> str | None:
+    text, _failure = _read_working(repo_root, path)
+    return text
+
+
+def _read_working(repo_root: Path, path: str) -> tuple[str | None, str | None]:
+    """Return `(text, None)`, `(None, None)` when absent, or `(None, failure)` when unreadable.
+
+    `failure` is the exception type and errno name, never `str(exc)`, as `skipped-unreadable` does.
+    """
     target = repo_root / path
     try:
         data = target.read_bytes()
-    except OSError:
-        return None
+    except (FileNotFoundError, NotADirectoryError):
+        # A missing path segment (NotADirectoryError) means no file there: absent, not unreadable.
+        return None, None
+    except OSError as exc:
+        code = errno.errorcode.get(exc.errno) if exc.errno is not None else None
+        return None, type(exc).__name__ + (f" {code}" if code else "")
     if len(data) > MAX_CONFIG_BYTES:
         raise ValueError(
             f"{path} is {len(data)} bytes, over the {MAX_CONFIG_BYTES} byte limit for a config file"
         )
-    return data.decode("utf-8", errors="replace")
+    return data.decode("utf-8", errors="replace"), None
 
 
 def policy_from_toml(
