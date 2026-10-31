@@ -16,6 +16,7 @@ import codecs
 import hashlib
 import os
 import shutil
+import stat
 import subprocess
 import sys
 from collections.abc import Mapping
@@ -44,6 +45,27 @@ SKIP_SYMLINK = "symlink"
 SKIP_SUBMODULE = "submodule"
 SKIP_ENCODING = "encoding"
 SKIP_UNMERGED = "unmerged"
+SKIP_NONPORTABLE_PATH = "nonportable-path"
+
+#: Device stems Windows reserves in every directory, regardless of case or extension (7.8).
+_WINDOWS_RESERVED_STEMS = frozenset(
+    {
+        "CON",
+        "PRN",
+        "AUX",
+        "NUL",
+        "CONIN$",
+        "CONOUT$",
+        *(f"COM{n}" for n in range(1, 10)),
+        *(f"LPT{n}" for n in range(1, 10)),
+        "COM\xb9",
+        "COM\xb2",
+        "COM\xb3",
+        "LPT\xb9",
+        "LPT\xb2",
+        "LPT\xb3",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -223,10 +245,82 @@ def _decode(data: bytes) -> tuple[str, bool]:
         return data.decode("utf-8", errors="replace"), True
 
 
+def _reserved_windows_device(path: str) -> tuple[str, str] | None:
+    """Return `(segment, device)` when any segment is a reserved Windows device name (7.8).
+
+    Win32 strips trailing spaces and dots and treats everything after the first dot as an
+    extension, so `NUL`, `nul.js`, `src/NUL` and `src/nul.postcss.config.mjs` resolve to kernel
+    character devices when opened on Windows without an extended-length prefix (`NUL` reads as
+    0 bytes and `CON`/`AUX` block indefinitely), while `git checkout` refuses to materialize
+    them as regular files on NTFS.
+    """
+    for segment in path.replace("\\", "/").split("/"):
+        stripped = segment.rstrip(" .")
+        if not stripped:
+            continue
+        stem = stripped.partition(".")[0].upper()
+        if stem in _WINDOWS_RESERVED_STEMS:
+            return segment, stem
+    return None
+
+
+def _escape_backslash_path(raw_path: str) -> str:
+    """Escape `\\` as `%5C` so a backslash-bearing index path satisfies `require_repo_path`
+    without colliding with any forward-slash sibling path on `FileEntry` or `Finding`."""
+    escaped = raw_path.replace("\\", "%5C").strip("/")
+    if not escaped or escaped == ".":
+        return "%5C"
+    return escaped
+
+
+def _actual_disk_relpath(resolved_root: Path, target: Path) -> str | None:
+    """Return the case-preserved repo-relative path on disk, or `None` if resolution fails."""
+    try:
+        return target.resolve().relative_to(resolved_root).as_posix()
+    except (OSError, ValueError):
+        return None
+
+
 def _collect_one(
-    repo_root: Path, entry: IndexEntry, policy: Policy, role_globs: Mapping[str, tuple[str, ...]]
+    repo_root: Path,
+    entry: IndexEntry,
+    policy: Policy,
+    role_globs: Mapping[str, tuple[str, ...]],
+    *,
+    resolved_root: Path | None = None,
+    collided_casefolds: frozenset[str] = frozenset(),
+    seen_case_inodes: dict[tuple[str, int, int], str] | None = None,
 ) -> tuple[FileEntry, tuple[PendingFinding, ...]]:
     findings: list[PendingFinding] = []
+
+    if "\\" in entry.path:
+        # Git emits forward slashes on every platform, so a backslash in `ls-files` output is a
+        # literal filename character from a POSIX index that Windows treats as a directory
+        # separator and `require_repo_path` refuses on `FileEntry` and `Finding` (task 7.8).
+        safe_path = _escape_backslash_path(entry.path)
+        role_probe = entry.path.replace("\\", "/").strip("/") or safe_path
+        roles = resolve_roles(role_probe, b"", role_globs)
+        findings.append(
+            _state(
+                "skipped-nonportable-path",
+                Severity.HIGH,
+                safe_path,
+                roles,
+                f"tracked path {entry.path!r} contains a backslash, which is a filename byte "
+                "on POSIX and a directory separator on Windows; nothing was scanned",
+                evidence=entry.path,
+            )
+        )
+        return (
+            FileEntry(
+                path=safe_path,
+                sha256=None,
+                roles=roles,
+                skip_reason=SKIP_NONPORTABLE_PATH,
+            ),
+            tuple(findings),
+        )
+
     target = repo_root / entry.path
 
     if entry.is_unmerged:
@@ -283,8 +377,37 @@ def _collect_one(
             tuple(findings),
         )
 
+    reserved = _reserved_windows_device(entry.path)
+    if reserved is not None:
+        segment, device = reserved
+        roles = resolve_roles(entry.path, b"", role_globs)
+        findings.append(
+            _state(
+                "skipped-nonportable-path",
+                Severity.HIGH,
+                entry.path,
+                roles,
+                f"tracked path {entry.path!r} uses Windows reserved device name {device} "
+                f"in segment {segment!r} and cannot be trusted as a regular file; nothing "
+                "was scanned",
+                evidence=entry.path,
+            )
+        )
+        return (
+            FileEntry(
+                path=entry.path,
+                sha256=None,
+                roles=roles,
+                skip_reason=SKIP_NONPORTABLE_PATH,
+            ),
+            tuple(findings),
+        )
+
     try:
-        size_bytes = os.path.getsize(target)
+        st = os.lstat(target)
+        if not stat.S_ISREG(st.st_mode):
+            raise OSError("not a regular file")
+        size_bytes = st.st_size
         with target.open("rb") as handle:
             head = handle.read(HEAD_BYTES)
     except OSError as exc:
@@ -306,6 +429,42 @@ def _collect_one(
             ),
             tuple(findings),
         )
+
+    folded = entry.path.casefold()
+    if folded in collided_casefolds:
+        root_for_rel = resolved_root if resolved_root is not None else repo_root.resolve()
+        actual_rel = _actual_disk_relpath(root_for_rel, target)
+        inode_key = (folded, st.st_dev, st.st_ino)
+        prior = (
+            seen_case_inodes.get(inode_key)
+            if (seen_case_inodes is not None and st.st_ino != 0)
+            else None
+        )
+        if (actual_rel is not None and actual_rel != entry.path) or prior is not None:
+            other = prior or actual_rel or folded
+            roles = resolve_roles(entry.path, b"", role_globs)
+            findings.append(
+                _state(
+                    "skipped-nonportable-path",
+                    Severity.HIGH,
+                    entry.path,
+                    roles,
+                    f"tracked path {entry.path!r} collides case-insensitively with {other!r} "
+                    "on the working tree and cannot be read as itself; nothing was scanned",
+                    evidence=f"{entry.path} -> {other}",
+                )
+            )
+            return (
+                FileEntry(
+                    path=entry.path,
+                    sha256=None,
+                    roles=roles,
+                    skip_reason=SKIP_NONPORTABLE_PATH,
+                ),
+                tuple(findings),
+            )
+        if seen_case_inodes is not None and st.st_ino != 0:
+            seen_case_inodes[inode_key] = entry.path
 
     roles = resolve_roles(entry.path, head, role_globs)
 
@@ -657,15 +816,31 @@ def collect(
     disappears from the report.
     """
     index_entries = list_tracked_files(repo_root)
+    casefold_counts: dict[str, int] = {}
+    for index_entry in index_entries:
+        if not index_entry.is_unmerged and not index_entry.is_submodule:
+            folded = index_entry.path.casefold()
+            casefold_counts[folded] = casefold_counts.get(folded, 0) + 1
+    collided_casefolds = frozenset(folded for folded, count in casefold_counts.items() if count > 1)
+    resolved_root = repo_root.resolve() if collided_casefolds else None
+    seen_case_inodes: dict[tuple[str, int, int], str] = {}
     entries: list[FileEntry] = []
     findings: list[PendingFinding] = []
     gitmodules_entry: FileEntry | None = None
     gitmodules_has_state_finding = False
     for index_entry in index_entries:
-        entry, entry_findings = _collect_one(repo_root, index_entry, policy, role_globs)
+        entry, entry_findings = _collect_one(
+            repo_root,
+            index_entry,
+            policy,
+            role_globs,
+            resolved_root=resolved_root,
+            collided_casefolds=collided_casefolds,
+            seen_case_inodes=seen_case_inodes,
+        )
         entries.append(entry)
         findings.extend(entry_findings)
-        if entry.path == GITMODULES_PATH:
+        if entry.path == GITMODULES_PATH and "\\" not in index_entry.path:
             gitmodules_entry = entry
             gitmodules_has_state_finding = bool(entry_findings)
     findings.extend(

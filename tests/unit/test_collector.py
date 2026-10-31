@@ -10,7 +10,9 @@ from __future__ import annotations
 import hashlib
 import os
 import shutil
+import stat
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -19,10 +21,14 @@ from tests.fixtures import assemble
 from airlock import runner
 from airlock.collector import (
     SKIP_ENCODING,
+    SKIP_NONPORTABLE_PATH,
     SKIP_OVERSIZE,
     SKIP_SUBMODULE,
     SKIP_SYMLINK,
     SKIP_UNMERGED,
+    SKIP_UNREADABLE,
+    IndexEntry,
+    _collect_one,
     check_runtime,
     collect,
     git_text,
@@ -59,6 +65,10 @@ def git(root: Path, *args: str) -> str:
             "user.email=airlock-test@example.invalid",
             "-c",
             "core.hooksPath=/dev/null",
+            "-c",
+            "core.autocrlf=false",
+            "-c",
+            "core.protectNTFS=false",
             *args,
         ],
         capture_output=True,
@@ -214,14 +224,39 @@ class TestRolesAndReads:
         )
 
 
+def stage_blob(root: Path, rel: str, data: bytes | str, mode: str = "100644") -> str:
+    """Write a blob into the object database and stage it at `rel` with `mode`."""
+    payload = data.encode("utf-8") if isinstance(data, str) else data
+    proc = subprocess.run(
+        ["git", "-C", str(root), "hash-object", "-w", "--stdin"],
+        input=payload,
+        capture_output=True,
+        check=True,
+    )
+    sha = proc.stdout.decode("ascii").strip()
+    git(root, "update-index", "--add", "--cacheinfo", f"{mode},{sha},{rel}")
+    return sha
+
+
+def stage_symlink(root: Path, rel: str, target: Path) -> None:
+    """Create a tracked symlink on POSIX, or stage mode 120000 on unprivileged Windows."""
+    link = root / rel
+    try:
+        link.symlink_to(target)
+        git(root, "add", "-A")
+        commit(root)
+    except OSError:
+        write(root, "seed-for-symlink.py", "x = 1\n")
+        git(root, "add", "-A")
+        commit(root)
+        stage_blob(root, rel, str(target), mode="120000")
+
+
 class TestSymlinks:
     def test_a_tracked_symlink_is_recorded_not_followed(self, repo: Path, tmp_path: Path) -> None:
         secret = tmp_path / "outside.txt"
         secret.write_text(DROPPER)
-        link = repo / "postcss.config.mjs"
-        link.symlink_to(secret)
-        git(repo, "add", "-A")
-        commit(repo)
+        stage_symlink(repo, "postcss.config.mjs", secret)
         result = scan(repo)
         entry = entry_of(result, "postcss.config.mjs")
         assert entry.skip_reason == SKIP_SYMLINK
@@ -471,7 +506,10 @@ class TestLimits:
         finding = next(f for f in result.pending if f.rule_id == "skipped-oversize")
         assert finding.severity is Severity.HIGH
 
-    @pytest.mark.skipif(os.geteuid() == 0, reason="root ignores file permissions")
+    @pytest.mark.skipif(
+        os.name == "nt" or getattr(os, "geteuid", lambda: 1)() == 0,
+        reason="POSIX chmod 0000 read-permission check",
+    )
     def test_unreadable_is_high(self, repo: Path) -> None:
         path = write(repo, "locked.py", "x = 1\n")
         commit(repo)
@@ -482,6 +520,16 @@ class TestLimits:
             path.chmod(0o644)
         assert "skipped-unreadable" in rule_ids(result.pending)
         assert entry_of(result, "locked.py").skip_reason == "unreadable"
+
+    def test_a_missing_working_tree_file_is_unreadable_high_on_every_platform(
+        self, repo: Path
+    ) -> None:
+        path = write(repo, "vanished.py", "x = 1\n")
+        commit(repo)
+        path.unlink()
+        result = scan(repo)
+        assert "skipped-unreadable" in rule_ids(result.pending)
+        assert entry_of(result, "vanished.py").skip_reason == SKIP_UNREADABLE
 
 
 class TestDecoding:
@@ -662,13 +710,20 @@ class TestStateFindingsAreFindings:
             '[submodule "vendored"]\n\tpath = vendored\n\turl = https://example.invalid/v.git\n'
             '[submodule "gone"]\n\tpath = gone\n\turl = https://example.invalid/g.git\n',
         )
-        (repo / "link.py").symlink_to(repo / "outside.txt")
+        try:
+            (repo / "link.py").symlink_to(repo / "outside.txt")
+            symlink_on_disk = True
+        except OSError:
+            symlink_on_disk = False
         git(repo, "add", "-A")
         commit(repo)
         # After the commit, because `commit` stages the working tree and a fresh `git add -A`
         # would drop a mode the working tree cannot produce.
+        if not symlink_on_disk:
+            stage_blob(repo, "link.py", str(repo / "outside.txt"), mode="120000")
         git(repo, "update-index", "--add", "--cacheinfo", f"160000,{GITLINK_SHA},vendored")
         git(repo, "update-index", "--add", "--cacheinfo", f"160000,{GITLINK_SHA},unmapped")
+        stage_blob(repo, "aux.js", DROPPER)
 
         collection = collect(repo, Policy(max_file_bytes=160), ROLE_GLOBS)
 
@@ -678,7 +733,247 @@ class TestStateFindingsAreFindings:
             "submodule-orphan",
             "skipped-symlink",
             "skipped-oversize",
+            "skipped-nonportable-path",
         } <= set(rule_ids(collection.pending))
         findings = number_occurrences(collection.pending)
         assert all(finding.fingerprint.startswith("sha256:") for finding in findings)
         assert len({finding.fingerprint for finding in findings}) == len(findings)
+
+
+class TestWindowsAndPathPortability:
+    """Windows runner, path separator and case-insensitive path tests (task 7.8, #28)."""
+
+    @pytest.mark.parametrize(
+        "reserved_path,expected_device",
+        [
+            ("NUL", "NUL"),
+            ("nul.js", "NUL"),
+            ("src/NUL", "NUL"),
+            ("src/nul.postcss.config.mjs", "NUL"),
+            ("CON", "CON"),
+            ("aux.js", "AUX"),
+            ("com1.txt", "COM1"),
+            ("lpt1.js", "LPT1"),
+            ("PRN.", "PRN"),
+        ],
+    )
+    def test_reserved_windows_device_names_fail_closed_with_skipped_nonportable_path(
+        self, repo: Path, reserved_path: str, expected_device: str
+    ) -> None:
+        write(repo, "seed.py", "x = 1\n")
+        commit(repo)
+        stage_blob(repo, reserved_path, DROPPER)
+
+        result = scan(repo)
+
+        entry = entry_of(result, reserved_path)
+        assert entry.skip_reason == SKIP_NONPORTABLE_PATH
+        assert entry.text is None
+        assert entry.sha256 is None
+        assert result.files_skipped == {SKIP_NONPORTABLE_PATH: 1}
+        assert rule_ids(result.pending) == ["skipped-nonportable-path"]
+        finding = result.pending[0]
+        assert finding.severity is Severity.HIGH
+        assert finding.path == reserved_path
+        assert finding.suppressible is False
+        assert expected_device in finding.message
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="measures Win32 NUL device resolution")
+    def test_win32_nul_device_resolves_to_character_device_without_extended_prefix(
+        self, repo: Path
+    ) -> None:
+        """Confirm the #28 hypothesis directly on a Windows NTFS runner."""
+        target = repo / "NUL"
+        st = os.stat(target)
+        assert stat.S_ISCHR(st.st_mode) is True
+        assert stat.S_ISREG(st.st_mode) is False
+        assert os.path.getsize(target) == 0
+        assert target.read_bytes() == b""
+        assert os.path.abspath(str(target)).upper() == "\\\\.\\NUL"
+        extended = f"\\\\?\\{repo}\\NUL"
+        with pytest.raises(FileNotFoundError):
+            os.stat(extended)
+
+    def test_ordinary_filenames_starting_with_device_prefixes_are_scanned(self, repo: Path) -> None:
+        for rel in ("nullable.py", "auxiliary.js", "conftest.py", "printer.ts", "commerce.rs"):
+            write(repo, rel, "x = 1\n")
+        commit(repo)
+
+        result = scan(repo)
+
+        assert result.pending == ()
+        assert result.files_skipped == {}
+        assert len(result.entries) == 5
+
+    def test_a_tracked_path_with_a_backslash_in_its_filename_fails_closed(self, repo: Path) -> None:
+        write(repo, "dir/postcss.config.mjs", "export default {}\n")
+        commit(repo)
+        stage_blob(repo, "dir\\postcss.config.mjs", DROPPER)
+
+        result = scan(repo)
+
+        paths = [entry.path for entry in result.entries]
+        assert paths == ["dir/postcss.config.mjs", "dir%5Cpostcss.config.mjs"]
+        assert entry_of(result, "dir/postcss.config.mjs").skip_reason is None
+        assert entry_of(result, "dir/postcss.config.mjs").text == "export default {}\n"
+        assert entry_of(result, "dir%5Cpostcss.config.mjs").skip_reason == SKIP_NONPORTABLE_PATH
+
+        assert rule_ids(result.pending) == ["skipped-nonportable-path"]
+        finding = result.pending[0]
+        assert finding.path == "dir%5Cpostcss.config.mjs"
+        assert finding.severity is Severity.HIGH
+        assert finding.roles == ("tooling-config", "source")
+        assert finding.evidence == "dir\\postcss.config.mjs"
+        assert finding.suppressible is False
+        assert result.files_skipped == {SKIP_NONPORTABLE_PATH: 1}
+        numbered = number_occurrences(result.pending)
+        assert len(numbered) == 1
+        assert numbered[0].rule_id == "skipped-nonportable-path"
+
+        lone_entry, lone_findings = _collect_one(
+            repo,
+            IndexEntry(mode="100644", path="\\"),
+            Policy(),
+            ROLE_GLOBS,
+        )
+        assert lone_entry.path == "%5C"
+        assert lone_entry.path != "."
+        assert lone_entry.skip_reason == SKIP_NONPORTABLE_PATH
+        assert len(lone_findings) == 1
+        assert lone_findings[0].path == "%5C"
+        assert lone_findings[0].evidence == "\\"
+
+    def test_case_insensitive_index_collision_never_merges_two_paths_into_one(
+        self, repo: Path
+    ) -> None:
+        rules_root = Path(__file__).resolve().parents[2] / "rules"
+        role_globs = load_role_globs(rules_root / "roles.toml")
+        rules = load_rules(
+            rules_root / "builtin",
+            known_detectors=DETECTOR_NAMES,
+            known_roles=known_roles(role_globs),
+        )
+        policy = Policy()
+        write(repo, "postcss.config.mjs", DROPPER)
+        commit(repo)
+        # On a case-sensitive filesystem (Linux ext4), writing the uppercase sibling creates a
+        # second distinct file on disk; on a case-insensitive filesystem (Windows NTFS), both
+        # paths resolve to the same file on disk and `stage_blob` puts the second entry in the
+        # index.
+        if (repo / "postcss.config.MJS").resolve().name != "postcss.config.mjs":
+            write(repo, "postcss.config.MJS", DROPPER)
+        stage_blob(repo, "postcss.config.MJS", DROPPER)
+
+        collection = collect(repo, policy, role_globs)
+        all_pending = [
+            *collection.pending,
+            *runner.collect(
+                ScanContext(
+                    entries=collection.entries,
+                    policy=policy,
+                    manifest=EMPTY_MANIFEST,
+                    rules=rules,
+                )
+            ),
+        ]
+        findings = number_occurrences(all_pending)
+        high_by_path: dict[str, list[str]] = {}
+        for item in findings:
+            if item.severity is Severity.HIGH:
+                high_by_path.setdefault(item.path, []).append(item.rule_id)
+
+        assert set(high_by_path) == {"postcss.config.MJS", "postcss.config.mjs"}
+        assert "cfg-dynamic-code" in high_by_path["postcss.config.mjs"]
+        assert set(high_by_path["postcss.config.MJS"]) & {
+            "cfg-dynamic-code",
+            "skipped-nonportable-path",
+        }
+        assert len({item.fingerprint for item in findings}) == len(findings)
+
+    def test_case_insensitive_collision_where_working_tree_file_is_clean_fails_closed(
+        self, repo: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        write(repo, "postcss.config.mjs", "export default {}\n")
+        commit(repo)
+        if not (repo / "postcss.config.MJS").exists():
+            # On case-sensitive Linux, hardlink the uppercase name to the lowercase file so both
+            # index paths resolve to the same working-tree inode just as they do on NTFS.
+            os.link(repo / "postcss.config.mjs", repo / "postcss.config.MJS")
+        stage_blob(repo, "postcss.config.MJS", DROPPER)
+        monkeypatch.setattr(
+            "airlock.collector._actual_disk_relpath",
+            lambda _root, _target: "postcss.config.mjs",
+        )
+
+        result = scan(repo)
+
+        assert rule_ids(result.pending) == ["skipped-nonportable-path"]
+        finding = result.pending[0]
+        assert finding.severity is Severity.HIGH
+        assert finding.path == "postcss.config.MJS"
+        assert finding.roles == ("tooling-config", "source")
+        assert entry_of(result, "postcss.config.MJS").skip_reason == SKIP_NONPORTABLE_PATH
+        assert entry_of(result, "postcss.config.mjs").skip_reason is None
+
+    def test_non_regular_working_tree_file_fails_closed_as_skipped_unreadable(
+        self, repo: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        write(repo, "pipe.py", "x = 1\n")
+        commit(repo)
+        target_pipe = repo / "pipe.py"
+        mkfifo = getattr(os, "mkfifo", None)
+        if mkfifo is not None:
+            target_pipe.unlink()
+            mkfifo(target_pipe)
+        else:
+            real_lstat = os.lstat
+
+            def fake_lstat(target: os.PathLike[str] | str):
+                st = real_lstat(target)
+                if Path(target).name == "pipe.py":
+                    return os.stat_result((stat.S_IFIFO | 0o600, *st[1:]))
+                return st
+
+            monkeypatch.setattr("airlock.collector.os.lstat", fake_lstat)
+
+        result = scan(repo)
+        assert rule_ids(result.pending) == ["skipped-unreadable"]
+        assert entry_of(result, "pipe.py").skip_reason == SKIP_UNREADABLE
+
+    def test_regular_index_entry_replaced_on_disk_by_symlink_outside_repo_fails_closed(
+        self, repo: Path, tmp_path: Path
+    ) -> None:
+        outside = tmp_path / "outside-secret.txt"
+        outside.write_text("SECRET_FROM_OUTSIDE\n", encoding="utf-8")
+        write(repo, "dir/x.py", "x = 1\n")
+        commit(repo)
+        link_path = repo / "dir" / "x.py"
+        link_path.unlink()
+        try:
+            os.symlink(outside, link_path)
+        except OSError:
+            pytest.skip("unprivileged symlink creation unavailable on this host")
+
+        result = scan(repo)
+        assert rule_ids(result.pending) == ["skipped-unreadable"]
+        entry = entry_of(result, "dir/x.py")
+        assert entry.skip_reason == SKIP_UNREADABLE
+        assert entry.text is None
+        assert entry.sha256 is None
+
+    def test_skipped_nonportable_path_state_rule_has_a_positive_and_a_negative_repo_case(
+        self, tmp_path: Path
+    ) -> None:
+        rule_id = "skipped-nonportable-path"
+        assert rule_id in STATE_RULE_IDS
+        pos = tmp_path / f"pos-{rule_id}"
+        neg = tmp_path / f"neg-{rule_id}"
+        for root in (pos, neg):
+            root.mkdir()
+            git(root, "init", "-q", "--initial-branch=main")
+            write(root, "keep.py", "x = 1\n")
+            commit(root)
+        stage_blob(pos, "aux.js", DROPPER)
+
+        assert rule_id in rule_ids(scan(pos).pending)
+        assert rule_id not in rule_ids(scan(neg).pending)
