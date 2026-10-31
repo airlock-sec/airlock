@@ -61,10 +61,6 @@ from .report import console, github, jsonout, summary
 from .roles import known_roles
 from .rules import load_role_globs, load_rules
 
-#: The repository root in a source checkout, which is also what `$GITHUB_ACTION_PATH` holds
-#: when the Action runs (`ARCHITECTURE.md` 10).
-REPO_ROOT = Path(__file__).resolve().parents[2]
-
 
 def rules_root(package_dir: Path) -> Path:
     """Where the rule data for the copy of the tool at `package_dir` lives.
