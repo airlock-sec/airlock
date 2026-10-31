@@ -113,7 +113,7 @@ The rule that the whole design rests on: **a change cannot relax the rules it is
 |---|---|---|
 | `pr` | the pull request's base commit | gating a contribution |
 | `push` | `github.event.before`, the commit the push started at | gating a merge to a default branch |
-| `full` | the working tree, announced with an `untrusted-policy-source` INFO | a local look at your own repository |
+| `full` | the working tree, announced with an `untrusted-policy-source` INFO (WARN if a policy file is there but unreadable) | a local look at your own repository |
 
 A base that cannot be resolved is exit 2, not a scan against HEAD. A force push yields
 `history-rewritten`. A policy edited inside the change yields `policy-changed` and the base copy is

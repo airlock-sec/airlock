@@ -166,6 +166,8 @@ mode push:
       of HEAD (git merge-base --is-ancestor): finding history-rewritten (HIGH), bootstrap defaults
 mode full (local, manual, scheduled):
     read from the working tree, emit untrusted-policy-source (INFO) so the weaker guarantee is visible
+    - file absent: bootstrap defaults, untrusted-policy-source (INFO) says so
+    - file present but unreadable: bootstrap defaults, untrusted-policy-source (WARN) names the error type
 
 for each policy file:
     use the version at base; if the head version differs, emit policy-changed (WARN) with a diff summary
