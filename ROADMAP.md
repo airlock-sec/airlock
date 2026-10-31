@@ -1,6 +1,6 @@
 # ROADMAP: Airlock
 
-Last updated: 2026-10-31 06:31 UTC
+Last updated: 2026-10-31 07:07 UTC
 
 Roadmap version: 1
 
@@ -48,10 +48,10 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 | 4 | Action and dogfood | 0 | 7 | 0% |
 | 5 | Release v0.1.0 | 1 | 7 | 14% |
 | 6 | Stellar detectors | 0 | 5 | 0% |
-| 7 | Hardening and edge cases | 8 | 16 | 50% |
+| 7 | Hardening and edge cases | 9 | 17 | 53% |
 | 8 | Release v0.2.0 and community | 1 | 6 | 17% |
 | 9 (backlog) | Backlog | 0 | 10 | 0% |
-| **Phases 0 to 8** | **Readiness total** | **55** | **102** | **54%** |
+| **Phases 0 to 8** | **Readiness total** | **56** | **103** | **54%** |
 | Gates | G1 to G10 | 0 | 10 | 0% |
 <!-- PROGRESS:END -->
 
@@ -284,6 +284,8 @@ families.
 
 - [x] **7.16** Remove `cli.REPO_ROOT`, dead since 5.7 replaced the resolution it came from with `rules_root`. S. Deps: 5.7. Done when: a grep-recorded sweep of every other module-level name in `cli.py` (`RULES_ROOT`, `DEFAULT_RULES_DIR`, `DEFAULT_ROLES_FILE`, `EVENT_MODES`, `RENDERERS`, `STEP_SUMMARY_ENV`, `WASM_RULE_PREFIX`) confirms each is read somewhere, the wheel-layout and checkout-layout `rules_root` tests are unchanged, and a new test fails without the removal. (done 2026-10-31, #63: `git grep` found nothing reading `REPO_ROOT` outside its own definition and the four test files that compute their own copy; `tests/unit/test_cli.py` now defines its own `REPO_ROOT` for the one test that used the import, matching the other test files, and `TestNoDeadModuleNames::test_repo_root_was_removed_as_dead_code` asserts `cli` carries no such attribute, confirmed failing against the pre-fix module. Every other module-level name in `cli.py` is read inside the module itself or imported by `test_cli.py`; see the change record for the full grep. `ARCHITECTURE.md` 10 already describes `cli.rules_root`, not `REPO_ROOT`, and `AGENTS.md` makes no mention of either name, so neither doc needed a wording fix.)
 
+- [x] **7.17** Point the withheld and suppression notes at a command this run can always satisfy. S. Deps: 2.9. (done 2026-10-31, #79: `github._withheld_note` and the suppression notice promised "the step summary and JSON output," neither of which a `--format github` run necessarily produces. Both now end in the same `github.FULL_LIST_HINT` sentence telling the reader to rerun with `--format json` and the same `--mode`/`--base`/`--before`, which lists everything regardless of how this run was invoked. The withheld count is untouched, and `INFO_ANNOTATIONS` still leaves two slots for the two `::notice` lines. `tests/unit/test_report.py::TestGithubAnnotations::test_the_withheld_note_names_the_command_that_lists_everything` and `test_the_withheld_and_suppression_notes_share_the_same_sentence` cover the new wording and the shared sentence; both failed against the old f-strings (verified by stashing the `github.py` change) before the fix.)
+
 ### Phase 8: Release v0.2.0 and community
 
 - [ ] **8.1** Update every doc for v0.2 behavior (`PRD.md`, `ARCHITECTURE.md`, `ARCHITECTURE_ESSENTIALS.md`, `project_structure.md`, `README.md`, `AGENTS.md`, `CLAUDE.md`). M. Deps: Phases 6 and 7. Gate G7.
@@ -377,6 +379,7 @@ by slug, and one pair the hand-written table had the wrong way round is now corr
 <!-- CHANGELOG:START -->
 | Date (UTC) | Change | Tasks |
 |---|---|---|
+| 2026-10-31 07:07 | Close #79 (task 7.17); the GitHub annotation reporter's withheld and suppression notes name a command that this run can always satisfy, instead of a step summary or JSON file it may not have produced. [details](docs/changes/2026-10-31-0707-withheld-note-command-not-promise.md) | 7.17 |
 | 2026-10-31 06:31 | Tick 1.18 after Scorecard on main reports Pinned-Dependencies 10 and the overall score moves from 6.9 to 7.0. [details](docs/changes/2026-10-31-0631-tick-pinned-ci-dependencies.md) | 1.18 |
 | 2026-10-31 06:19 | Hash-pin the CI toolchain and build backend, install with --require-hashes, and install the project from a wheel so every pip command in CI is pinned. [details](docs/changes/2026-10-31-0619-hash-pinned-ci-install.md) | 1.18 |
 | 2026-10-31 06:13 | Close #63 (task 7.16): delete the dead `cli.REPO_ROOT` and record what reads every other module-level name in `cli.py`. [details](docs/changes/2026-10-31-0613-remove-dead-cli-repo-root.md) | 7.16 |

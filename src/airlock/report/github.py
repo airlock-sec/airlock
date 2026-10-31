@@ -34,6 +34,14 @@ INFO_ANNOTATIONS = ANNOTATIONS_PER_LEVEL - 2
 #: The command name GitHub reads each severity level into.
 _COMMANDS = {Severity.HIGH: "error", Severity.WARN: "warning", Severity.INFO: "notice"}
 
+#: What the withheld note and the suppression note both point to: a command that always exists on
+#: this run, rather than a step summary or a JSON file that this invocation may not have produced
+#: (issue #79). Both notes end in this exact sentence so neither drifts from the other.
+FULL_LIST_HINT = (
+    "rerun this scan with `--format json` and the same `--mode`, `--base` and `--before` "
+    "to see the full list."
+)
+
 
 def escape_property(value: str) -> str:
     """Escape the five characters GitHub treats specially inside a workflow command property."""
@@ -57,10 +65,7 @@ def _annotation(finding: Finding, command: str) -> str:
 
 
 def _withheld_note(severity: Severity, count: int) -> str:
-    body = (
-        f"{count} {severity.label.upper()} finding(s) are not annotated above; "
-        "the step summary and JSON output list them all."
-    )
+    body = f"{count} {severity.label.upper()} finding(s) are not annotated above; {FULL_LIST_HINT}"
     return f"::{_COMMANDS[severity]} title=airlock::{escape_data(body)}"
 
 
@@ -89,7 +94,7 @@ def render(
     if report.suppressed:
         body = (
             f"{len(report.suppressed)} finding(s) are hidden by the trusted airlock.toml; "
-            "the JSON output names each one and its reason."
+            f"{FULL_LIST_HINT}"
         )
         lines.append(f"::notice title=airlock::{escape_data(body)}")
     return "\n".join(lines) + ("\n" if lines else "")
