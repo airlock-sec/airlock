@@ -1,0 +1,32 @@
+# Dependabot (task 1.6).
+#
+# Two ecosystems, both weekly and grouped, so a normal week is one pull request per ecosystem
+# rather than one per action or package. The pip ecosystem reads the `dev` group in
+# `pyproject.toml`; the runtime dependency list is empty on purpose (AGENTS.md 4).
+#
+# Dependabot pull requests are ordinary pull requests. They need a record under `docs/changes/`
+# and a regenerated `ROADMAP.md`, and the roadmap gate will fail them if either is missing.
+
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      actions:
+        patterns: ["*"]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      python:
+        patterns: ["*"]
+    open-pull-requests-limit: 5

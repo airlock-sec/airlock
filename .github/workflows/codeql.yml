@@ -1,0 +1,45 @@
+# CodeQL static analysis (task 1.17).
+#
+# This is the SAST tool Scorecard's SAST check looks for. It runs on pushes to `main`, weekly,
+# and on pull requests whose head is a branch of this repository. Fork pull requests are skipped
+# because `security-events: write` is not granted to them, so the upload would fail; their code
+# is analyzed on `main` after it merges.
+#
+# Both actions are pinned by commit SHA with the tag each was resolved from (AGENTS.md 9). The
+# pin is the same one `.github/workflows/scorecard.yml` uses for upload-sarif, and Dependabot
+# (1.6) updates it.
+#
+# `security-events: write` is the only write permission and it is job-level. The workflow does
+# not gate a merge: findings appear in code scanning, while the required checks remain `checks`
+# and `roadmap`.
+
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "17 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze Python
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          languages: python
+      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          category: "/language:python"

@@ -388,6 +388,53 @@ class TestSubmodules:
 
         assert {"nul-in-text", "submodule-unmapped"} <= set(rule_ids(result.pending))
         assert "submodule-present" not in rule_ids(result.pending)
+        unmapped = next(f for f in result.pending if f.rule_id == "submodule-unmapped")
+        assert unmapped.severity is Severity.HIGH
+        assert "nul-in-text" in unmapped.message
+        assert "severity remains HIGH" in unmapped.message
+
+    def test_an_oversize_gitmodules_names_its_skip_reason_in_the_unmapped_gitlink(
+        self, repo: Path
+    ) -> None:
+        text = (
+            f'[submodule "vendor/lib"]\n\tpath = vendor/lib\n\turl = {self.SUBMODULE_URL}\n'
+            + "#" * 256
+        )
+        write(repo, ".gitmodules", text)
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "seed")
+        self.add_gitlink(repo)
+
+        result = scan(repo, Policy(max_file_bytes=200))
+
+        assert "skipped-oversize" in rule_ids(result.pending)
+        unmapped = next(f for f in result.pending if f.rule_id == "submodule-unmapped")
+        assert unmapped.severity is Severity.HIGH
+        assert "skipped-oversize" in unmapped.message
+        assert "severity remains HIGH" in unmapped.message
+
+    def test_a_malformed_gitmodules_section_stays_orphaned_and_gitlink_unmapped(
+        self, repo: Path
+    ) -> None:
+        write(
+            repo,
+            ".gitmodules",
+            '[submodule "vendor/other"]\n\tpath = vendor/other\n',
+        )
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "seed")
+        self.add_gitlink(repo)
+
+        result = scan(repo)
+
+        assert {"submodule-orphan", "submodule-unmapped"} <= set(rule_ids(result.pending))
+        orphan = next(f for f in result.pending if f.rule_id == "submodule-orphan")
+        unmapped = next(f for f in result.pending if f.rule_id == "submodule-unmapped")
+        assert orphan.severity is Severity.WARN
+        assert "vendor/other" in orphan.message
+        assert "missing a single path and url" in orphan.message
+        assert unmapped.severity is Severity.HIGH
+        assert "no matching path and url" in unmapped.message
 
     @pytest.mark.parametrize(
         "rule_id",
