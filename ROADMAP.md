@@ -1,6 +1,6 @@
 # ROADMAP: Airlock
 
-Last updated: 2026-10-31 06:31 UTC
+Last updated: 2026-10-31 08:36 UTC
 
 Roadmap version: 1
 
@@ -44,14 +44,14 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 | 0 | Decisions and validation | 8 | 16 | 50% |
 | 1 | Repository bootstrap and self-protection | 17 | 18 | 94% |
 | 2 | Core engine | 16 | 16 | 100% |
-| 3 | P0 detectors | 4 | 11 | 36% |
+| 3 | P0 detectors | 5 | 12 | 42% |
 | 4 | Action and dogfood | 0 | 7 | 0% |
 | 5 | Release v0.1.0 | 1 | 7 | 14% |
 | 6 | Stellar detectors | 0 | 5 | 0% |
 | 7 | Hardening and edge cases | 8 | 16 | 50% |
 | 8 | Release v0.2.0 and community | 1 | 6 | 17% |
 | 9 (backlog) | Backlog | 0 | 10 | 0% |
-| **Phases 0 to 8** | **Readiness total** | **55** | **102** | **54%** |
+| **Phases 0 to 8** | **Readiness total** | **56** | **103** | **54%** |
 | Gates | G1 to G10 | 0 | 10 | 0% |
 <!-- PROGRESS:END -->
 
@@ -232,6 +232,7 @@ families.
 - [ ] **3.9** Bypass regression tests for all seven Appendix B cases under `tests/bypass/`. M. Deps: 0.4, 3.1, 3.4, 3.6; case 6 also waits on 6.4. Done when: all seven fail closed. (partial, 2026-10-30, #33: six of the seven are regressions, one module per case named `test_bypass_<n>_<slug>.py`. Cases 1, 2, 4, 5 and 7 assert the exact rule ids and severities rather than a bare exit code, so an unrelated HIGH cannot make them green: `wasm-unlisted` HIGH; `nul-in-text` plus `cfg-dynamic-code` HIGH on the same config; `pat-decode-eval` HIGH next to the wildcard allowlist; `cfg-dynamic-code` HIGH for `eval(decrypted)`; and `pat-decode-eval` HIGH under `vendor/`, which is case 7 and the one #32's sibling slice closed. Case 3 is a differential: the payload with and without the old script's inline marker must produce identical findings, so a marker that starts to matter fails the test instead of passing quietly. Case 6 is a skipped test that names 6.4, because `.cargo/config.toml` has no role and `cargo_vectors` is a docstring; it asserts fail-closed in its body, so removing the skip is all 6.4 has to do. The seven shapes and the repository builder come from `scripts/bypass_probe.py` rather than a second copy, so the probe and the tests cannot drift, and the payloads stay assembled from fragments there. The probe itself was split so the builder no longer installs an external scanner: `build` is the shared half and `install_script` is the probe's own step, with the `--script` contract unchanged, and `tests/unit/test_bypass_probe.py` drives `main` with stub scanners that exit 0 and 1 to keep both halves of that contract honest. `PRD.md` Appendix B records which cases are now regressions. Not done by this row: case 6, which is 6.4's to close, and the probe's original 7-of-7 result was not re-run, because the external `malware_scan.py` is not in this repository and is not committed here; the historical result stays as measured on 2026-10-27 and the stub tests prove the plumbing rather than the result)
 - [ ] **3.10** Self-scan test: Airlock passes its own scan with no `SELF` skip. S. Deps: 3.9. Done when: the test runs in CI.
 - [ ] **3.11** Cut the measured per-pattern scan cost, or record why not. `PRD.md` 7 asked for 50 ms per regex rule per 1 MB of adversarial text; task 2.12 measures `cfg-network` at about 63 ms and `cfg-chain-endpoint` at about 50 ms, while the worst single cap-length line is 10 ms. Candidate: a literal prefilter in `rules.apply_patterns` that skips a rule when none of its literal alternatives appear in the line, case-folded. L. Deps: 2.12, 3.3. Done when: the number is measured again after the change, the fixture gate still passes, and the corpus gate reports no lost findings. Not a promise that the prefilter is sound: it has to be proved not to drop a match.
+- [x] **3.12** `manifest add --dry-run`: print the entry a write would produce and write nothing. S. Deps: 3.5. Done when: the preview and the written file come from one code path, a bad target among several writes nothing and names the target, and the provenance note appears on both the preview and a real write. (done 2026-10-31: `manifest_add` in `policy.py` already rendered the complete new text before `_manifest_add` wrote it, so `--dry-run` is that same `change.text` printed instead of written; there is no second render for the preview to drift from. `tests/unit/test_cli.py::TestManifestCommands` adds `test_dry_run_writes_nothing_and_exits_clean`, `test_dry_run_output_and_the_written_file_are_one_code_path` (a written repo and a dry-run repo, same target, asserts the written bytes appear in the dry-run's printed output and the dry-run repo's manifest is byte-identical to before), `test_dry_run_states_origin_and_source_are_not_attested` and `test_the_write_carries_the_same_provenance_note_as_the_dry_run`. `test_a_bad_target_in_a_multi_add_writes_nothing_and_names_it` proves item 2 was already true before this task (validation in `manifest_add` raises before any write regardless of `--dry-run`) and documents it as a contract rather than an accident. Verified by stashing `src/airlock/cli.py` only and re-running the four new tests: all four failed for the right reason (`unrecognized arguments: --dry-run`, `module 'airlock.cli' has no attribute 'PROVENANCE_NOTE'`), the fifth (bad-target) already passed on the old code. `pytest` 843 passed (2 skipped, pre-existing), `ruff check`/`ruff format --check` clean, `mypy src` clean. `README.md`, `site/usage.html` and `ARCHITECTURE.md` 7.7 describe the flag; `PRD.md`'s `manifest add` paragraph and usage grid gained it too.)
 
 ### Phase 4: Action and dogfood
 
@@ -377,6 +378,7 @@ by slug, and one pair the hand-written table had the wrong way round is now corr
 <!-- CHANGELOG:START -->
 | Date (UTC) | Change | Tasks |
 |---|---|---|
+| 2026-10-31 08:36 | Close #86 (task 3.12): `manifest add --dry-run` prints the entry a write would produce and writes nothing, exiting 0 either way. [details](docs/changes/2026-10-31-0836-manifest-add-dry-run.md) | 3.5, 3.12 |
 | 2026-10-31 06:31 | Tick 1.18 after Scorecard on main reports Pinned-Dependencies 10 and the overall score moves from 6.9 to 7.0. [details](docs/changes/2026-10-31-0631-tick-pinned-ci-dependencies.md) | 1.18 |
 | 2026-10-31 06:19 | Hash-pin the CI toolchain and build backend, install with --require-hashes, and install the project from a wheel so every pip command in CI is pinned. [details](docs/changes/2026-10-31-0619-hash-pinned-ci-install.md) | 1.18 |
 | 2026-10-31 06:13 | Close #63 (task 7.16): delete the dead `cli.REPO_ROOT` and record what reads every other module-level name in `cli.py`. [details](docs/changes/2026-10-31-0613-remove-dead-cli-repo-root.md) | 7.16 |

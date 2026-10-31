@@ -93,6 +93,7 @@
             <tr><td class="mono">airlock scan --format github</td><td>Emits workflow commands as annotations. <b>console</b> is the default.</td></tr>
             <tr><td class="mono">airlock scan --format json --output report.json</td><td>Writes the machine-readable report instead of printing it.</td></tr>
             <tr><td class="mono">airlock manifest add &lt;targets&gt; ...</td><td>Records one or more artifacts by SHA-256 in <b>wasm-manifest.toml</b>. Stages nothing.</td></tr>
+            <tr><td class="mono">airlock manifest add &lt;targets&gt; ... --dry-run</td><td>Prints the entry the write would produce and writes nothing. Exits 0 either way.</td></tr>
             <tr><td class="mono">airlock manifest check</td><td>Runs the scan pipeline and keeps the <b>wasm-*</b> findings, so the manifest is judged the same way twice.</td></tr>
           </tbody>
         </table>
@@ -218,6 +219,7 @@ expires     = "2026-11-29"</pre>
           <p>The manifest is keyed by SHA-256, not by path, so a known artifact that moves is a WARN rather than a HIGH. An unlisted artifact, or one whose bytes changed, is HIGH.</p>
           <p>Land the manifest before the pull request that adds the artifacts. The trusted base is what a pull request is judged against, so a change that adds both at once has no reviewed entry to compare with.</p>
           <p>Archives are reported by <b>wasm-archive-skipped</b> because the scanner reads bytes and never unpacks them. A Wasm file inside a zip is an unexamined hole, not a pass.</p>
+          <p>A CI job that only wants to tell a maintainer "this artifact is unlisted, run <code>add</code>" should add <code>--dry-run</code>: it prints the entry the write would produce and touches nothing, exiting 0 either way so the flag is advice, not a gate.</p>
         </div>
       </div>
     </div>

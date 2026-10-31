@@ -154,6 +154,10 @@ airlock manifest check
 request that adds the files, which is the flow the trusted base assumes. `check` gates on the
 artifacts that are present: an unlisted or swapped one fails, a stale entry is named and does not.
 
+A CI job that only wants to tell a maintainer "this artifact is unlisted, run `add`" should add
+`--dry-run`: it prints the entry the write would produce and touches nothing, exiting 0 either way
+so the flag is advice, not a gate.
+
 Run from a checkout without installing, if you prefer:
 
 ```bash

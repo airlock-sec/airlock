@@ -19,9 +19,11 @@ Two rules the rest of the design depends on:
   add, edit or delete a rule by doing anything to its own files.
 
 `manifest add` writes the manifest from the file it is given: one command per artifact, and the
-result parses with the same loader the scan reads it with. `manifest check` runs the same pipeline
-as a scan and keeps the artifact findings, because "is my manifest right" is the wasm_manifest
-detector's question and reimplementing it here would be a second answer to it.
+result parses with the same loader the scan reads it with. `--dry-run` prints the same text in
+place of writing it, so a CI job can advise a maintainer without touching the protected file
+(task 3.12). `manifest check` runs the same pipeline as a scan and keeps the artifact findings,
+because "is my manifest right" is the wasm_manifest detector's question and reimplementing it
+here would be a second answer to it.
 """
 
 from __future__ import annotations
@@ -103,6 +105,16 @@ STEP_SUMMARY_ENV = "GITHUB_STEP_SUMMARY"
 #: filter at once rather than quietly widening it.
 WASM_RULE_PREFIX = "wasm-"
 
+#: Printed after every `manifest add`, dry run or real: `--origin` and `--source` are whatever the
+#: caller typed, not something the tool verified against the artifact. A CI job that prints a
+#: suggested entry is proposing it, not attesting to it (task 3.12, item 4).
+PROVENANCE_NOTE = (
+    "note: a new entry's origin and source are taken from the flags given here (a path that "
+    "joins an existing entry keeps that entry's recorded provenance), and neither is verified "
+    "against the artifact; read them as a question for whoever reviews the manifest change, "
+    "not an answer"
+)
+
 
 class UsageError(ValueError):
     """A configuration or usage problem: exit 2 with a plain message, never a traceback."""
@@ -152,6 +164,11 @@ def build_parser() -> argparse.ArgumentParser:
     add.add_argument("--source", required=True, help="where the artifact comes from")
     add.add_argument("--build", default="", help="the command that produces it, for origin built")
     add.add_argument("--note", default="", help="anything a reviewer needs to know")
+    add.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print the entry a write would produce, write nothing; advice, not a gate (exit 0)",
+    )
     check = verbs.add_parser("check", help="verify the manifest against the tree")
     check.add_argument("path", nargs="?", default=".", help="repository (default: cwd)")
     check.add_argument(
@@ -293,7 +310,12 @@ def _scan_command(args: argparse.Namespace) -> int:
 
 
 def _manifest_add(args: argparse.Namespace) -> int:
-    """Record each artifact by hash and write the manifest back.
+    """Record each artifact by hash and, unless `--dry-run`, write the manifest back.
+
+    `manifest_add` validates every target and renders the complete new text before this function
+    does anything else, so a bad path among several targets raises before a write is even
+    considered (item 2) and the one `change.text` it returns is what both `--dry-run` prints and
+    a real run writes (item 3): there is no second render for the preview to drift from.
 
     Nothing is staged or committed: `wasm-manifest.toml` is a protected path, so the operator
     reviews the diff and lands it in its own pull request, which is the flow the trusted base
@@ -312,18 +334,26 @@ def _manifest_add(args: argparse.Namespace) -> int:
     if change.unchanged:
         print(f"airlock: {args.manifest} already lists every target; nothing written")
         return EXIT_PASS
-    target = repo / args.manifest
-    try:
-        target.write_text(change.text, encoding="utf-8")
-    except OSError as exc:
-        raise UsageError(f"cannot write {target}: {exc.strerror or exc}") from exc
-    print(
-        f"airlock: {args.manifest}: "
-        + f"{len(change.added)} added, {len(change.extended)} path(s) joined"
-    )
+
+    if args.dry_run:
+        print(f"airlock: {args.manifest} (dry run, nothing written):")
+    else:
+        target = repo / args.manifest
+        try:
+            target.write_text(change.text, encoding="utf-8")
+        except OSError as exc:
+            raise UsageError(f"cannot write {target}: {exc.strerror or exc}") from exc
+        print(
+            f"airlock: {args.manifest}: "
+            + f"{len(change.added)} added, {len(change.extended)} path(s) joined"
+        )
     for entry in (*change.added, *change.extended):
         print(f"  {entry.sha256[:12]}  {', '.join(sorted(entry.paths))}")
-    print("land this change on its own before the pull request that adds the files (FR-06)")
+    print(PROVENANCE_NOTE)
+    if args.dry_run:
+        print(change.text, end="" if change.text.endswith("\n") else "\n")
+    else:
+        print("land this change on its own before the pull request that adds the files (FR-06)")
     return EXIT_PASS
 
 
