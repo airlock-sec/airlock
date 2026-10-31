@@ -165,7 +165,7 @@ PYTHONPATH=src python3 -m airlock scan --mode full
 |---|---|
 | 0 | nothing at or above `--fail-on` (default `high`) |
 | 1 | a finding at or above the threshold |
-| 2 | usage or configuration error, including an unresolvable base and a missing `git` |
+| 2 | usage or configuration error, including an unresolvable base, a missing `git`, and an unwritable manifest or report path |
 | 3 | internal error |
 
 A scan that could not run never reports success.

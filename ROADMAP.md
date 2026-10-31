@@ -1,6 +1,6 @@
 # ROADMAP: Airlock
 
-Last updated: 2026-10-30 22:22 UTC
+Last updated: 2026-10-31 00:21 UTC
 
 Roadmap version: 1
 
@@ -365,6 +365,7 @@ by slug, and one pair the hand-written table had the wrong way round is now corr
 <!-- CHANGELOG:START -->
 | Date (UTC) | Change | Tasks |
 |---|---|---|
+| 2026-10-31 00:21 | A manifest or report write that fails is reported as a usage error (exit 2) naming the path, not as an internal error (exit 3). [details](docs/changes/2026-10-31-0021-manifest-write-usage-error.md) | 2.10, 3.5 |
 | 2026-10-30 22:22 | Second issue intake: fifty-six standalone issues under `docs/issues/`, each grounded in a shipped file and a probe or audit finding, plus a README and a publisher that skips it. [details](docs/changes/2026-10-30-2222-second-issue-intake-fifty-six-issues.md) | 1.16 |
 | 2026-10-30 19:20 | Close #29 (5.2): `RULES.md` is generated from `rules/builtin/*.toml` by `scripts/rule_reference.py`, whose `--check` mode the unit suite runs, replacing the four hand-copied rule tables in `README.md`. [details](docs/changes/2026-10-30-1920-generated-rules-reference.md) | 5.2, D-10, G7 |
 | 2026-10-30 19:14 | Close #28 (7.8): the collector refuses a tracked path it cannot read as itself as skipped-nonportable-path HIGH, for Windows reserved device names, a literal backslash in a filename and case-insensitive index collisions. [details](docs/changes/2026-10-30-1914-windows-path-portability.md) | 7.8, 2.2, 2.4 |
