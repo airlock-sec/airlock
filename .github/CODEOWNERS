@@ -14,6 +14,26 @@
 /src/airlock/collector.py @Gabbydunkk
 /src/airlock/runner.py @Gabbydunkk
 
+# Truncation runs before the evidence is hashed, so this constant is what makes a fingerprint
+# a prefix comparison; a one-constant edit changes what every existing suppression matches
+/src/airlock/fingerprint.py @Gabbydunkk
+
+# The non-suppressible state-rule set and the Severity, Mode and exit-code contract
+/src/airlock/model.py @Gabbydunkk
+
+# The role and sensitivity resolution that is the coverage claim every rule depends on
+/src/airlock/roles.py @Gabbydunkk
+
+# The escaping boundary for evidence text, which is attacker-controlled
+/src/airlock/report/ @Gabbydunkk
+
+# Decides which policy was trusted and runs the pipeline in the one order the design fixes
+/src/airlock/cli.py @Gabbydunkk
+
+# A bypass regression is the assertion that a confirmed supply-chain bypass stays closed, the
+# same way a rule is; ordinary unit tests and fixtures are not swept in (docs/changes record)
+/tests/bypass/ @Gabbydunkk
+
 # Dogfood policy and the Wasm manifest
 /airlock.toml @Gabbydunkk
 /wasm-manifest.toml @Gabbydunkk
