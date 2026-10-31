@@ -1,6 +1,6 @@
 # ROADMAP: Airlock
 
-Last updated: 2026-10-30 19:20 UTC
+Last updated: 2026-10-31 00:21 UTC
 
 Roadmap version: 1
 
@@ -46,12 +46,12 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 | 2 | Core engine | 15 | 15 | 100% |
 | 3 | P0 detectors | 4 | 11 | 36% |
 | 4 | Action and dogfood | 0 | 7 | 0% |
-| 5 | Release v0.1.0 | 2 | 7 | 29% |
+| 5 | Release v0.1.0 | 1 | 7 | 14% |
 | 6 | Stellar detectors | 0 | 5 | 0% |
 | 7 | Hardening and edge cases | 5 | 13 | 38% |
 | 8 | Release v0.2.0 and community | 1 | 6 | 17% |
 | 9 (backlog) | Backlog | 0 | 10 | 0% |
-| **Phases 0 to 8** | **Readiness total** | **46** | **95** | **48%** |
+| **Phases 0 to 8** | **Readiness total** | **45** | **95** | **47%** |
 | Gates | G1 to G10 | 0 | 10 | 0% |
 <!-- PROGRESS:END -->
 
@@ -238,7 +238,7 @@ families.
 ### Phase 5: Release v0.1.0
 
 - [ ] **5.1** `README.md` complete: what it checks, what it does not, install snippet, limits, threat model summary, roadmap rule. M. Deps: 4.2. Done when: a new user can install in under five minutes.
-- [x] **5.2** Usage docs and rule reference (generated from `rules/*.toml`). M. Deps: 2.5. Done when: every rule has a documented ID, severity and rationale. (done 2026-10-30, #29: `scripts/rule_reference.py` loads `rules/builtin/*.toml` and `rules/roles.toml` once through `airlock.rules.load_rules` and `load_role_globs` so any rule the scanner refuses to load fails generation with exit 2 instead of appearing in the reference, and preserves the loader's rule ordering within each family. It emits `RULES.md` grouped by rule family (`builtin_patterns`, `ci_surface`, `config_role`, `wasm_manifest`) with a header stating total and per-family counts plus severity counts, a summary table whose `#<rule-id>` anchors resolve directly to bare `### \`<rule-id>\`` headings, and per-rule sections covering ID, title, severity, suppressibility, detector, roles, pattern shape (`kind` and expressions when present, `none (evaluated by detector code)` when `pattern is None`), fixture builder pair (`positive` and `negative`) and rationale. `--check` mode regenerates in memory and exits 1 when `RULES.md` is missing or disagrees with `rules/builtin/*.toml`, and `tests/unit/test_rule_reference.py::TestRuleReferenceGenerator::test_the_committed_rule_reference_is_current` runs `python scripts/rule_reference.py --check` as a subprocess inside the unit suite during the `checks` job of `.github/workflows/ci.yml` (the same pattern `test_roadmap_gate.py` and `test_build_site.py` use). Decision D-10 records the relationship between `RULES.md` (`scripts/rule_reference.py`) and `site/rules.html` plus `site/data/rules.json` (`scripts/build_site.py`), and `test_rule_reference_and_site_rules_json_agree_on_every_rule` cross-checks that both generators emit the identical rule-ID set and metadata. Dependency reordered from `3.7` to `2.5` (earlier draft listed `Deps: 3.7`): the generator reads `rules/builtin/*.toml` directly and is gated in the unit suite, so it documents all 24 currently shipped rules now and automatically requires any rule `3.7` adds to be regenerated into `RULES.md` before `3.7` can pass CI. `README.md` replaces its four hand-maintained rule tables with concise family framing and a link to `RULES.md`, and `tests/unit/test_rule_reference.py` adds 10 unit tests covering `--check`, per-rule rendering, internal `#anchor` slug resolution, parity with `site/data/rules.json`, stale-output and rule-edit detection, loader validation errors, and README/unit-suite gating.)
+- [ ] **5.2** Usage docs and rule reference (generated from `rules/*.toml`). M. Deps: 3.7. Done when: every rule has a documented ID, severity and rationale.
 - [ ] **5.3** Release workflow with build provenance attestation; documented and tested verification command; note on reviewing Action SHA bumps. M. Deps: 1.5. Done when: a test release verifies.
 - [ ] **5.4** Reach a Scorecard score of 8 or higher on the repo. M. Deps: 1.7. Done when: score recorded. Gate G5.
 - [ ] **5.5** Tag `v0.1.0`; publish the commit SHA consumers should pin. S. Deps: 4.7, 5.1 to 5.4. Done when: tag exists and gates G1 to G10 are reviewed for v0.1.
@@ -311,7 +311,6 @@ Parallelizable early: 0.6 to 0.14, 1.2, 1.6, 1.8, 1.10. The roadmap gate (1.9) s
 | D-07 | Roadmap gate has no exemptions, including dependency bumps | Decided 2026-10-27 | Matches the owner's instruction; Dependabot is grouped weekly to limit noise |
 | D-08 | Cut jsmask, SARIF-in-v0.1, `init`, `rules test` CLI, `deploy_gate`, SEP-58 parser from v0.1 | Decided 2026-10-27 | `ARCHITECTURE.md` 16.4 |
 | D-09 | SARIF fingerprint key | Decided 2026-10-28 | `partialFingerprints["airlock/v1"]`, matching D-01; ADR-019. Replaces the draft `repoGuard/v1` before SARIF ships, so no consumer migration is needed. Algorithm unchanged; implementation remains 7.6. |
-| D-10 | Two generated rule views (`RULES.md` and `site/rules.html` + `site/data/rules.json`) | Decided 2026-10-30 | `rules/builtin/*.toml` and `rules/roles.toml` (loaded via `airlock.rules`) are the single authoritative source. `RULES.md` (`scripts/rule_reference.py`, task 5.2) is the canonical in-tree Markdown reference, and `site/rules.html` plus `site/data/rules.json` (`scripts/build_site.py`, task 8.6) are the HTML and JSON site outputs over the same TOML data; the two renderers remain separate because one emits Markdown and one emits HTML/JSON, and `tests/unit/test_rule_reference.py` cross-checks that both generators emit the identical rule-ID set, titles, families, severities, detectors, roles and suppressibility flags so they cannot drift. |
 
 ## 8. Risk register
 
@@ -364,6 +363,7 @@ by slug, and one pair the hand-written table had the wrong way round is now corr
 <!-- CHANGELOG:START -->
 | Date (UTC) | Change | Tasks |
 |---|---|---|
+| 2026-10-31 00:21 | A manifest or report write that fails is reported as a usage error (exit 2) naming the path, not as an internal error (exit 3). [details](docs/changes/2026-10-31-0021-manifest-write-usage-error.md) | 2.10, 3.5 |
 | 2026-10-30 19:20 | Close #29 (5.2): `RULES.md` is generated from `rules/builtin/*.toml` by `scripts/rule_reference.py`, whose `--check` mode the unit suite runs, replacing the four hand-copied rule tables in `README.md`. [details](docs/changes/2026-10-30-1920-generated-rules-reference.md) | 5.2, D-10, G7 |
 | 2026-10-30 19:14 | Close #28 (7.8): the collector refuses a tracked path it cannot read as itself as skipped-nonportable-path HIGH, for Windows reserved device names, a literal backslash in a filename and case-insensitive index collisions. [details](docs/changes/2026-10-30-1914-windows-path-portability.md) | 7.8, 2.2, 2.4 |
 | 2026-10-30 17:36 | Take the changelog out of `ROADMAP.md`: one record per change under `docs/changes/`, the section 9 block and `Last updated` generated from them, and the roadmap gate asking for a record instead of an edit to the shared file. [details](docs/changes/2026-10-30-1736-generated-changelog-moves.md) | 1.15, 1.9 |
