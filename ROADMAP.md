@@ -1,6 +1,6 @@
 # ROADMAP: Airlock
 
-Last updated: 2026-10-31 06:31 UTC
+Last updated: 2026-10-31 07:24 UTC
 
 Roadmap version: 1
 
@@ -48,10 +48,10 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 | 4 | Action and dogfood | 0 | 7 | 0% |
 | 5 | Release v0.1.0 | 1 | 7 | 14% |
 | 6 | Stellar detectors | 0 | 5 | 0% |
-| 7 | Hardening and edge cases | 8 | 16 | 50% |
+| 7 | Hardening and edge cases | 9 | 16 | 56% |
 | 8 | Release v0.2.0 and community | 1 | 6 | 17% |
 | 9 (backlog) | Backlog | 0 | 10 | 0% |
-| **Phases 0 to 8** | **Readiness total** | **55** | **102** | **54%** |
+| **Phases 0 to 8** | **Readiness total** | **56** | **102** | **55%** |
 | Gates | G1 to G10 | 0 | 10 | 0% |
 <!-- PROGRESS:END -->
 
@@ -276,7 +276,7 @@ families.
 - [x] **7.11** Suppression churn tests: expiry warning, occurrence reindexing after edits. S. Deps: 2.8. (done 2026-10-28 by audit, #25: `tests/unit/test_suppression.py::TestExpiry` covers expiry yesterday, today, days 1/30/31, duplicate warning prevention and an injected UTC date. `TestOccurrences::test_B5_a_second_copy_of_a_suppressed_line_is_reported` returns the added copy; `test_deleting_the_first_copy_returns_the_later_suppression` returns the survivor after reindexing. `TestMatching::test_a_suppressed_line_that_moved_stays_suppressed` and `test_a_different_evidence_on_the_same_line_is_not_covered` distinguish movement from changed evidence. Real numbering and suppression run on synthetic findings; real-repository churn measurement remains unverified.)
 - [x] **7.12** Settle the SARIF `partialFingerprints` key after the rename. S. Deps: 1.12. (done 2026-10-28, #22: D-09 and ADR-019 settle `airlock/v1` in architecture 6.6, the SARIF stub, PRD FR-19 and essentials. No migration is needed before the reporter ships. Two tests in `TestDocumentedConstants` read the actual reporter row and stub docstring, so an unrelated mention cannot hide a stale key. Both failed before the documentation change. SARIF remains unimplemented under 7.6; the fingerprint algorithm is unchanged.)
 
-- [ ] **7.13** Keep the step summary inside GitHub's 1 MiB per-step ceiling. M. Deps: 2.9, 0.9. Done when: a report with enough HIGHs to pass the ceiling still reaches a reviewer and names what it could not show, with a test that renders past the budget. Found while measuring 0.9 (`ARCHITECTURE.md` 6.6): above 1 MiB the runner aborts the upload, creates an error annotation, and leaves both the step and the job green, so finding volume alone can delete the summary a reviewer reads. The 20-summaries-per-job limit constrains any chunked design. `summary.py` has no byte budget today, and the "every HIGH is listed" property in 6.6 is what has to be traded or split across steps deliberately.
+- [x] **7.13** Keep the step summary inside GitHub's 1 MiB per-step ceiling. M. Deps: 2.9, 0.9. Done when: a report with enough HIGHs to pass the ceiling still reaches a reviewer and names what it could not show, with a test that renders past the budget. Found while measuring 0.9 (`ARCHITECTURE.md` 6.6): above 1 MiB the runner aborts the upload, creates an error annotation, and leaves both the step and the job green, so finding volume alone can delete the summary a reviewer reads. The 20-summaries-per-job limit constrains any chunked design. `summary.py` has no byte budget today, and the "every HIGH is listed" property in 6.6 is what has to be traded or split across steps deliberately. (done 2026-10-31, issue #78: `report/summary.py` now renders against `SUMMARY_BYTE_BUDGET` (524,288 bytes, half of the documented 1 MiB ceiling, cleared of both 0.9's observed failure points rather than skimmed under one), degrading in the stated order, every HIGH's row kept first, evidence blocks added from what budget remains and dropped first, and only a row count that alone exceeds the budget caps the list, each loss named in a note pointing at `airlock scan --format json` rather than left silent. `TestSummaryBudget` in `tests/unit/test_report.py` has six test methods: a 3000-HIGH-with-evidence flood asserts the document still fits the budget, every row survives, earlier evidence is intact, and the withheld-evidence note names the count; a second case floods 60,000 evidence-free HIGHs to force the row cap itself and asserts the same document-fits and withheld-count properties; a sixth checks the fence count stays even. Three fail against the pre-fix module (the document-fits assertion on each flood, `AttributeError: SUMMARY_BYTE_BUDGET`, and the withheld-evidence-note assertion, since the old render never drops anything); the other three pass unchanged against the pre-fix module (every row already survived, earlier evidence was already intact, every fence was already closed) and serve as regression guards rather than evidence the fix was needed. All six pass after. `ARCHITECTURE.md` 6.6 records the budget and the measurement it is set from in both the reporter table row and the narrative paragraph.)
 
 - [x] **7.14** Preserve gitlink reason IDs when `.gitmodules` has a state finding. S. Deps: 2.2, 7.2. Done when: the underlying state IDs appear in the corresponding `submodule-unmapped` message; severity remains HIGH and malformed-section `submodule-orphan` behavior is unchanged, covered by oversized and NUL temporary-repository tests plus a malformed-section regression.
 
@@ -377,6 +377,7 @@ by slug, and one pair the hand-written table had the wrong way round is now corr
 <!-- CHANGELOG:START -->
 | Date (UTC) | Change | Tasks |
 |---|---|---|
+| 2026-10-31 07:24 | Close #78 (task 7.13), budget the step summary to SUMMARY_BYTE_BUDGET and degrade evidence before rows. [details](docs/changes/2026-10-31-0724-summary-byte-budget.md) | 7.13 |
 | 2026-10-31 06:31 | Tick 1.18 after Scorecard on main reports Pinned-Dependencies 10 and the overall score moves from 6.9 to 7.0. [details](docs/changes/2026-10-31-0631-tick-pinned-ci-dependencies.md) | 1.18 |
 | 2026-10-31 06:19 | Hash-pin the CI toolchain and build backend, install with --require-hashes, and install the project from a wheel so every pip command in CI is pinned. [details](docs/changes/2026-10-31-0619-hash-pinned-ci-install.md) | 1.18 |
 | 2026-10-31 06:13 | Close #63 (task 7.16): delete the dead `cli.REPO_ROOT` and record what reads every other module-level name in `cli.py`. [details](docs/changes/2026-10-31-0613-remove-dead-cli-repo-root.md) | 7.16 |
