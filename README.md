@@ -84,9 +84,9 @@ drift from the TOML files.
 See [`RULES.md`](RULES.md) for the complete generated rule reference.
 
 The collector adds the state findings on top: `nul-in-text`, `non-utf8-text`, `skipped-oversize`,
-`skipped-unreadable`, `skipped-symlink`, `skipped-unmerged`, `submodule-present`,
-`submodule-unmapped`, `submodule-orphan`. Every one of them is a finding, because a file that was
-not read must not look the same as a file that was clean.
+`skipped-unreadable`, `skipped-symlink`, `skipped-unmerged`, `skipped-nonportable-path`,
+`submodule-present`, `submodule-unmapped`, `submodule-orphan`. Every one of them is a finding,
+because a file that was not read must not look the same as a file that was clean.
 
 The Stellar-side detectors (`soroban_profile`, `stellar_seed`, `cargo_vectors`) are designed in
 [ARCHITECTURE.md](ARCHITECTURE.md) 9 and not implemented: those modules carry docstrings and no
