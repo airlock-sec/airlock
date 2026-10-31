@@ -37,7 +37,7 @@ airlock/
     __main__.py                    # python -m airlock
     cli.py                         # argument parsing, command dispatch, exit codes                          (2.10)
     model.py                       # Severity, Mode, Finding, Rule, Policy, Manifest, ScanReport, FileEntry, ScanContext (2.1)
-    collector.py                   # git ls-files, reads, decoding, limits, startup checks                   (2.2, 2.3)
+    collector.py                   # git ls-files, reads, limits, startup checks, gitlink reason reporting (2.2, 2.3, 7.14)
     roles.py                       # glob matcher and content-magic role resolution                          (2.4)
     rules.py                       # rule loading, in-code validation, pattern engine, line cap              (2.5)
     fingerprint.py                 # occurrence-aware fingerprints                                           (2.6)

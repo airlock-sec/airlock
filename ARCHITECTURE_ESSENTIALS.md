@@ -71,6 +71,7 @@ Status: v0.2 (red-team revision). Outline of decisions an agent must not violate
 
 - Exit: 0 pass, 1 findings at or above `fail_on`, 2 config or usage error, 3 internal error.
 - Skip and state findings are never suppressible, even when a loaded rule declares otherwise. IDs: `skipped-oversize`, `skipped-unreadable`, `skipped-symlink`, `skipped-unmerged`, `skipped-nonportable-path`, `submodule-present`, `submodule-unmapped`, `submodule-orphan`, `nul-in-text`, `non-utf8-text`, `cfg-long-line`, `detector-error`, `history-rewritten`, `no-trusted-base`, `policy-changed`, `policy-unknown-key`, `suppression-expiring`, `suppression-invalid`, `untrusted-policy-source`.
+- When `.gitmodules` has state findings, each unmapped gitlink names those finding IDs and remains HIGH because its subtree was not scanned. [7.14]
 
 ## 7. Detectors
 
