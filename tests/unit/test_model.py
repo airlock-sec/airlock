@@ -406,6 +406,7 @@ class TestDocumentedConstants:
             "skipped-unreadable",
             "skipped-symlink",
             "skipped-unmerged",
+            "skipped-nonportable-path",
             "submodule-present",
             "submodule-unmapped",
             "submodule-orphan",
@@ -437,6 +438,7 @@ class TestDocumentedConstants:
         )
         assert "submodule-unmapped` (HIGH)" in fail_closed
         assert "submodule-orphan` (WARN)" in fail_closed
+        assert "skipped-nonportable-path` (HIGH)" in fail_closed
 
     def test_exit_codes_are_distinct(self) -> None:
         codes = {model.EXIT_PASS, model.EXIT_FINDINGS, EXIT_CONFIG, model.EXIT_INTERNAL}
