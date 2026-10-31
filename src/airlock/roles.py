@@ -142,6 +142,9 @@ def roles_from_magic(head: bytes) -> tuple[str, ...]:
 def _segment_pattern(segment: str) -> re.Pattern[str]:
     """Compile one path segment: `*` stays inside the segment, `?` matches one character.
 
+    Matched case-insensitively (`re.IGNORECASE`) so `Postcss.config.mjs`, `postcss.config.MJS`
+    and `.VSCODE/tasks.json` resolve to the same roles as their lowercase spellings on both
+    case-sensitive and case-insensitive filesystems (task 7.8), matching `fallback_role`.
     There is no local cache here: `re.compile` already memoizes, and a module-level dict
     would be the mutable state the code conventions forbid.
     """
@@ -153,7 +156,7 @@ def _segment_pattern(segment: str) -> re.Pattern[str]:
             parts.append("[^/]")
         else:
             parts.append(re.escape(char))
-    return re.compile("\\A" + "".join(parts) + "\\Z")
+    return re.compile("\\A" + "".join(parts) + "\\Z", re.IGNORECASE)
 
 
 def match_glob(pattern: str, path: str) -> bool:
