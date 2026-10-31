@@ -34,7 +34,7 @@ packages = ["src/airlock"]
 "rules" = "airlock/rules"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11"]
+dev = ["pytest>=9.2.0", "ruff>=0.17.3", "mypy>=2.4.0"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
