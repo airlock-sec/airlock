@@ -7,7 +7,9 @@ would let a wrong `git` argument list pass.
 
 from __future__ import annotations
 
+import os
 import subprocess
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -354,6 +356,92 @@ class TestFullMode:
 
         with pytest.raises(ValueError, match="over the"):
             resolve_policy(repo, Mode.FULL, head)
+
+    def test_an_oversize_manifest_file_is_a_config_error(self, repo: Path) -> None:
+        seed(repo)
+        write(repo, MANIFEST_FILENAME, "# " + "x" * 1_000_000)
+        head = git(repo, "rev-parse", "HEAD").strip()
+
+        with pytest.raises(ValueError, match="over the"):
+            resolve_policy(repo, Mode.FULL, head)
+
+    @pytest.mark.parametrize("name", [POLICY_FILENAME, MANIFEST_FILENAME])
+    def test_a_directory_in_place_of_the_file_is_unreadable_not_absent(
+        self, repo: Path, name: str
+    ) -> None:
+        seed(repo)
+        (repo / name).unlink()
+        (repo / name).mkdir()
+        head = git(repo, "rev-parse", "HEAD").strip()
+
+        result = resolve_policy(repo, Mode.FULL, head)
+
+        if name == POLICY_FILENAME:
+            assert result.policy is BOOTSTRAP_POLICY
+        else:
+            assert result.manifest is EMPTY_MANIFEST
+        (finding,) = [
+            item
+            for item in result.pending
+            if item.rule_id == "untrusted-policy-source" and item.path == name
+        ]
+        assert finding.severity is Severity.WARN
+        assert finding.evidence == "unreadable"
+        assert "could not be read (IsADirectoryError EISDIR)" in finding.message
+        assert "shipped defaults apply" in finding.message
+        assert f"no {name}" not in finding.message
+
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="Windows: chmod cannot refuse the owner a read"
+    )
+    @pytest.mark.skipif(
+        hasattr(os, "geteuid") and os.geteuid() == 0,
+        reason="Linux/macOS as root: root reads a mode 000 file",
+    )
+    @pytest.mark.parametrize("name", [POLICY_FILENAME, MANIFEST_FILENAME])
+    def test_a_file_without_read_permission_is_unreadable_not_absent(
+        self, repo: Path, name: str
+    ) -> None:
+        seed(repo)
+        head = git(repo, "rev-parse", "HEAD").strip()
+        target = repo / name
+        target.chmod(0)
+        try:
+            result = resolve_policy(repo, Mode.FULL, head)
+        finally:
+            target.chmod(0o644)
+
+        if name == POLICY_FILENAME:
+            assert result.policy is BOOTSTRAP_POLICY
+        else:
+            assert result.manifest is EMPTY_MANIFEST
+        (finding,) = [
+            item
+            for item in result.pending
+            if item.rule_id == "untrusted-policy-source" and item.path == name
+        ]
+        assert finding.severity is Severity.WARN
+        assert "could not be read (PermissionError EACCES)" in finding.message
+        assert f"no {name}" not in finding.message
+
+    def test_the_absent_message_is_unchanged(self, repo: Path) -> None:
+        seed(repo)
+        (repo / POLICY_FILENAME).unlink()
+        head = git(repo, "rev-parse", "HEAD").strip()
+
+        result = resolve_policy(repo, Mode.FULL, head)
+
+        (finding,) = [
+            item
+            for item in result.pending
+            if item.rule_id == "untrusted-policy-source" and item.path == POLICY_FILENAME
+        ]
+        assert finding.severity is Severity.INFO
+        assert finding.evidence == "absent"
+        assert (
+            finding.message
+            == f"no {POLICY_FILENAME} in the working tree, so the shipped defaults apply"
+        )
 
 
 class TestPolicyLoading:

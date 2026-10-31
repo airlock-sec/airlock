@@ -1,6 +1,6 @@
 # ROADMAP: Airlock
 
-Last updated: 2026-10-31 04:30 UTC
+Last updated: 2026-10-31 04:58 UTC
 
 Roadmap version: 1
 
@@ -48,10 +48,10 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 | 4 | Action and dogfood | 0 | 7 | 0% |
 | 5 | Release v0.1.0 | 1 | 7 | 14% |
 | 6 | Stellar detectors | 0 | 5 | 0% |
-| 7 | Hardening and edge cases | 6 | 14 | 43% |
+| 7 | Hardening and edge cases | 7 | 15 | 47% |
 | 8 | Release v0.2.0 and community | 1 | 6 | 17% |
 | 9 (backlog) | Backlog | 0 | 10 | 0% |
-| **Phases 0 to 8** | **Readiness total** | **47** | **97** | **48%** |
+| **Phases 0 to 8** | **Readiness total** | **48** | **98** | **49%** |
 | Gates | G1 to G10 | 0 | 10 | 0% |
 <!-- PROGRESS:END -->
 
@@ -274,6 +274,8 @@ families.
 
 - [x] **7.14** Preserve gitlink reason IDs when `.gitmodules` has a state finding. S. Deps: 2.2, 7.2. Done when: the underlying state IDs appear in the corresponding `submodule-unmapped` message; severity remains HIGH and malformed-section `submodule-orphan` behavior is unchanged, covered by oversized and NUL temporary-repository tests plus a malformed-section regression.
 
+- [x] **7.15** Tell an unreadable working-tree policy file apart from an absent one. S. Deps: 2.7. (done 2026-10-31, #55: `policy._read_working` returns absent only for `FileNotFoundError`/`NotADirectoryError`; any other `OSError` keeps the bootstrap fallback but emits `untrusted-policy-source` at WARN naming `type(exc).__name__` and the errno name, because the maintainer's suppressions are not applied. The absent INFO text is unchanged. Tests in `tests/unit/test_policy.py::TestFullMode` cover absent, unreadable (directory in place, mode 000) and over-cap for both files.)
+
 ### Phase 8: Release v0.2.0 and community
 
 - [ ] **8.1** Update every doc for v0.2 behavior (`PRD.md`, `ARCHITECTURE.md`, `ARCHITECTURE_ESSENTIALS.md`, `project_structure.md`, `README.md`, `AGENTS.md`, `CLAUDE.md`). M. Deps: Phases 6 and 7. Gate G7.
@@ -367,6 +369,7 @@ by slug, and one pair the hand-written table had the wrong way round is now corr
 <!-- CHANGELOG:START -->
 | Date (UTC) | Change | Tasks |
 |---|---|---|
+| 2026-10-31 04:58 | Close #55 (task 7.15): an unreadable working-tree policy or manifest file is reported as unreadable at WARN, not as absent. [details](docs/changes/2026-10-31-0458-unreadable-policy-file-not-absent.md) | 7.15 |
 | 2026-10-31 04:30 | Install the OpenSSF Scorecard workflow and README badge (1.7): pinned actions, published results with OIDC, weekly and push-to-main runs. [details](docs/changes/2026-10-31-0430-scorecard-workflow.md) | 1.7 |
 | 2026-10-31 04:27 | Unmapped gitlink findings now name .gitmodules state-finding IDs and explain why severity remains HIGH. [details](docs/changes/2026-10-31-0427-submodule-state-finding-reasons.md) | 7.14 |
 | 2026-10-31 00:21 | A manifest or report write that fails is reported as a usage error (exit 2) naming the path, not as an internal error (exit 3). [details](docs/changes/2026-10-31-0021-manifest-write-usage-error.md) | 2.10, 3.5 |
