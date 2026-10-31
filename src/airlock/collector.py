@@ -691,7 +691,7 @@ def _parse_gitmodules(text: str, line_cap: int) -> tuple[_GitmoduleSection, ...]
 def _submodule_findings(
     index_entries: tuple[IndexEntry, ...],
     gitmodules_entry: FileEntry | None,
-    gitmodules_has_state_finding: bool,
+    gitmodules_state_finding_ids: tuple[str, ...],
     policy: Policy,
     role_globs: Mapping[str, tuple[str, ...]],
 ) -> tuple[PendingFinding, ...]:
@@ -709,7 +709,7 @@ def _submodule_findings(
         if (
             gitmodules_entry is not None
             and gitmodules_entry.skip_reason is None
-            and not gitmodules_has_state_finding
+            and not gitmodules_state_finding_ids
         )
         else None
     )
@@ -732,11 +732,16 @@ def _submodule_findings(
         commit_ref = entry.sha[:12] if entry.sha else "unknown"
         matches = by_path.get(entry.path, [])
         if len(matches) != 1:
-            detail = (
-                "matches multiple entries in .gitmodules"
-                if len(matches) > 1
-                else "has no matching path and url in .gitmodules"
-            )
+            if len(matches) > 1:
+                detail = "matches multiple entries in .gitmodules"
+            elif gitmodules_state_finding_ids:
+                reason_ids = ", ".join(f"`{rule_id}`" for rule_id in gitmodules_state_finding_ids)
+                detail = (
+                    f"cannot be mapped because .gitmodules has state finding(s) {reason_ids}; "
+                    "severity remains HIGH"
+                )
+            else:
+                detail = "has no matching path and url in .gitmodules"
             out.append(
                 _state(
                     "submodule-unmapped",
@@ -827,7 +832,7 @@ def collect(
     entries: list[FileEntry] = []
     findings: list[PendingFinding] = []
     gitmodules_entry: FileEntry | None = None
-    gitmodules_has_state_finding = False
+    gitmodules_state_finding_ids: tuple[str, ...] = ()
     for index_entry in index_entries:
         entry, entry_findings = _collect_one(
             repo_root,
@@ -842,12 +847,14 @@ def collect(
         findings.extend(entry_findings)
         if entry.path == GITMODULES_PATH and "\\" not in index_entry.path:
             gitmodules_entry = entry
-            gitmodules_has_state_finding = bool(entry_findings)
+            gitmodules_state_finding_ids = tuple(
+                sorted({finding.rule_id for finding in entry_findings})
+            )
     findings.extend(
         _submodule_findings(
             index_entries,
             gitmodules_entry,
-            gitmodules_has_state_finding,
+            gitmodules_state_finding_ids,
             policy,
             role_globs,
         )
