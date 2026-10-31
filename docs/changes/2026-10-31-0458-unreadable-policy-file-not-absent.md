@@ -1,10 +1,10 @@
 ---
 date: 2026-10-31 04:58 UTC
-tasks: 7.14
-summary: Close #55 (task 7.14): an unreadable working-tree policy or manifest file is reported as unreadable at WARN, not as absent.
+tasks: 7.15
+summary: Close #55 (task 7.15): an unreadable working-tree policy or manifest file is reported as unreadable at WARN, not as absent.
 ---
 
-Close #55 (task 7.14). In `full` mode `policy._working_text` folded every `OSError` into
+Close #55 (task 7.15). In `full` mode `policy._working_text` folded every `OSError` into
 "absent", so a policy file the scanner could not open (mode 000, a directory in its place, an I/O
 error) produced `no airlock.toml in the working tree, so the shipped defaults apply`. The new
 `policy._read_working` treats only `FileNotFoundError` and `NotADirectoryError` as absent. Any
