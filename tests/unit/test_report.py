@@ -481,3 +481,53 @@ class TestSummaryContent:
         body = summary.render(report(finding(evidence=payload, path=payload)))
 
         assert payload not in _outside(body)
+
+
+class TestSummaryBudget:
+    """Task 7.13: the document fits `SUMMARY_BYTE_BUDGET`, not just each row (issue #78)."""
+
+    def _flood(self, count: int) -> list[Finding]:
+        return [
+            finding(rule_id=f"cfg-h{i}", path=f"h{i}.js", line=i + 1, evidence=EVIDENCE * 8)
+            for i in range(count)
+        ]
+
+    def test_a_report_past_the_budget_still_fits_the_budget(self) -> None:
+        text = summary.render(report(*self._flood(3000)))
+
+        assert len(text.encode("utf-8")) <= summary.SUMMARY_BYTE_BUDGET
+
+    def test_earlier_findings_keep_their_evidence_intact(self) -> None:
+        text = summary.render(report(*self._flood(3000)))
+
+        assert EVIDENCE[:50] in text
+        assert "h0.js:1" in text
+
+    def test_every_high_row_survives_even_when_evidence_does_not(self) -> None:
+        text = summary.render(report(*self._flood(3000)))
+
+        for index in range(3000):
+            assert f"h{index}.js:{index + 1}" in text
+
+    def test_the_document_names_how_many_highs_lost_their_evidence(self) -> None:
+        text = summary.render(report(*self._flood(3000)))
+
+        assert "run `airlock scan --format json`" in text
+
+    def test_a_truncated_document_closes_every_fence_it_opens(self) -> None:
+        text = summary.render(report(*self._flood(3000)))
+
+        fences = [line for line in text.split("\n") if line.strip().startswith("`")]
+        assert len(fences) % 2 == 0
+
+    def test_rows_alone_past_the_budget_are_capped_and_counted(self) -> None:
+        rows = [
+            finding(rule_id=f"cfg-r{i}", path=f"r{i}.js", line=1, evidence=None)
+            for i in range(60_000)
+        ]
+        text = summary.render(report(*rows))
+
+        assert len(text.encode("utf-8")) <= summary.SUMMARY_BYTE_BUDGET
+        assert "more HIGH finding(s) are not listed above" in text
+        assert "r0.js:1" in text
+        assert "r59999.js:1" not in text
