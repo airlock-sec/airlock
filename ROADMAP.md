@@ -1,6 +1,6 @@
 # ROADMAP: Airlock
 
-Last updated: 2026-10-31 04:27 UTC
+Last updated: 2026-10-31 04:30 UTC
 
 Roadmap version: 1
 
@@ -367,6 +367,7 @@ by slug, and one pair the hand-written table had the wrong way round is now corr
 <!-- CHANGELOG:START -->
 | Date (UTC) | Change | Tasks |
 |---|---|---|
+| 2026-10-31 04:30 | Install the OpenSSF Scorecard workflow and README badge (1.7): pinned actions, published results with OIDC, weekly and push-to-main runs. [details](docs/changes/2026-10-31-0430-scorecard-workflow.md) | 1.7 |
 | 2026-10-31 04:27 | Unmapped gitlink findings now name .gitmodules state-finding IDs and explain why severity remains HIGH. [details](docs/changes/2026-10-31-0427-submodule-state-finding-reasons.md) | 7.14 |
 | 2026-10-31 00:21 | A manifest or report write that fails is reported as a usage error (exit 2) naming the path, not as an internal error (exit 3). [details](docs/changes/2026-10-31-0021-manifest-write-usage-error.md) | 2.10, 3.5 |
 | 2026-10-30 22:22 | Second issue intake: fifty-six standalone issues under `docs/issues/`, each grounded in a shipped file and a probe or audit finding, plus a README and a publisher that skips it. [details](docs/changes/2026-10-30-2222-second-issue-intake-fifty-six-issues.md) | 1.16 |
