@@ -607,7 +607,7 @@ def artifact(root: Path, rel: str, word: str) -> Path:
     return path
 
 
-def manifest_add(root: Path, *targets: str) -> int:
+def manifest_add(root: Path, *targets: str, dry_run: bool = False) -> int:
     """Run `airlock manifest add` against `root` and return its exit code."""
     return main(
         [
@@ -622,6 +622,7 @@ def manifest_add(root: Path, *targets: str) -> int:
             "contracts/counter",
             "--build",
             "cargo build --release --target wasm32-unknown-unknown",
+            *(["--dry-run"] if dry_run else []),
         ]
     )
 
@@ -671,6 +672,78 @@ class TestManifestCommands:
             " M wasm-manifest.toml",
         ]
         assert "on its own" in capsys.readouterr().out
+
+    def test_dry_run_writes_nothing_and_exits_clean(self, repo: Path, capsys) -> None:
+        """Task 35: a CI job uses `--dry-run` as advice, not a gate, so exit 0 either way."""
+        seed(repo)
+        artifact(repo, "target/counter.wasm", "counter")
+        before = (repo / "wasm-manifest.toml").read_text(encoding="utf-8")
+
+        assert manifest_add(repo, "target/counter.wasm", dry_run=True) == EXIT_PASS
+
+        assert (repo / "wasm-manifest.toml").read_text(encoding="utf-8") == before
+        out = capsys.readouterr().out
+        assert "dry run" in out
+        assert "cargo build --release" in out
+
+    def test_dry_run_output_and_the_written_file_are_one_code_path(
+        self, tmp_path: Path, capsys
+    ) -> None:
+        """The preview cannot drift from the real write: both come from the same `change.text`."""
+        written_repo = tmp_path / "written"
+        written_repo.mkdir()
+        git(written_repo, "init", "-q", "--initial-branch=main")
+        seed(written_repo)
+        artifact(written_repo, "target/counter.wasm", "counter")
+        assert manifest_add(written_repo, "target/counter.wasm") == EXIT_PASS
+        written = (written_repo / "wasm-manifest.toml").read_text(encoding="utf-8")
+        capsys.readouterr()
+
+        preview_repo = tmp_path / "preview"
+        preview_repo.mkdir()
+        git(preview_repo, "init", "-q", "--initial-branch=main")
+        seed(preview_repo)
+        artifact(preview_repo, "target/counter.wasm", "counter")
+        before = (preview_repo / "wasm-manifest.toml").read_text(encoding="utf-8")
+        assert manifest_add(preview_repo, "target/counter.wasm", dry_run=True) == EXIT_PASS
+
+        out = capsys.readouterr().out
+        assert written in out
+        assert (preview_repo / "wasm-manifest.toml").read_text(encoding="utf-8") == before
+
+    def test_dry_run_states_origin_and_source_are_not_attested(self, repo: Path, capsys) -> None:
+        """A CI-filled entry is a suggestion, so the preview says so (task 3.12, item 4)."""
+        seed(repo)
+        artifact(repo, "target/counter.wasm", "counter")
+
+        manifest_add(repo, "target/counter.wasm", dry_run=True)
+
+        assert cli.PROVENANCE_NOTE in capsys.readouterr().out
+
+    def test_the_write_carries_the_same_provenance_note_as_the_dry_run(
+        self, repo: Path, capsys
+    ) -> None:
+        """Item 4 asks for the same comment in both, not a dry-run-only disclaimer."""
+        seed(repo)
+        artifact(repo, "target/counter.wasm", "counter")
+
+        manifest_add(repo, "target/counter.wasm")
+
+        assert cli.PROVENANCE_NOTE in capsys.readouterr().out
+
+    def test_a_bad_target_in_a_multi_add_writes_nothing_and_names_it(
+        self, repo: Path, capsys
+    ) -> None:
+        """Item 2: one bad path among several must stop every write, named in the message."""
+        seed(repo)
+        artifact(repo, "target/good.wasm", "good")
+        write(repo, "target/bad.wasm", "not a wasm artifact\n")
+        before = (repo / "wasm-manifest.toml").read_text(encoding="utf-8")
+
+        assert manifest_add(repo, "target/good.wasm", "target/bad.wasm") == EXIT_CONFIG
+
+        assert (repo / "wasm-manifest.toml").read_text(encoding="utf-8") == before
+        assert "target/bad.wasm" in capsys.readouterr().err
 
     def test_check_fails_closed_on_an_unlisted_artifact(self, repo: Path, capsys) -> None:
         seed(repo)
