@@ -103,7 +103,7 @@
             <tr><td class="mono">no-trusted-base</td><td>WARN</td><td>A push created the branch. The shipped defaults apply, and the scan still runs at full strength.</td></tr>
             <tr><td class="mono">policy-changed</td><td>WARN</td><td>The policy changed inside this change. The base copy is what ran.</td></tr>
             <tr><td class="mono">policy-unknown-key</td><td>WARN</td><td>A key this build does not read. The setting stays at its default.</td></tr>
-            <tr><td class="mono">untrusted-policy-source</td><td>INFO</td><td><b>full</b> mode read policy from the working tree, which the change can edit.</td></tr>
+            <tr><td class="mono">untrusted-policy-source</td><td>INFO or WARN</td><td><b>full</b> mode read policy from the working tree, which the change can edit. WARN when a policy file is there but could not be read: the shipped defaults apply and the finding names the error.</td></tr>
             <tr><td class="mono">suppression-invalid</td><td>HIGH</td><td>A suppression entry matches no applicable finding, so it is hiding nothing and claiming otherwise.</td></tr>
             <tr><td class="mono">suppression-expiring</td><td>WARN</td><td>An entry expires within 30 days. Renew it with a reason, or let the finding return.</td></tr>
           </tbody>

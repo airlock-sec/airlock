@@ -123,6 +123,15 @@ class TestUsage:
         seed(repo)
         assert main(["scan", str(repo), "--event", "push", "--mode", "pr"]) == EXIT_CONFIG
 
+    def test_a_flag_the_resolved_mode_discards_is_rejected(self, repo: Path) -> None:
+        seed(repo)
+        assert main(["scan", str(repo), "--mode", "full", "--base", "a" * 40]) == EXIT_CONFIG
+        assert main(["scan", str(repo), "--mode", "pr", "--before", "a" * 40]) == EXIT_CONFIG
+
+    def test_a_flag_the_resolved_mode_reads_is_accepted(self, repo: Path) -> None:
+        seed(repo)
+        assert main(["scan", str(repo), "--mode", "full"]) in (EXIT_PASS, EXIT_FINDINGS)
+
     def test_an_unknown_mode_is_a_usage_error(self, repo: Path) -> None:
         seed(repo)
         with pytest.raises(SystemExit) as stop:
