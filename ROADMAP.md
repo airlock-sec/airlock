@@ -1,6 +1,6 @@
 # ROADMAP: Airlock
 
-Last updated: 2026-10-31 05:21 UTC
+Last updated: 2026-10-31 05:46 UTC
 
 Roadmap version: 1
 
@@ -373,6 +373,7 @@ by slug, and one pair the hand-written table had the wrong way round is now corr
 <!-- CHANGELOG:START -->
 | Date (UTC) | Change | Tasks |
 |---|---|---|
+| 2026-10-31 05:46 | Accept Dependabot's grouped bump of pytest, ruff and mypy in the dev dependency group, with the CI suite unchanged. [details](docs/changes/2026-10-31-0546-dependabot-python-group.md) | 1.6 |
 | 2026-10-31 05:21 | Refuse `--base`/`--before` in a mode that discards them (2.16): a flag the resolved trust model does not read is a usage error, the same rule `--event` follows, and the flag help names its mode. [details](docs/changes/2026-10-31-0521-refuse-flags-a-mode-discards.md) | 2.16 |
 | 2026-10-31 05:15 | Add weekly grouped Dependabot updates and a pinned CodeQL workflow for Python, the two largest quick gains in the Scorecard report. [details](docs/changes/2026-10-31-0515-dependabot-and-codeql.md) | 1.6, 1.17 |
 | 2026-10-31 04:58 | Close #55 (task 7.15): an unreadable working-tree policy or manifest file is reported as unreadable at WARN, not as absent. [details](docs/changes/2026-10-31-0458-unreadable-policy-file-not-absent.md) | 7.15 |
