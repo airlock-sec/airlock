@@ -11,18 +11,22 @@ same bar. The design lives in [`PRD.md`](PRD.md), [`ARCHITECTURE.md`](ARCHITECTU
    phase and say why.
 2. Check its dependencies are done. If they are not, stop and say so.
 3. Write the failing test or fixture first, then the smallest change that passes.
-4. Run `python -m pytest`, `ruff check .`, `ruff format --check .` and `mypy src`.
+4. Install the dev tools the way `AGENTS.md` section 5 describes (`uv run --group dev`, or
+   `pipx` plus a venv; a plain `pip install` is refused on a PEP 668 system). Run
+   `python3 -m pytest`, `ruff check .`, `ruff format --check .`, `mypy src` and
+   `airlock scan --mode full .` (the installed console script, the same one CI's self-scan step
+   runs; must report no HIGH findings).
 5. **Record the change in the same pull request.** Add one file under `docs/changes/`, named
    `YYYY-MM-DD-HHMM-<slug>.md` for the UTC minute it landed, with `date:`, `tasks:` and
    `summary:` front matter and the record itself below. The date cannot be in the future, and a
    record that has landed on the default branch is never deleted or renamed: if it is wrong, a
    later record says so. Tick or add your tasks in `ROADMAP.md`, then run
-   `python scripts/roadmap_progress.py`, which regenerates the progress table, the changelog in
+   `python3 scripts/roadmap_progress.py`, which regenerates the progress table, the changelog in
    section 9 and the `Last updated` line from those two sources. Check with
-   `python scripts/roadmap_progress.py --check`. A change is not finished until the roadmap is
+   `python3 scripts/roadmap_progress.py --check`. A change is not finished until the roadmap is
    current.
 6. Update any document the change touches. If the code contradicts a doc, fix the doc.
-7. If you changed a rule, run `python scripts/rule_reference.py` and `python scripts/build_site.py`
+7. If you changed a rule, run `python3 scripts/rule_reference.py` and `python3 scripts/build_site.py`
    and commit the regenerated `RULES.md` and `site/` files. The unit suite (and the Pages workflow
    for `site/`) runs both scripts with `--check` and fails a stale reference or page, because both
    are generated from the rule data rather than written by hand.
@@ -34,7 +38,7 @@ characters. Never commit to the default branch, never force-push, never rewrite 
 history, and do not bump a pinned Action SHA without reading the diff.
 
 A conflict in `ROADMAP.md` can now only be inside a generated block: take either side, run
-`python scripts/roadmap_progress.py`, and commit what it writes. Your change record is a file
+`python3 scripts/roadmap_progress.py`, and commit what it writes. Your change record is a file
 nobody else edits, so the two records survive the merge untouched.
 
 ## Boundaries

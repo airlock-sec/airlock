@@ -11,3 +11,6 @@ dist/
 *.egg-info/
 .venv/
 venv/
+# `uv run --group dev` (AGENTS.md 5) writes this on first use; the project pins dev tool versions
+# in pyproject.toml's dev dependency group, not in a lockfile.
+uv.lock

@@ -2,7 +2,7 @@
 
 Instructions for any coding agent (Claude Code, Codex, Cursor, Copilot and others) working in this repository. Humans can read it too. Keep it short; deep detail lives in the linked docs.
 
-> **Roadmap rule (every contribution):** any change, however small, must be recorded in the same pull request: tick or add your tasks in `ROADMAP.md`, add one file under `docs/changes/` named `YYYY-MM-DD-HHMM-<slug>.md` with `date:`, `tasks:` and `summary:` front matter, then run `python scripts/roadmap_progress.py`, which regenerates the progress table, the changelog and the `Last updated` line from those sources. Never hand-edit a generated region. A task is not finished until `ROADMAP.md` is current. The `roadmap` workflow enforces this (task 1.9, broadened by 1.15); until the check is required, enforce it on yourself.
+> **Roadmap rule (every contribution):** any change, however small, must be recorded in the same pull request: tick or add your tasks in `ROADMAP.md`, add one file under `docs/changes/` named `YYYY-MM-DD-HHMM-<slug>.md` with `date:`, `tasks:` and `summary:` front matter, then run `python3 scripts/roadmap_progress.py`, which regenerates the progress table, the changelog and the `Last updated` line from those sources. Never hand-edit a generated region. A task is not finished until `ROADMAP.md` is current. The `roadmap` workflow enforces this (task 1.9, broadened by 1.15); until the check is required, enforce it on yourself.
 
 ## 1. What this project is
 
@@ -26,7 +26,7 @@ Do not load every document up front. Start with the essentials.
 4. Implement the smallest change that passes.
 5. Run the checks in section 5.
 6. Update docs that the change touches (`project_structure.md` for file moves, the PRD and architecture docs for behavior changes).
-7. **Record the change** (rule above): one file directly under `docs/changes/` (UTC minute in the name, `date:`, `tasks:` and `summary:` front matter, the record below; the date is not in the future and a record that has landed is never deleted or renamed), your task boxes in `ROADMAP.md`, then `python scripts/roadmap_progress.py` to regenerate the table, the changelog and `Last updated`.
+7. **Record the change** (rule above): one file directly under `docs/changes/` (UTC minute in the name, `date:`, `tasks:` and `summary:` front matter, the record below; the date is not in the future and a record that has landed is never deleted or renamed), your task boxes in `ROADMAP.md`, then `python3 scripts/roadmap_progress.py` to regenerate the table, the changelog and `Last updated`.
 8. Open a small PR using the template. One task or one tightly related group per PR.
 
 ## 4. Hard rules
@@ -53,16 +53,35 @@ These come from `ARCHITECTURE_ESSENTIALS.md` section 2. Do not break them. If an
 
 ## 5. Commands
 
-These are the checks CI runs (1.5). Run all of them before finishing.
+Install the dev tools first. A system Python is commonly externally managed (PEP 668) and
+refuses a direct `pip install`; `uv run` provisions its own virtual environment and interpreter
+instead, reading the pinned versions from `pyproject.toml`'s `dev` dependency group, so nothing
+lands in the system install:
 
 ```
-python -m pytest
+uv run --group dev -- <command>
+```
+
+Without `uv`: `pipx install "ruff>=0.17.3"` and `pipx install "mypy>=2.4.0"` for the standalone
+tools (`pipx ensurepath` once, so `~/.local/bin` is on `PATH`), and a venv for the package and
+`pytest`, which needs `airlock` importable alongside it: `python3 -m venv .venv &&
+.venv/bin/python3 -m pip install -e . "pytest>=9.2.0"` (Debian and Ubuntu need the `python3-venv`
+apt package first), then `source .venv/bin/activate` before the checks so `python3` and
+`airlock` come from that venv.
+
+These are the checks CI runs (1.5). Run all of them before finishing (prefix each with `uv run
+--group dev --` if that is how the tools landed).
+
+```
+python3 -m pytest
 ruff check .
 ruff format --check .
 mypy src
-python -m airlock scan --mode full             # self-scan; must report no HIGH findings
+airlock scan --mode full .                     # installed console script, matching ci.yml: the
+                                                # module form would miss a wheel built without its
+                                                # rule data; must report no HIGH findings
 scripts/check_roadmap_touched.sh origin/main   # the PR adds a docs/changes/ record, regenerates ROADMAP.md, deletes no landed record
-python scripts/roadmap_progress.py --check     # the generated regions match the tasks and the records
+python3 scripts/roadmap_progress.py --check    # the generated regions match the tasks and the records
 ```
 
 If a command does not exist yet, say so in the PR instead of silently skipping it.
