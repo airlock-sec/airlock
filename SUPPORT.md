@@ -37,17 +37,27 @@ The three rules that most often get a pull request closed here:
 
 ## Commands CI runs
 
-Install the package and the dev tools, then run all five. Python 3.11 is what CI uses.
+Install the dev tools, then run all five. Python 3.11 is what CI uses. Locally, a direct
+`pip install` into the system interpreter is refused with "externally-managed-environment" on a
+current Debian or Ubuntu Python (PEP 668), so install through `uv` instead, which provisions its
+own virtual environment and interpreter and never touches the system install:
 
 ```bash
-python -m pip install . pytest ruff mypy
-
-python -m pytest
-ruff check .
-ruff format --check .
-mypy src
-airlock scan --mode full .
+uv run --group dev -- python3 -m pytest
+uv run --group dev -- ruff check .
+uv run --group dev -- ruff format --check .
+uv run --group dev -- mypy src
+uv run --group dev -- airlock scan --mode full .
 ```
+
+`uv run --group dev` installs the package and the versions pinned in `pyproject.toml`'s `dev`
+dependency group on first use. Without `uv`: `pipx install "ruff>=0.17.3"` and
+`pipx install "mypy>=2.4.0"` for the standalone tools (`pipx ensurepath` once, so `~/.local/bin`
+is on `PATH`), then a venv for the package and `pytest`, since `pytest` needs `airlock`
+importable alongside it: `python3 -m venv .venv && .venv/bin/python3 -m pip install -e .
+"pytest>=9.2.0"` (Debian and Ubuntu need the `python3-venv` apt package first), then
+`source .venv/bin/activate` so `python3` and `airlock` come from that venv, and run the five
+commands above without the `uv run --group dev --` prefix.
 
 The self-scan must report no HIGH findings, and it is the installed console script rather than the
 module path so that a wheel missing its rule data fails the build. The two roadmap gates run as a
@@ -55,7 +65,7 @@ separate job:
 
 ```bash
 scripts/check_roadmap_touched.sh origin/main
-python scripts/roadmap_progress.py --check
+python3 scripts/roadmap_progress.py --check
 ```
 
 If a command does not exist on your branch, say so in the pull request instead of skipping it.

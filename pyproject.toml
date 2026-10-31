@@ -33,6 +33,8 @@ packages = ["src/airlock"]
 [tool.hatch.build.targets.wheel.force-include]
 "rules" = "airlock/rules"
 
+# The pins here are what `uv run --group dev` installs into its own virtual environment, and what
+# a `pipx`/venv fallback should pin to by hand (AGENTS.md 5). Neither is a runtime dependency.
 [dependency-groups]
 # hatchling is the build backend, listed here so CI can build the wheel with
 # `--no-build-isolation` from the same hash-pinned lock as the test tools (1.18).

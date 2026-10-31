@@ -1,6 +1,6 @@
 # ROADMAP: Airlock
 
-Last updated: 2026-10-31 06:31 UTC
+Last updated: 2026-10-31 07:07 UTC
 
 Roadmap version: 1
 
@@ -42,7 +42,7 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 | Phase | Name | Done | Total | Progress |
 |---|---|---|---|---|
 | 0 | Decisions and validation | 8 | 16 | 50% |
-| 1 | Repository bootstrap and self-protection | 17 | 18 | 94% |
+| 1 | Repository bootstrap and self-protection | 18 | 19 | 95% |
 | 2 | Core engine | 16 | 16 | 100% |
 | 3 | P0 detectors | 4 | 11 | 36% |
 | 4 | Action and dogfood | 0 | 7 | 0% |
@@ -51,7 +51,7 @@ The repository is 100% ready when every task in Phases 0 to 8 is done and every 
 | 7 | Hardening and edge cases | 8 | 16 | 50% |
 | 8 | Release v0.2.0 and community | 1 | 6 | 17% |
 | 9 (backlog) | Backlog | 0 | 10 | 0% |
-| **Phases 0 to 8** | **Readiness total** | **55** | **102** | **54%** |
+| **Phases 0 to 8** | **Readiness total** | **56** | **103** | **54%** |
 | Gates | G1 to G10 | 0 | 10 | 0% |
 <!-- PROGRESS:END -->
 
@@ -197,6 +197,8 @@ families.
 - [x] **1.17** CodeQL for Python: a pinned workflow that runs on pushes to `main`, on same-repository pull requests and weekly, and uploads SARIF to code scanning. S. Deps: 1.5. Done when: the analyze job succeeds and a CodeQL analysis appears in code scanning. (done 2026-10-31 05:21: `.github/workflows/codeql.yml` uses `github/codeql-action/init` and `analyze` at the same v4.39.1 pin as the Scorecard workflow, with `permissions: contents: read` and job-level `security-events: write`. Pull requests from forks are skipped because `security-events: write` is not granted to them; `main` is analyzed on every push. Observed on the pull request that added it: the `Analyze Python` job passed in 57 seconds ([run `41172147406`](https://github.com/airlock-sec/airlock/actions/runs/41172147406)), and analysis `2067326533` appeared in code scanning for merge commit `e24f588`, category `/language:python`, with 43 rules and 0 results. The first analysis on `main` itself follows the merge.)
 
 - [x] **1.18** Pin the CI toolchain by hash: a requirements lock covering pytest, ruff, mypy and hatchling, installed with `--require-hashes`, and the project installed from a wheel built without build isolation. S. Deps: 1.5. Done when: every `pip install` in `ci.yml` is hash-pinned or wheel-only, the workflow passes on a clean runner, and Scorecard's Pinned-Dependencies reports 10. (done 2026-10-31 06:31: `requirements-ci.txt` is generated from the `dev` group in `pyproject.toml`, which now also lists the hatchling build backend, with `uv pip compile --generate-hashes --python-version 3.11 --python-platform x86_64-unknown-linux-gnu`. A clean Python 3.11 venv installed it with real pip and `--require-hashes`, built the wheel with `--no-build-isolation`, installed the wheel with `--no-deps`, and passed the suite, ruff, mypy and the self-scan. The `checks` job passed on the hosted runner ([run `41176464491`](https://github.com/airlock-sec/airlock/actions/runs/41176464491)), and Scorecard on `main` for merge commit `30b809e` reports Pinned-Dependencies 10 with "2 out of 2 pipCommand dependencies pinned", raising the overall score from 6.9 to 7.0 ([run `41176617992`](https://github.com/airlock-sec/airlock/actions/runs/41176617992)).)
+
+- [x] **1.19** Fix the contributor setup docs: `AGENTS.md` section 5, `CONTRIBUTING.md` and `SUPPORT.md` named the bare `python` interpreter and `AGENTS.md` named the module form `python -m airlock scan`, neither of which survives a current Debian or Ubuntu Python (PEP 668 refuses a direct `pip install`, and the interpreter is `python3`). S. Deps: none. Done when: every documented command in the three files runs where `python` does not exist, all three name the same self-scan command `ci.yml` runs, the dev-tool install path is written down and works on a PEP 668 base, and a `docs/changes/` record states the image and interpreter versions a clean run used. (done 2026-10-31 07:07: all three documents now write `python3`, and `uv run --group dev -- <command>` is the documented install path, reading the pins straight out of `pyproject.toml`'s `dev` dependency group into a project-local virtual environment, which avoids PEP 668 rather than working around it; `pipx install "ruff>=0.17.3"` and `pipx install "mypy>=2.4.0"` plus a `python3 -m venv` for the package and `pytest` is documented as the fallback, with the `pipx ensurepath` and apt `python3-venv` notes the issue asked for. `AGENTS.md`'s self-scan line changed from `python -m airlock scan --mode full` to `airlock scan --mode full .`, matching `ci.yml`, with the wheel-and-rule-data reason attached inline; `CONTRIBUTING.md` had no self-scan line at all and now names the same command. `tests/unit/test_contributor_docs.py` reads the self-scan command out of `ci.yml` and asserts all three documents name it, and separately scans the three documents for a bare `python` that is not `python3` and not the capitalized prose name; run against the pre-fix text it failed two of three cases (the self-scan mismatch, and 5 bare-`python` hits in `AGENTS.md` alone), and passed all three after the edits. No Docker was available in this environment, so the clean-run proof is a fresh `uv`-managed virtual environment in `/tmp` (a copy of the repository with no pre-existing `.venv`) rather than a container, on Debian GNU/Linux 13 (trixie), kernel `6.12.94+`: `uv 0.13.6`, Python `3.14.10` (uv's own provisioned interpreter; `requires-python` only pins `>=3.11`), `pytest 9.2.0`, `ruff 0.17.3`, `mypy 2.4.1`. Following only the documented `uv run --group dev` commands on this repository reached `841 passed, 2 skipped`, `ruff check` and `ruff format --check` clean, `mypy` clean on 25 files, and the self-scan `0 HIGH · 0 WARN · 2 INFO · 238 file(s) scanned, nothing skipped`. Not verified: the `pipx` fallback path, since `pipx` is not installed in this sandbox. Left alone and noted rather than silently dropped: the identical roadmap-rule banner sentence that also writes `python scripts/roadmap_progress.py` repeats in `CLAUDE.md`, `PRD.md`, `ARCHITECTURE.md`, `project_structure.md`, `README.md` and `.github/pull_request_template.md`; the issue's Tech stack section names only `AGENTS.md`, `CONTRIBUTING.md`, `SUPPORT.md`, `pyproject.toml` and `ci.yml`, so those six files were not touched here.)
 
 ### Phase 2: Core engine
 
@@ -377,6 +379,7 @@ by slug, and one pair the hand-written table had the wrong way round is now corr
 <!-- CHANGELOG:START -->
 | Date (UTC) | Change | Tasks |
 |---|---|---|
+| 2026-10-31 07:07 | Contributor setup docs now install dev tools through `uv run --group dev` (PEP 668 safe), say `python3` everywhere, and name ci.yml's installed-console-script self-scan (1.19). [details](docs/changes/2026-10-31-0707-pep668-dev-tool-install-and-python3.md) | 1.19 |
 | 2026-10-31 06:31 | Tick 1.18 after Scorecard on main reports Pinned-Dependencies 10 and the overall score moves from 6.9 to 7.0. [details](docs/changes/2026-10-31-0631-tick-pinned-ci-dependencies.md) | 1.18 |
 | 2026-10-31 06:19 | Hash-pin the CI toolchain and build backend, install with --require-hashes, and install the project from a wheel so every pip command in CI is pinned. [details](docs/changes/2026-10-31-0619-hash-pinned-ci-install.md) | 1.18 |
 | 2026-10-31 06:13 | Close #63 (task 7.16): delete the dead `cli.REPO_ROOT` and record what reads every other module-level name in `cli.py`. [details](docs/changes/2026-10-31-0613-remove-dead-cli-repo-root.md) | 7.16 |
